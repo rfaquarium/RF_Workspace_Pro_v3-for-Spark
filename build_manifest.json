@@ -1,0 +1,53 @@
+{
+  "generatedAt": "2026-09-07T14:57:25.974Z",
+  "coreFiles": [
+    "Config.html",
+    "Components.html",
+    "Modals.html",
+    "Modals_Orders.html",
+    "Tab_Dashboard.html",
+    "Tab_Orders.html",
+    "App_Main.html"
+  ],
+  "deferredFiles": [
+    "Tab_Production.html",
+    "Tab_Inventory.html",
+    "Tab_ImportExport.html",
+    "Tab_Suppliers.html",
+    "Tab_Finance.html",
+    "Tab_BusinessReport.html",
+    "Tab_HR.html",
+    "Tab_Documents.html",
+    "Tab_Viewer3D.html",
+    "Tab_Affiliate.html",
+    "Tab_Analytics.html",
+    "Tab_Workspaces.html",
+    "ShopeeGlobalTab.html"
+  ],
+  "hashes": {
+    "Config.html": "64b43d2ee1c1064e706a15c83cb565b820f54234045f9f99864c66bb310688f8",
+    "Components.html": "375e73d660a90e1d525236d56f4bbb2066180e9f48f7d3f5258826a3a0922bb6",
+    "Modals.html": "40b568b39d68e3237f260e51ab9dfe9cbf1bee052f1101b9707bc5999c898658",
+    "Modals_Orders.html": "a049798aeec702035674679da72e9380b76a89c3a625130e896e8f6c3425cf12",
+    "Tab_Dashboard.html": "9bf5ef952d831b595ff18028650eba193813e893d7b90ef908c8ad25c1c23b9b",
+    "Tab_Orders.html": "a5a68d5e10e9474ec3aebc92552294bf671af2f3cc485bbbad7eec4aa6d868e2",
+    "App_Main.html": "7e346adb9033f17bb16973a43dcbada3855b02a50f8839a32aa03b9727d97c2b",
+    "Tab_Production.html": "543bb6c0c31156d40d16c5a554c16027b5b3ca275f12e96dabcd7695adb8c7c7",
+    "Tab_Inventory.html": "5e52f36a81e370e54eae115b5042d2358ceeb981d1b27920f6ccda92297cde3d",
+    "Tab_ImportExport.html": "c3a86f8b7a35bc3bd3d590e384f88738592d2b7143789856e05d80b170c310e5",
+    "Tab_Suppliers.html": "9c5edeb18ec9180636cec8737b3df94c120715e7eb60413ea4700644b3f0adf6",
+    "Tab_Finance.html": "ab3caa39f894f42f33dd0dc293ce5500b6ad21dfdd69ced399b9f1016b7a4250",
+    "Tab_BusinessReport.html": "002b73537a5094117e5ee1d050c76cc7cb68264e6029ca80b8ef790366b48d33",
+    "Tab_HR.html": "a8d2b38ebec9a24af5244cae62bd782a06a8cb545b282f9c2356990cbee173c5",
+    "Tab_Documents.html": "bbe662e69c280b7de2427c508d1bfe07121849ac18925fbbc88450c166aa4acd",
+    "Tab_Viewer3D.html": "b5a7084f30dabd51ef3e2be4e2b280801e415de08de5ae527429973c653b68d7",
+    "Tab_Affiliate.html": "d295f198a8cf634c53774e9bbf4cd431005170ed49ce42db5de609e95c47c8d9",
+    "Tab_Analytics.html": "2e778efb1ae9a42a1b980fda157f25b08f6c85bb760a424455a078406689912f",
+    "Tab_Workspaces.html": "430aa6a1326534f0c1d19a12d3af6737ee319d1f37b5e48cc66d4325a86cdd0f",
+    "ShopeeGlobalTab.html": "244dcdecc7e4888ce8a4d3bb4228d16332899b5a4d9114146a137c780329b021"
+  },
+  "bundleHashes": {
+    "Compiled_Core.html": "9f5cca4afc9e684c6d78935bcc848717accfa5d598a695a3cb0d6000d236ff91",
+    "Compiled_Deferred.html": "eecc1d28320e56679ce8ffd06271a4afa374382ea41616d10d752207785c998c"
+  }
+}

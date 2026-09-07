@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>RF Workspace Pro</title>
+
+  <!-- PWA Meta -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="RF Workspace">
+  <meta name="theme-color" content="#09090b">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="apple-touch-icon" href="https://i.postimg.cc/TYD5NncZ/icon.png">
+  <link rel="shortcut icon" href="https://i.postimg.cc/TYD5NncZ/icon.png" type="image/png">
+  <link rel="manifest" href="/manifest.json">
+
+  <!-- PRECONNECT: Thiết lập kết nối TCP+TLS tới Google TRƯỚC khi iframe gọi → tiết kiệm 300-800ms -->
+  <link rel="preconnect" href="https://script.google.com" crossorigin>
+  <link rel="preconnect" href="https://apis.google.com" crossorigin>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://script.google.com">
+  <link rel="dns-prefetch" href="https://cdnjs.cloudflare.com">
+  <link rel="dns-prefetch" href="https://www.gstatic.com">
+
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html,body{
+      width:100%;height:100%;overflow:hidden;
+      background:#09090b;color:#fafafa;
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+      position:fixed;top:0;left:0;right:0;bottom:0;
+      padding:env(safe-area-inset-top,0) env(safe-area-inset-right,0) env(safe-area-inset-bottom,0) env(safe-area-inset-left,0);
+    }
+
+    /* === IFRAME: ẩn hoàn toàn cho đến khi sẵn sàng === */
+    .gas-frame{
+      display:block;width:100%;height:100%;border:0;outline:0;
+      position:absolute;top:0;left:0;z-index:2;
+      opacity:0;transition:opacity .25s ease;
+    }
+    .gas-frame.ready{opacity:1}
+
+    /* === APP SHELL: Giao diện giả lập hiện NGAY LẬP TỨC (0ms) === */
+    .app-shell{
+      position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;
+      display:flex;flex-direction:column;background:#09090b;
+    }
+    .app-shell.gone{display:none}
+
+    /* Header giả */
+    .shell-header{
+      height:56px;
+      background:#121215;
+      border-bottom:1px solid rgba(255,255,255,.06);
+      display:flex;align-items:center;padding:0 16px;gap:12px;
+      flex-shrink:0;
+    }
+    .shell-avatar{
+      width:36px;height:36px;border-radius:10px;
+      background:linear-gradient(135deg,#d4af37 0%,#a88928 100%);
+      flex-shrink:0;
+    }
+    .shell-title-block{flex:1;display:flex;flex-direction:column;gap:5px}
+    .shell-t1{width:110px;height:12px;border-radius:6px;background:#1e1e24}
+    .shell-t2{width:70px;height:9px;border-radius:4px;background:#1a1a1f}
+
+    /* Tab bar giả */
+    .shell-tabs{
+      height:40px;background:#0e0e11;
+      border-bottom:1px solid rgba(255,255,255,.05);
+      display:flex;align-items:center;padding:0 12px;gap:18px;
+      flex-shrink:0;overflow-x:auto;
+    }
+    .shell-tab{height:10px;border-radius:5px;background:#1a1a1f;flex-shrink:0}
+
+    /* Content cards giả */
+    .shell-body{flex:1;padding:12px;overflow:hidden;display:flex;flex-direction:column;gap:10px}
+    .shell-card{
+      border-radius:12px;background:#121215;
+      border:1px solid rgba(255,255,255,.05);
+      padding:14px;display:flex;flex-direction:column;gap:8px;
+      flex-shrink:0;
+    }
+    .shell-line{height:10px;border-radius:5px;background:#1a1a1f}
+
+    /* Bottom nav giả */
+    .shell-nav{
+      height:54px;background:#121215;
+      border-top:1px solid rgba(255,255,255,.06);
+      display:flex;align-items:center;justify-content:space-around;
+      padding-bottom:env(safe-area-inset-bottom,0);flex-shrink:0;
+    }
+    .shell-nav-dot{
+      width:22px;height:22px;border-radius:6px;background:#1a1a1f;
+    }
+
+    /* Shimmer animation nhẹ nhàng */
+    .shimmer{
+      background:linear-gradient(90deg,#1a1a1f 25%,#222228 50%,#1a1a1f 75%);
+      background-size:200% 100%;
+      animation:shimmer 1.5s ease-in-out infinite;
+    }
+    @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+    /* iOS bounce fix */
+    @supports(-webkit-touch-callout:none){
+      html,body{-webkit-overflow-scrolling:touch;overscroll-behavior:none}
+    }
+  </style>
+</head>
+<body>
+  <!-- APP SHELL: Hiện ngay tức thì khi mở app (cached by SW → 0ms) -->
+  <div class="app-shell" id="appShell">
+    <div class="shell-header">
+      <div class="shell-avatar"></div>
+      <div class="shell-title-block">
+        <div class="shell-t1 shimmer"></div>
+        <div class="shell-t2 shimmer"></div>
+      </div>
+    </div>
+    <div class="shell-tabs">
+      <div class="shell-tab shimmer" style="width:52px"></div>
+      <div class="shell-tab shimmer" style="width:64px"></div>
+      <div class="shell-tab shimmer" style="width:48px"></div>
+      <div class="shell-tab shimmer" style="width:56px"></div>
+      <div class="shell-tab shimmer" style="width:44px"></div>
+    </div>
+    <div class="shell-body">
+      <div class="shell-card">
+        <div class="shell-line shimmer" style="width:60%"></div>
+        <div class="shell-line shimmer" style="width:85%"></div>
+        <div class="shell-line shimmer" style="width:45%"></div>
+      </div>
+      <div class="shell-card">
+        <div class="shell-line shimmer" style="width:70%"></div>
+        <div class="shell-line shimmer" style="width:90%"></div>
+        <div class="shell-line shimmer" style="width:50%"></div>
+      </div>
+      <div class="shell-card">
+        <div class="shell-line shimmer" style="width:55%"></div>
+        <div class="shell-line shimmer" style="width:80%"></div>
+        <div class="shell-line shimmer" style="width:40%"></div>
+      </div>
+      <div class="shell-card">
+        <div class="shell-line shimmer" style="width:65%"></div>
+        <div class="shell-line shimmer" style="width:75%"></div>
+      </div>
+    </div>
+    <div class="shell-nav">
+      <div class="shell-nav-dot shimmer"></div>
+      <div class="shell-nav-dot shimmer"></div>
+      <div class="shell-nav-dot shimmer"></div>
+      <div class="shell-nav-dot shimmer"></div>
+      <div class="shell-nav-dot shimmer"></div>
+    </div>
+  </div>
+
+  <!-- GAS IFRAME: load ngầm, chỉ hiện khi sẵn sàng -->
+  <iframe
+    id="gasFrame"
+    class="gas-frame"
+    src="https://script.google.com/macros/s/AKfycbytd9c_FzcqJ_65nqNI-xplYVRD3gstZcIL6PBk34P81XdSqXTNcRWsYt5bbeqjg66N/exec"
+    allow="geolocation; microphone; camera; clipboard-read; clipboard-write"
+    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-downloads"
+    loading="eager">
+  </iframe>
+
+  <script>
+    // === ZERO-LATENCY SWAP: Shell → Real App ===
+    var frame = document.getElementById('gasFrame');
+    var shell = document.getElementById('appShell');
+    var swapped = false;
+
+    function swapToReal() {
+      if (swapped) return;
+      swapped = true;
+      frame.classList.add('ready');
+      // Đợi fade-in xong rồi mới xóa shell (tránh flicker)
+      setTimeout(function() { shell.classList.add('gone'); }, 300);
+    }
+
+    // Iframe loaded
+    frame.addEventListener('load', swapToReal);
+
+    // Fallback 15s (trường hợp GAS cold-start chậm)
+    setTimeout(function() { if (!swapped) swapToReal(); }, 15000);
+
+    // === SERVICE WORKER: Cache shell page → mở app = 0ms ===
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function(){});
+    }
+
+    // === iOS: Chống kéo bounce ===
+    document.addEventListener('touchmove', function(e) {
+      if (e.target === document.body || e.target === document.documentElement) {
+        e.preventDefault();
+      }
+    }, { passive: false });
+  </script>
+</body>
+</html>

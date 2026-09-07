@@ -1,0 +1,1158 @@
+<script type="text/babel">
+  // Chuẩn hoá danh sách công cụ/tài sản (hỗ trợ phân bổ nhân sự riêng & tình trạng bàn giao %)
+  function normalizeTools(rawTools, defaultWsUser = '') {
+    if (!rawTools) return [];
+    let parsed = rawTools;
+    if (typeof rawTools === 'string') {
+      try {
+        parsed = JSON.parse(rawTools);
+      } catch(e) {
+        parsed = rawTools.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+      }
+    }
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item, idx) => {
+      if (typeof item === 'string') {
+        return {
+          id: 'TOOL_' + idx + '_' + Date.now(),
+          name: item,
+          qty: 1,
+          value: 0,
+          depreciation: '12 tháng',
+          status: 'Tốt',
+          user: defaultWsUser || '',
+          conditionPct: 100
+        };
+      }
+      const condVal = (item.conditionPct !== undefined && item.conditionPct !== null && item.conditionPct !== '') ? Number(item.conditionPct) : 100;
+      return {
+        id: item.id || ('TOOL_' + idx + '_' + Date.now()),
+        name: item.name || 'Dụng cụ ' + (idx + 1),
+        qty: parseInt(item.qty) || 1,
+        value: parseInt(item.value) || 0,
+        depreciation: item.depreciation || '12 tháng',
+        status: item.status || 'Tốt',
+        user: (item.user || item.assignedUser || item.manager || defaultWsUser || '').trim(),
+        conditionPct: isNaN(condVal) ? 100 : Math.min(100, Math.max(0, condVal))
+      };
+    });
+  }
+
+  // Helper tính màu cho badge tình trạng %
+  function getConditionBadge(pct) {
+    const val = Number(pct) || 0;
+    if (val >= 95) return { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30', label: `${val}% Mới` };
+    if (val >= 80) return { bg: 'bg-cyan-500/15', text: 'text-cyan-400', border: 'border-cyan-500/30', label: `${val}% Tốt` };
+    if (val >= 60) return { bg: 'bg-amber-500/15', text: 'text-amber-400', border: 'border-amber-500/30', label: `${val}% Khá` };
+    return { bg: 'bg-rose-500/15', text: 'text-rose-400', border: 'border-rose-500/30', label: `${val}% Cũ` };
+  }
+
+  const WorkspaceTab = ({ data, pushData, users, userConfigs, triggerToast, userRole: propUserRole, currentUser: propCurrentUser, hasPerm: propHasPerm }) => {
+    const [isSaving, setIsSaving] = React.useState(false);
+    const [showModal, setShowModal] = React.useState(false);
+    const [selectedWorkspace, setSelectedWorkspace] = React.useState(null);
+    const [selectedItemForPenalty, setSelectedItemForPenalty] = React.useState(null);
+    const [actionType, setActionType] = React.useState(''); // 'assign' | 'report' | 'item_penalty'
+    const [managerFilterMap, setManagerFilterMap] = React.useState({});
+    const [selectedGlobalManager, setSelectedGlobalManager] = React.useState('ALL');
+
+    const role = propUserRole || localStorage.getItem('rf_role') || '';
+    const currentUser = (propCurrentUser || localStorage.getItem('rf_user') || '').trim();
+    const isBoss = localStorage.getItem('rf_boss') === 'true' || role.toUpperCase() === 'TỐI CAO' || currentUser.includes('Tiến');
+
+    const hasPerm = React.useCallback((actionCode) => {
+      if (isBoss || role === 'TỐI CAO') return true;
+      if (typeof propHasPerm === 'function') return propHasPerm(actionCode);
+      if (typeof canUserDo === 'function') return canUserDo(actionCode, role, currentUser);
+      return isBoss;
+    }, [propHasPerm, role, currentUser, isBoss]);
+
+    const canConfigLayout = hasPerm('WS_CONFIG_LAYOUT'); // Tiến, Tâm
+
+    const workspaces = data?.Workspaces || [];
+
+    // Tính danh sách nhân sự phụ trách thực tế từ tất cả workspaces (cho Tab nhanh trên cùng)
+    const allManagerStats = React.useMemo(() => {
+      const map = {};
+      let totalTools = 0;
+      let totalVal = 0;
+
+      workspaces.forEach(ws => {
+        const toolsList = normalizeTools(ws.tools, ws.user);
+        toolsList.forEach(tool => {
+          const mgr = (tool.user || ws.user || 'Chưa gán').trim();
+          if (!map[mgr]) {
+            map[mgr] = { count: 0, totalValue: 0, stations: new Set() };
+          }
+          map[mgr].count += (tool.qty || 1);
+          map[mgr].totalValue += (tool.value * (tool.qty || 1));
+          map[mgr].stations.add(ws.name || ws.id);
+          totalTools += (tool.qty || 1);
+          totalVal += (tool.value * (tool.qty || 1));
+        });
+      });
+
+      const list = Object.keys(map).sort((a, b) => map[b].count - map[a].count).map(name => ({
+        name,
+        count: map[name].count,
+        totalValue: map[name].totalValue,
+        stationCount: map[name].stations.size
+      }));
+
+      return { list, totalTools, totalVal };
+    }, [workspaces]);
+
+    // Lọc danh sách trạm theo Tab nhanh nhân sự trên cùng
+    const displayedWorkspaces = React.useMemo(() => {
+      if (selectedGlobalManager === 'ALL') return workspaces;
+      return workspaces.filter(ws => {
+        const toolsList = normalizeTools(ws.tools, ws.user);
+        const managers = toolsList.map(t => (t.user || ws.user || 'Chưa gán').trim());
+        return managers.includes(selectedGlobalManager) || (ws.user && ws.user.trim() === selectedGlobalManager);
+      });
+    }, [workspaces, selectedGlobalManager]);
+    
+    // Lấy danh sách nhân sự an toàn tuyệt đối
+    const employees = React.useMemo(() => {
+      let list = [];
+      if (Array.isArray(users) && users.length > 0) {
+        list = users.map(u => typeof u === 'string' ? u : (u['Tên Nhân Sự'] || u.name || u.user));
+      } else if (userConfigs && Array.isArray(userConfigs.users)) {
+        list = userConfigs.users.map(u => typeof u === 'string' ? u : (u['Tên Nhân Sự'] || u.name || u.user));
+      } else if (userConfigs && userConfigs.pins && typeof userConfigs.pins === 'object') {
+        list = Object.values(userConfigs.pins).map(p => p.name || p['Tên Nhân Sự'] || p.user);
+      } else if (data?.Config_NhanSu && Array.isArray(data.Config_NhanSu)) {
+        list = data.Config_NhanSu.map(u => typeof u === 'string' ? u : (u['Tên Nhân Sự'] || u.name || u.user));
+      }
+      return Array.from(new Set(list.filter(Boolean)));
+    }, [users, userConfigs, data]);
+
+    const handleAssign = (ws) => {
+      setSelectedWorkspace(ws || { 
+        id: 'WS_' + Date.now(), 
+        name: '', 
+        user: '', 
+        tools: [
+          { id: 'T_' + Date.now() + '_1', name: '', qty: 1, value: 0, depreciation: '12 tháng', status: 'Tốt', user: '', conditionPct: 100 }
+        ], 
+        status: 'Tốt', 
+        photo: '' 
+      });
+      setActionType('assign');
+      setShowModal(true);
+    };
+
+    const handleReport = (ws) => {
+      setSelectedWorkspace(ws);
+      setSelectedItemForPenalty(null);
+      setActionType('report');
+      setShowModal(true);
+    };
+
+    const handleItemPenalty = (ws, toolItem) => {
+      setSelectedWorkspace(ws);
+      setSelectedItemForPenalty(toolItem);
+      setActionType('item_penalty');
+      setShowModal(true);
+    };
+
+    const handleDeleteItem = async (ws, toolId) => {
+      if (!isBoss) return;
+      if (!confirm('Bạn có chắc chắn muốn xoá thiết bị này khỏi trạm?')) return;
+      const currentTools = normalizeTools(ws.tools, ws.user);
+      const updatedTools = currentTools.filter(t => t.id !== toolId);
+      
+      const payload = {
+        Workspaces: [{
+          ...ws,
+          tools: updatedTools
+        }]
+      };
+      try {
+        await pushData(payload, null, 'Đã cập nhật danh sách thiết bị!');
+      } catch(e) {
+        if (typeof triggerToast === 'function') triggerToast('Lỗi xoá thiết bị: ' + e, 'fa-triangle-exclamation', 'danger');
+        else alert('Lỗi xoá thiết bị: ' + e);
+      }
+    };
+
+    const handleDeleteWorkspace = async (ws) => {
+      if (!isBoss) return;
+      if (!confirm(`Bạn có chắc muốn xoá toàn bộ Trạm [${ws.name}]?`)) return;
+      const payload = {
+        Workspaces: []
+      };
+      // Gửi lệnh xoá qua deletes
+      try {
+        await pushData(payload, { Workspaces: [ws.id] }, `Đã xoá Trạm [${ws.name}]!`);
+      } catch(e) {
+        if (typeof triggerToast === 'function') triggerToast('Lỗi xoá trạm: ' + e, 'fa-triangle-exclamation', 'danger');
+        else alert('Lỗi xoá trạm: ' + e);
+      }
+    };
+
+    return (
+      <div className="p-4 md:p-6 lg:p-8 max-w-[1700px] mx-auto pb-32 animate-fade-in text-zinc-100 min-h-screen">
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b border-zinc-800/80 pb-6">
+          <div>
+            <div className="flex items-center gap-2.5 mb-1.5">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                Phân hệ Trách Nhiệm & Khấu Hao
+              </span>
+              <span className="text-zinc-600">•</span>
+              <span className="text-xs text-zinc-400 font-mono">Quản lý đa nhân sự & % Bàn giao</span>
+            </div>
+            <h2 className="text-2xl md:text-3xl font-display font-bold tracking-tight text-white flex items-center gap-3">
+              <i className="fa-solid fa-scale-balanced text-zinc-400"></i>
+              Trách Nhiệm & Bàn Giao Thiết Bị
+            </h2>
+            <p className="text-zinc-400 font-sans text-xs md:text-sm mt-1">
+              Nhóm và phân bổ vật tư cho từng nhân sự phụ trách riêng biệt, ghi nhận % tình trạng lúc bàn giao và tự động quy trách nhiệm phạt đền bù chuẩn xác 100%.
+            </p>
+          </div>
+          {isBoss && (
+            <button 
+              onClick={() => handleAssign(null)} 
+              className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-zinc-200 text-zinc-950 rounded-xl font-bold text-sm transition-all shadow-[0_0_20px_rgba(255,255,255,0.15)] active:scale-95 cursor-pointer shrink-0"
+            >
+              <i className="fa-solid fa-plus text-xs"></i> Lập Bàn Giao Mới
+            </button>
+          )}
+        </div>
+
+        {/* THANH TAB NHANH: NHÂN SỰ CHỊU TRÁCH NHIỆM TRÊN CÙNG */}
+        {allManagerStats.list.length > 0 && (
+          <div className="mb-6 bg-[#121214]/90 border border-zinc-800/80 rounded-2xl p-3 sm:p-4 backdrop-blur-sm shadow-xl">
+            <div className="flex items-center justify-between gap-3 mb-2.5 pb-2.5 border-b border-zinc-800/60 flex-wrap">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-xs">
+                  <i className="fa-solid fa-users-viewfinder"></i>
+                </div>
+                <span className="text-xs font-bold text-zinc-200 uppercase tracking-wider">
+                  Tab Nhanh: Nhân Sự Chịu Trách Nhiệm
+                </span>
+                <span className="text-[11px] text-zinc-500 font-mono">
+                  ({allManagerStats.list.length} nhân sự • {allManagerStats.totalTools} thiết bị • {allManagerStats.totalVal.toLocaleString('vi-VN')} ₫)
+                </span>
+              </div>
+
+              {selectedGlobalManager !== 'ALL' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedGlobalManager('ALL')}
+                  className="text-[11px] font-semibold text-zinc-400 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer bg-zinc-800/60 px-2.5 py-1 rounded-lg border border-zinc-700/50 hover:bg-zinc-700"
+                >
+                  <i className="fa-solid fa-rotate-left text-[10px]"></i> Xem tất cả trạm & nhân sự
+                </button>
+              )}
+            </div>
+
+            {/* Dải Tab cuộn ngang mượt mà */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 custom-scrollbar">
+              {/* Tab Tất Cả */}
+              <button
+                type="button"
+                onClick={() => setSelectedGlobalManager('ALL')}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 cursor-pointer ${
+                  selectedGlobalManager === 'ALL'
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-zinc-950 shadow-[0_0_15px_rgba(245,158,11,0.25)] border border-amber-400 font-black'
+                    : 'bg-[#18181b] text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/80 border border-zinc-800'
+                }`}
+              >
+                <i className="fa-solid fa-layer-group text-[11px]"></i>
+                <span>Tất cả nhân sự</span>
+                <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded-md ${
+                  selectedGlobalManager === 'ALL' ? 'bg-black/20 text-zinc-950' : 'bg-zinc-800 text-zinc-300'
+                }`}>
+                  {allManagerStats.totalTools} món
+                </span>
+              </button>
+
+              {/* Từng nhân sự */}
+              {allManagerStats.list.map(mgr => {
+                const isSelected = selectedGlobalManager === mgr.name;
+                return (
+                  <button
+                    key={mgr.name}
+                    type="button"
+                    onClick={() => setSelectedGlobalManager(isSelected ? 'ALL' : mgr.name)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center gap-2 cursor-pointer ${
+                      isSelected
+                        ? 'bg-white text-zinc-950 shadow-[0_0_15px_rgba(255,255,255,0.2)] border border-white scale-[1.02] font-black'
+                        : 'bg-[#18181b] text-zinc-300 hover:text-white hover:bg-zinc-800/80 border border-zinc-800'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold ${
+                      isSelected ? 'bg-zinc-900 text-white' : 'bg-zinc-800 text-amber-400 border border-zinc-700'
+                    }`}>
+                      <i className="fa-solid fa-user"></i>
+                    </div>
+                    <span>{mgr.name}</span>
+                    <span className={`text-[10.5px] font-mono font-bold px-1.5 py-0.2 rounded-md ${
+                      isSelected ? 'bg-zinc-200 text-zinc-900' : 'bg-zinc-800 text-amber-400'
+                    }`}>
+                      {mgr.count} món
+                    </span>
+                    <span className={`text-[10px] font-mono hidden sm:inline ${
+                      isSelected ? 'text-zinc-600' : 'text-zinc-500'
+                    }`}>
+                      ({mgr.totalValue.toLocaleString('vi-VN')}₫)
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Bento Grid Layout */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          {displayedWorkspaces.map((ws, i) => {
+            const toolsList = normalizeTools(ws.tools, ws.user);
+
+            // Danh sách các nhân sự phụ trách vật tư trong phòng
+            const distinctManagers = Array.from(new Set(toolsList.map(t => (t.user || ws.user || 'Chưa gán').trim()))).filter(Boolean);
+            const isMine = distinctManagers.some(m => m.includes(currentUser.split(' ').pop()) || currentUser === m) || ws.user.includes(currentUser.split(' ').pop()) || currentUser === ws.user;
+
+            // Tính % tình trạng trung bình của trạm
+            const avgCondition = toolsList.length > 0 
+              ? Math.round(toolsList.reduce((sum, t) => sum + (Number(t.conditionPct) || 100), 0) / toolsList.length)
+              : 100;
+            const avgCondBadge = getConditionBadge(avgCondition);
+
+            // Filter tools theo nhân sự: ưu tiên selectedGlobalManager nếu khác 'ALL', ngược lại theo managerFilterMap[ws.id]
+            const effectiveFilter = selectedGlobalManager !== 'ALL' 
+              ? selectedGlobalManager 
+              : (managerFilterMap[ws.id] || 'ALL');
+
+            const filteredTools = effectiveFilter === 'ALL' 
+              ? toolsList 
+              : toolsList.filter(t => (t.user || ws.user || 'Chưa gán').trim() === effectiveFilter);
+
+            const totalValue = filteredTools.reduce((sum, t) => sum + (t.value * t.qty), 0);
+            const totalQty = filteredTools.reduce((sum, t) => sum + t.qty, 0);
+
+            let statusBadge = 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+            if (ws.status === 'Hỏng' || toolsList.some(t => t.status === 'Hỏng')) {
+              statusBadge = 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+            }
+            if (ws.status === 'Mất' || toolsList.some(t => t.status === 'Mất')) {
+              statusBadge = 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+            }
+
+            return (
+              <div 
+                key={ws.id || i} 
+                className="group relative bg-[#121214] border border-zinc-800/80 hover:border-zinc-700/80 rounded-2xl p-5 md:p-6 flex flex-col gap-4 transition-all shadow-xl hover:shadow-2xl"
+              >
+                {/* Top Card Header */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-zinc-800/60">
+                  <div>
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h3 className="text-xl font-display font-bold text-white tracking-tight">{ws.name}</h3>
+                      <span className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold border uppercase tracking-wider ${statusBadge}`}>
+                        {ws.status || 'Tốt'}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-md text-[10.5px] font-bold font-mono border ${avgCondBadge.bg} ${avgCondBadge.text} ${avgCondBadge.border}`}>
+                        <i className="fa-solid fa-gauge-high mr-1 text-[9px]"></i> TB: {avgCondition}%
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <div className="w-5 h-5 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[9px] text-amber-400">
+                        <i className="fa-solid fa-user-shield"></i>
+                      </div>
+                      <span className="text-xs font-bold text-zinc-200">Trưởng trạm: {ws.user || 'Chưa gán'}</span>
+                      <span className="text-zinc-600 text-xs">•</span>
+                      <span className="text-[11px] text-zinc-400 font-mono">
+                        <i className="fa-solid fa-users text-[10px] mr-1 text-zinc-500"></i>
+                        {distinctManagers.length} nhân sự quản lý
+                      </span>
+                      <span className="text-zinc-600 text-xs">•</span>
+                      <span className="text-[11px] text-zinc-500 font-mono">Giao: {ws.handoverDate || '--/--/----'}</span>
+                    </div>
+                  </div>
+
+                  {/* Summary Metric Badges */}
+                  <div className="flex items-center gap-2 bg-[#18181b] border border-zinc-800 px-3.5 py-2 rounded-xl shrink-0">
+                    <div className="text-right">
+                      <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-500">
+                        {effectiveFilter !== 'ALL' ? `Tài sản (${effectiveFilter})` : `Tổng tài sản (${totalQty} món)`}
+                      </div>
+                      <div className="text-sm font-mono font-bold text-amber-400">
+                        {totalValue.toLocaleString('vi-VN')} ₫
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Thanh Lọc / Thông Báo Nhân Sự Trong Card */}
+                {selectedGlobalManager !== 'ALL' ? (
+                  <div className="flex items-center justify-between gap-2 bg-amber-500/10 border border-amber-500/20 px-3.5 py-2 rounded-xl text-amber-300 text-xs font-semibold">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <i className="fa-solid fa-user-check text-amber-400"></i>
+                      <span>Đang lọc thiết bị của: <strong className="text-white">{selectedGlobalManager}</strong></span>
+                      <span className="text-[11px] font-mono text-amber-400/90 font-bold">({filteredTools.length} món)</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedGlobalManager('ALL')}
+                      className="text-[11px] font-bold text-amber-400 hover:text-amber-200 underline cursor-pointer shrink-0"
+                    >
+                      Bỏ lọc
+                    </button>
+                  </div>
+                ) : (
+                  distinctManagers.length > 1 && (
+                    <div className="flex items-center gap-1.5 flex-wrap bg-[#18181b]/50 p-2 rounded-xl border border-zinc-800/50">
+                      <span className="text-[10.5px] font-bold text-zinc-500 uppercase tracking-wider mr-1 flex items-center gap-1">
+                        <i className="fa-solid fa-filter text-zinc-400"></i> Lọc tại trạm:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setManagerFilterMap(prev => ({ ...prev, [ws.id]: 'ALL' }))}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                          effectiveFilter === 'ALL'
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm'
+                            : 'bg-zinc-800/70 text-zinc-400 hover:text-white border border-zinc-700/40'
+                        }`}
+                      >
+                        Tất cả ({toolsList.length})
+                      </button>
+                      {distinctManagers.map(mgr => {
+                        const mgrTools = toolsList.filter(t => (t.user || ws.user || 'Chưa gán').trim() === mgr);
+                        const isSelected = effectiveFilter === mgr;
+                        return (
+                          <button
+                            key={mgr}
+                            type="button"
+                            onClick={() => setManagerFilterMap(prev => ({ ...prev, [ws.id]: isSelected ? 'ALL' : mgr }))}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                              isSelected
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                                : 'bg-zinc-800/70 text-zinc-300 hover:text-white border border-zinc-700/40 hover:bg-zinc-700'
+                            }`}
+                          >
+                            <i className="fa-solid fa-user text-[9px] text-zinc-400"></i>
+                            <span>{mgr}</span>
+                            <span className="text-[10px] font-mono text-amber-400/90 font-bold">({mgrTools.length} món)</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )
+                )}
+
+                {/* Body: Danh sách bảng thiết bị - BỎ CỘT NGƯỜI QUẢN LÝ, MỞ RỘNG TÊN THIẾT BỊ KHÔNG BỊ CẮT CỤT */}
+                <div className="flex-1 bg-[#18181b]/70 rounded-xl border border-zinc-800/60 overflow-hidden">
+                  <div className="px-4 py-2.5 bg-zinc-900/80 border-b border-zinc-800/60 grid grid-cols-12 text-[10.5px] font-bold text-zinc-400 uppercase tracking-wider gap-2 items-center">
+                    <div className="col-span-6 sm:col-span-6">Tên Thiết Bị / Dụng Cụ</div>
+                    <div className="col-span-2 sm:col-span-2 text-center">Tình Trạng Giao</div>
+                    <div className="col-span-1 sm:col-span-1 text-center">SL</div>
+                    <div className="col-span-2 sm:col-span-2 text-right">Giá Trị</div>
+                    <div className="col-span-1 sm:col-span-1 text-right">Thao Tác</div>
+                  </div>
+
+                  <div className="divide-y divide-zinc-800/50 max-h-[420px] overflow-y-auto custom-scrollbar">
+                    {filteredTools.length > 0 ? (
+                      filteredTools.map((tool, tIdx) => {
+                        let itemStatusColor = 'text-zinc-100';
+                        if (tool.status === 'Hỏng') itemStatusColor = 'text-amber-400 line-through opacity-80';
+                        if (tool.status === 'Mất') itemStatusColor = 'text-rose-400 line-through opacity-80';
+                        const condStyle = getConditionBadge(tool.conditionPct);
+                        const toolManager = (tool.user || ws.user || 'Chưa gán').trim();
+
+                        return (
+                          <div 
+                            key={tool.id || tIdx} 
+                            className="px-4 py-2.5 grid grid-cols-12 items-center hover:bg-zinc-800/40 transition-colors text-xs gap-2"
+                          >
+                            {/* Tên thiết bị - Rộng rãi 6 cột, không truncate, wrap chữ tự nhiên 100% rõ ràng */}
+                            <div className="col-span-6 sm:col-span-6 flex items-start gap-2.5 pr-1 min-w-0">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400/80 shrink-0 mt-1.5"></span>
+                              <div className="flex-1 min-w-0">
+                                <span className={`font-semibold text-zinc-100 text-xs sm:text-[13px] leading-snug break-words whitespace-normal inline ${itemStatusColor}`} title={tool.name}>
+                                  {tool.name}
+                                </span>
+                                {tool.status !== 'Tốt' && (
+                                  <span className={`ml-2 text-[9px] px-1.5 py-0.2 rounded font-bold uppercase shrink-0 inline-block align-middle ${tool.status === 'Hỏng' ? 'bg-amber-500/20 text-amber-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                                    {tool.status}
+                                  </span>
+                                )}
+                                {/* Tag nhỏ chỉ hiển thị khi xem "Tất cả" ở trạm có nhiều người phụ trách để nhận biết */}
+                                {effectiveFilter === 'ALL' && distinctManagers.length > 1 && (
+                                  <div className="mt-1 flex items-center gap-1">
+                                    <span className="text-[10px] text-zinc-400 bg-zinc-800/90 px-1.5 py-0.5 rounded border border-zinc-700/50 inline-flex items-center gap-1 font-mono">
+                                      <i className="fa-solid fa-user text-[8px] text-zinc-500"></i>
+                                      {toolManager}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Tình Trạng Lúc Bàn Giao (%) */}
+                            <div className="col-span-2 sm:col-span-2 text-center">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-mono font-bold border ${condStyle.bg} ${condStyle.text} ${condStyle.border}`} title={`Tình trạng lúc giao: ${tool.conditionPct || 100}%`}>
+                                <i className="fa-solid fa-gauge-high text-[9px]"></i>
+                                <span>{tool.conditionPct || 100}%</span>
+                              </span>
+                            </div>
+
+                            {/* Số lượng */}
+                            <div className="col-span-1 sm:col-span-1 text-center">
+                              <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono font-bold text-[11px] border border-zinc-700/50">
+                                x{tool.qty}
+                              </span>
+                            </div>
+
+                            {/* Giá trị */}
+                            <div className="col-span-2 sm:col-span-2 text-right font-mono font-semibold text-zinc-300 text-xs sm:text-sm">
+                              {(tool.value * tool.qty).toLocaleString('vi-VN')} <span className="text-[10px] text-zinc-500">₫</span>
+                            </div>
+
+                            {/* Các nút thao tác từng dòng: Phạt / Sửa / Xoá */}
+                            <div className="col-span-1 sm:col-span-1 flex items-center justify-end gap-1.5">
+                              {/* Nút Phạt từng món */}
+                              <button 
+                                onClick={() => handleItemPenalty(ws, tool)}
+                                title={`Báo sự cố & Phạt khấu trừ (${toolManager})`}
+                                className="w-6 h-6 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white border border-rose-500/20 flex items-center justify-center transition-all cursor-pointer"
+                              >
+                                <i className="fa-solid fa-gavel text-[9.5px]"></i>
+                              </button>
+
+                              {/* Nút Xoá món (Chỉ Tối Cao) */}
+                              {isBoss && (
+                                <button 
+                                  onClick={() => handleDeleteItem(ws, tool.id)}
+                                  title="Xoá thiết bị này"
+                                  className="w-6 h-6 rounded-lg bg-zinc-800/80 hover:bg-red-950/60 text-zinc-500 hover:text-rose-400 border border-zinc-700/50 flex items-center justify-center transition-all cursor-pointer"
+                                >
+                                  <i className="fa-solid fa-trash-can text-[9.5px]"></i>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="py-8 text-center text-zinc-500 italic text-xs">
+                        Không tìm thấy thiết bị nào thuộc bộ lọc này.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Footer Controls */}
+                <div className="flex items-center justify-between pt-2">
+                  <div className="flex items-center gap-2">
+                    {isBoss && (
+                      <button 
+                        onClick={() => handleDeleteWorkspace(ws)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                      >
+                        <i className="fa-solid fa-trash mr-1.5"></i> Xoá Trạm
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2.5">
+                    {canConfigLayout && (
+                      <button 
+                        onClick={() => handleAssign(ws)} 
+                        className="px-4 py-2 rounded-xl text-xs font-bold text-zinc-300 hover:text-white bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700/60 transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+                      >
+                        <i className="fa-solid fa-pen-to-square"></i> Sửa Trạm & Thiết Bị
+                      </button>
+                    )}
+                    {(isMine || isBoss) && (
+                      <button 
+                        onClick={() => handleReport(ws)} 
+                        className="px-4 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-sm"
+                      >
+                        <i className="fa-solid fa-triangle-exclamation"></i> Báo Sự Cố Trạm
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Empty state khi lọc theo nhân sự không có kết quả */}
+          {displayedWorkspaces.length === 0 && workspaces.length > 0 && (
+            <div className="col-span-full py-16 text-center border border-zinc-800/80 rounded-2xl bg-[#121214]/60">
+              <div className="w-12 h-12 bg-zinc-900 rounded-full flex items-center justify-center mx-auto mb-3 border border-zinc-800 text-zinc-500">
+                <i className="fa-solid fa-user-slash text-lg"></i>
+              </div>
+              <h4 className="text-sm font-bold text-zinc-300 mb-1">Không Tìm Thấy Thiết Bị Của {selectedGlobalManager}</h4>
+              <p className="text-zinc-500 text-xs mb-4">Nhân sự này hiện chưa được bàn giao trực tiếp thiết bị nào.</p>
+              <button
+                type="button"
+                onClick={() => setSelectedGlobalManager('ALL')}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold rounded-xl transition-all cursor-pointer inline-flex items-center gap-2"
+              >
+                <i className="fa-solid fa-rotate-left"></i> Xem tất cả nhân sự
+              </button>
+            </div>
+          )}
+
+          {workspaces.length === 0 && (
+            <div className="col-span-full py-28 text-center border-2 border-dashed border-zinc-800 rounded-3xl bg-zinc-900/20">
+              <div className="w-20 h-20 bg-zinc-900 rounded-full flex items-center justify-center mx-auto mb-5 border border-zinc-800 shadow-inner">
+                <i className="fa-solid fa-boxes-stacked text-3xl text-zinc-600"></i>
+              </div>
+              <h3 className="text-xl font-display font-semibold text-zinc-300 mb-2">Chưa Có Trạm Làm Việc Nào</h3>
+              <p className="text-zinc-500 max-w-md mx-auto text-sm leading-relaxed mb-6">
+                Hệ thống chưa ghi nhận không gian làm việc nào được bàn giao. {isBoss && 'Hãy bấm nút bên dưới để tạo trạm đầu tiên và gán trách nhiệm thiết bị cho từng nhân sự.'}
+              </p>
+              {isBoss && (
+                <button 
+                  onClick={() => handleAssign(null)} 
+                  className="px-6 py-3 bg-white text-zinc-950 rounded-xl font-bold text-sm hover:bg-zinc-200 transition-all shadow-lg active:scale-95 cursor-pointer"
+                >
+                  <i className="fa-solid fa-plus mr-2"></i> Lập Bàn Giao Đầu Tiên
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Modal Logic */}
+        {showModal && (
+          <WorkspaceModal 
+            ws={selectedWorkspace} 
+            itemForPenalty={selectedItemForPenalty}
+            action={actionType} 
+            onClose={() => { setShowModal(false); setSelectedItemForPenalty(null); }} 
+            pushData={pushData} 
+            employees={employees}
+            currentUser={currentUser}
+            triggerToast={triggerToast}
+          />
+        )}
+      </div>
+    );
+  };
+
+  // =========================================================================
+  // MODAL: LẬP BÀN GIAO CHI TIẾT TỪNG DÒNG & BÁO SỰ CỐ PHẠT
+  // =========================================================================
+  const WorkspaceModal = ({ ws, itemForPenalty, action, onClose, pushData, employees, currentUser, triggerToast }) => {
+    const currentWs = ws || {};
+    const [isSaving, setIsSaving] = React.useState(false);
+    const [name, setName] = React.useState(currentWs.name || '');
+    const [user, setUser] = React.useState(currentWs.user || '');
+    const [photo, setPhoto] = React.useState(currentWs.photo || '');
+
+    const notify = (msg, type = 'success') => {
+      if (typeof triggerToast === 'function') {
+        triggerToast(msg, type === 'danger' ? 'fa-triangle-exclamation' : 'fa-check', type);
+      } else {
+        alert(msg);
+      }
+    };
+
+    // Parse tools list với user riêng và % tình trạng
+    const initialTools = React.useMemo(() => {
+      if (!currentWs.tools) return [{ id: 'T_' + Date.now() + '_1', name: '', qty: 1, value: 0, depreciation: '12 tháng', status: 'Tốt', user: currentWs.user || '', conditionPct: 100 }];
+      let list = currentWs.tools;
+      if (typeof list === 'string') {
+        try { list = JSON.parse(list); } catch(e) { list = list.split(/[\n,]+/).map(s => s.trim()).filter(Boolean); }
+      }
+      if (!Array.isArray(list) || list.length === 0) {
+        return [{ id: 'T_' + Date.now() + '_1', name: '', qty: 1, value: 0, depreciation: '12 tháng', status: 'Tốt', user: currentWs.user || '', conditionPct: 100 }];
+      }
+      return list.map((t, idx) => {
+        if (typeof t === 'string') {
+          return { id: 'T_' + idx + '_' + Date.now(), name: t, qty: 1, value: 0, depreciation: '12 tháng', status: 'Tốt', user: currentWs.user || '', conditionPct: 100 };
+        }
+        const condVal = (t.conditionPct !== undefined && t.conditionPct !== null && t.conditionPct !== '') ? Number(t.conditionPct) : 100;
+        return {
+          ...t,
+          id: t.id || ('T_' + idx + '_' + Date.now()),
+          user: t.user || currentWs.user || '',
+          conditionPct: isNaN(condVal) ? 100 : Math.min(100, Math.max(0, condVal))
+        };
+      });
+    }, [currentWs.tools, currentWs.user]);
+
+    const [tools, setTools] = React.useState(initialTools);
+
+    // Dành cho Báo Phạt
+    const [penaltyAmount, setPenaltyAmount] = React.useState(() => {
+      if (itemForPenalty && itemForPenalty.value) return itemForPenalty.value.toLocaleString('vi-VN');
+      return '';
+    });
+    const [reportNote, setReportNote] = React.useState(() => {
+      if (itemForPenalty) return `Hỏng/Mất món: ${itemForPenalty.name} (SL: ${itemForPenalty.qty}, Bàn giao ban đầu: ${itemForPenalty.conditionPct || 100}%)`;
+      return '';
+    });
+    const [reportStatus, setReportStatus] = React.useState('Hỏng');
+
+    // Thêm 1 dòng công cụ mới
+    const handleAddToolRow = () => {
+      setTools(prev => [
+        ...prev,
+        {
+          id: 'T_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          name: '',
+          qty: 1,
+          value: 0,
+          depreciation: '12 tháng',
+          status: 'Tốt',
+          user: user || currentWs.user || '',
+          conditionPct: 100
+        }
+      ]);
+    };
+
+    // Gán nhanh toàn bộ vật tư cho người phụ trách trạm
+    const handleAssignAllToRoomUser = () => {
+      if (!user) return notify('Vui lòng chọn Người Phụ Trách Trạm trước!', 'warning');
+      setTools(prev => prev.map(t => ({ ...t, user })));
+      notify(`Đã gán tất cả ${tools.length} thiết bị cho ${user}!`, 'success');
+    };
+
+    // Sửa 1 trường của 1 dòng công cụ
+    const handleUpdateToolRow = (id, field, val) => {
+      setTools(prev => prev.map(t => {
+        if (t.id === id) {
+          return { ...t, [field]: val };
+        }
+        return t;
+      }));
+    };
+
+    // Xoá 1 dòng công cụ
+    const handleRemoveToolRow = (id) => {
+      if (tools.length <= 1) {
+        return setTools([{ id: 'T_' + Date.now(), name: '', qty: 1, value: 0, depreciation: '12 tháng', status: 'Tốt', user: user || '', conditionPct: 100 }]);
+      }
+      setTools(prev => prev.filter(t => t.id !== id));
+    };
+
+    // Lưu gán / cập nhật trạm
+    const handleSaveAssign = async () => {
+      if (!name.trim()) return notify('Vui lòng điền Tên Không Gian / Trạm!', 'danger');
+      if (!user) return notify('Vui lòng chọn Người Phụ Trách Trạm!', 'danger');
+
+      const validTools = tools.filter(t => t.name.trim()).map(t => {
+        const condVal = (t.conditionPct !== undefined && t.conditionPct !== null && t.conditionPct !== '') ? Number(t.conditionPct) : 100;
+        return {
+          id: t.id,
+          name: t.name.trim(),
+          qty: Math.max(1, parseInt(t.qty) || 1),
+          value: Math.max(0, parseInt(String(t.value).replace(/[^0-9]/g, '')) || 0),
+          depreciation: t.depreciation || '12 tháng',
+          status: t.status || 'Tốt',
+          user: (t.user || user).trim(),
+          conditionPct: isNaN(condVal) ? 100 : Math.min(100, Math.max(0, condVal))
+        };
+      });
+
+      if (validTools.length === 0) {
+        return notify('Vui lòng nhập ít nhất 1 thiết bị / công cụ bàn giao!', 'danger');
+      }
+
+      setIsSaving(true);
+      const dateStr = currentWs.handoverDate || new Date().toLocaleDateString('vi-VN');
+
+      const payload = {
+        Workspaces: [{
+          id: currentWs.id || ('WS_' + Date.now()),
+          name: name.trim(),
+          user,
+          tools: validTools,
+          status: currentWs.status || 'Tốt',
+          handoverDate: dateStr,
+          photo: photo || currentWs.photo || '',
+          note: currentWs.note || ''
+        }]
+      };
+
+      try {
+        await pushData(payload, null, `Đã lưu bàn giao trạm [${name.trim()}] thành công!`);
+        onClose();
+      } catch(e) {
+        notify('Lỗi lưu bàn giao: ' + e, 'danger');
+      } finally {
+        setIsSaving(false);
+      }
+    };
+
+    // Lưu báo cáo sự cố & phạt
+    const handleSaveReport = async () => {
+      if (!reportNote.trim()) return notify('Vui lòng ghi rõ chi tiết lý do và món đồ bị hỏng/mất!', 'danger');
+      setIsSaving(true);
+
+      const amt = parseInt(String(penaltyAmount).replace(/[^0-9]/g, '')) || 0;
+      const dateStr = new Date().toLocaleDateString('vi-VN');
+
+      // Xác định đúng nhân sự chịu trách nhiệm của món đồ này
+      const responsibleUser = itemForPenalty 
+        ? (itemForPenalty.user || currentWs.user || user) 
+        : (currentWs.user || user);
+
+      // Cập nhật trạng thái món đồ nếu phạt theo item
+      let updatedTools = tools;
+      if (itemForPenalty) {
+        updatedTools = tools.map(t => {
+          if (t.id === itemForPenalty.id) {
+            return { ...t, status: reportStatus };
+          }
+          return t;
+        });
+      }
+
+      let payload = {
+        Workspaces: [{
+          ...currentWs,
+          tools: updatedTools,
+          status: reportStatus
+        }]
+      };
+
+      if (amt > 0) {
+        payload.BonusPenalty = [{
+          id: 'BP_WS_' + Date.now(),
+          user: responsibleUser,
+          amount: -amt,
+          type: 'Phạt Vi Phạm',
+          note: `Trách nhiệm thiết bị [${itemForPenalty ? itemForPenalty.name : (currentWs.name || name)}] tại trạm [${currentWs.name || name}]: ${reportNote}`,
+          date: dateStr,
+          orderCode: ''
+        }];
+      }
+
+      try {
+        await pushData(payload, null, `Đã ghi nhận sự cố trạm [${ws.name}]!`);
+        if (window.sendNtfyNotification) {
+          window.sendNtfyNotification(
+            `🚨 BÁO CÁO SỰ CỐ: ${ws.name}`,
+            `Nhân sự chịu trách nhiệm: ${responsibleUser}\nMón đồ: ${itemForPenalty ? itemForPenalty.name : 'Toàn trạm'}\nTình trạng: ${reportStatus}\nMức phạt: ${amt.toLocaleString('vi-VN')} ₫\nNội dung: ${reportNote}`
+          );
+        }
+        onClose();
+      } catch(e) {
+        notify('Lỗi gửi báo cáo: ' + e, 'danger');
+      } finally {
+        setIsSaving(false);
+      }
+    };
+
+    const formatCurrencyInput = (val) => {
+      let num = String(val).replace(/[^0-9]/g, '');
+      if (!num) return '';
+      return parseInt(num).toLocaleString('vi-VN');
+    };
+
+    const totalModalValue = tools.reduce((sum, t) => {
+      const val = parseInt(String(t.value).replace(/[^0-9]/g, '')) || 0;
+      const qty = parseInt(t.qty) || 1;
+      return sum + (val * qty);
+    }, 0);
+
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md animate-fade-in">
+        <div className="bg-[#121214] border border-zinc-800 rounded-3xl w-full max-w-4xl overflow-hidden shadow-2xl flex flex-col max-h-[94vh]">
+          {/* Modal Header */}
+          <div className="p-5 sm:p-6 border-b border-zinc-800 flex justify-between items-center bg-[#18181b]/70">
+            <div>
+              <h3 className="text-xl font-display font-bold text-white flex items-center gap-3">
+                {action === 'assign' ? (
+                  <>
+                    <i className="fa-solid fa-clipboard-user text-zinc-400"></i>
+                    Bàn Giao & Gán Trách Nhiệm Thiết Bị
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-gavel text-rose-500"></i>
+                    {itemForPenalty ? `Phạt Sự Cố: ${itemForPenalty.name}` : `Báo Sự Cố Trạm: ${ws.name}`}
+                  </>
+                )}
+              </h3>
+              <p className="text-xs text-zinc-400 mt-1">
+                {action === 'assign' 
+                  ? 'Phân bổ thiết bị cho từng nhân sự riêng biệt, ghi nhận % tình trạng bàn giao và thời gian khấu hao.' 
+                  : 'Lập biên bản quy trách nhiệm đền bù trực tiếp vào lương của đúng nhân sự quản lý món đồ.'}
+              </p>
+            </div>
+            <button 
+              onClick={onClose} 
+              className="w-9 h-9 rounded-full bg-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-700 flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <i className="fa-solid fa-xmark text-sm"></i>
+            </button>
+          </div>
+
+          {/* Modal Content */}
+          <div className="p-5 sm:p-6 overflow-y-auto space-y-5 form-minimal custom-scrollbar">
+            {action === 'assign' ? (
+              <>
+                {/* 2 Cột: Tên trạm + Trưởng trạm */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">
+                      Tên Không Gian / Trạm Làm Việc <span className="text-rose-500">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      value={name} 
+                      onChange={e => setName(e.target.value)} 
+                      placeholder="VD: Phòng Đóng Gói, Xưởng Cắt Kính..." 
+                      className="w-full bg-[#09090b] border border-zinc-800 rounded-xl px-4 py-2.5 text-white placeholder-zinc-700 focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 transition-all text-sm font-medium" 
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">
+                      Trưởng Trạm / Quản Lý Mặc Định <span className="text-rose-500">*</span>
+                    </label>
+                    <select 
+                      value={user} 
+                      onChange={e => setUser(e.target.value)} 
+                      className="w-full bg-[#09090b] border border-zinc-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 transition-all text-sm font-medium"
+                    >
+                      <option value="">-- Chọn trưởng trạm / quản lý chung --</option>
+                      {employees.map((e, idx) => (
+                        <option key={idx} value={e}>{e}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Danh sách công cụ dạng từng dòng */}
+                <div>
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-2.5">
+                    <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+                      <i className="fa-solid fa-list-check text-zinc-500"></i>
+                      Danh Sách Thiết Bị / Dụng Cụ Bàn Giao ({tools.length} món)
+                    </label>
+                    <div className="flex items-center gap-3">
+                      {user && (
+                        <button
+                          type="button"
+                          onClick={handleAssignAllToRoomUser}
+                          className="text-[11px] font-bold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-2.5 py-1 rounded-lg border border-amber-500/20 transition-all cursor-pointer flex items-center gap-1"
+                        >
+                          <i className="fa-solid fa-bolt text-[10px]"></i> Gán tất cả cho {user}
+                        </button>
+                      )}
+                      <span className="text-xs font-mono font-bold text-amber-400">
+                        Tổng: {totalModalValue.toLocaleString('vi-VN')} ₫
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Bảng dynamic dòng */}
+                  <div className="bg-[#09090b] border border-zinc-800/80 rounded-2xl p-3 sm:p-4 space-y-3">
+                    <div className="hidden lg:grid grid-cols-12 gap-2 text-[10.5px] font-bold text-zinc-500 uppercase tracking-wider px-2">
+                      <div className="col-span-3">Tên Dụng Cụ / Thiết Bị</div>
+                      <div className="col-span-3">Người Quản Lý Riêng</div>
+                      <div className="col-span-2 text-center">Tình Trạng (%)</div>
+                      <div className="col-span-1 text-center">SL</div>
+                      <div className="col-span-2">Giá Trị (VNĐ)</div>
+                      <div className="col-span-1">Khấu Hao</div>
+                    </div>
+
+                    {tools.map((tool, idx) => (
+                      <div 
+                        key={tool.id || idx} 
+                        className="flex flex-col lg:grid lg:grid-cols-12 gap-2 bg-[#121214] p-3 lg:p-2 rounded-xl border border-zinc-800 items-center hover:border-zinc-700 transition-all"
+                      >
+                        {/* Tên */}
+                        <div className="w-full lg:col-span-3">
+                          <input 
+                            type="text" 
+                            value={tool.name} 
+                            onChange={e => handleUpdateToolRow(tool.id, 'name', e.target.value)} 
+                            placeholder={`VD: Bàn cắt kính #${idx + 1}`}
+                            className="w-full bg-[#18181b] border border-zinc-700/60 rounded-lg px-3 py-2 text-white placeholder-zinc-700 text-xs focus:outline-none focus:border-zinc-400"
+                          />
+                        </div>
+
+                        {/* Người Quản Lý Riêng */}
+                        <div className="w-full lg:col-span-3 flex items-center gap-1.5">
+                          <span className="lg:hidden text-[11px] text-zinc-500 font-bold w-20 shrink-0">Quản lý:</span>
+                          <select 
+                            value={tool.user || user || ''} 
+                            onChange={e => handleUpdateToolRow(tool.id, 'user', e.target.value)}
+                            className="w-full bg-[#18181b] border border-zinc-700/60 rounded-lg px-2.5 py-2 text-zinc-200 text-xs focus:outline-none focus:border-zinc-400"
+                          >
+                            <option value="">-- {user ? `Mặc định (${user})` : 'Chọn nhân sự'} --</option>
+                            {employees.map((emp, eIdx) => (
+                              <option key={eIdx} value={emp}>{emp}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Tình Trạng Lúc Bàn Giao (%) */}
+                        <div className="w-full lg:col-span-2 flex items-center gap-1.5">
+                          <span className="lg:hidden text-[11px] text-zinc-500 font-bold w-20 shrink-0">Tình trạng:</span>
+                          <div className="relative flex-1">
+                            <input 
+                              type="number" 
+                              min="0"
+                              max="100"
+                              value={tool.conditionPct !== undefined ? tool.conditionPct : 100} 
+                              onChange={e => handleUpdateToolRow(tool.id, 'conditionPct', Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                              placeholder="100"
+                              className="w-full bg-[#18181b] border border-zinc-700/60 rounded-lg px-2 py-2 pr-6 text-center text-emerald-400 font-mono font-bold text-xs focus:outline-none focus:border-emerald-500"
+                            />
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-zinc-500 font-mono font-bold">%</span>
+                          </div>
+                        </div>
+
+                        {/* SL */}
+                        <div className="w-full lg:col-span-1 flex items-center gap-1.5">
+                          <span className="lg:hidden text-[11px] text-zinc-500 font-bold w-20 shrink-0">SL:</span>
+                          <input 
+                            type="number" 
+                            min="1"
+                            value={tool.qty} 
+                            onChange={e => handleUpdateToolRow(tool.id, 'qty', e.target.value)} 
+                            className="w-full bg-[#18181b] border border-zinc-700/60 rounded-lg px-2 py-2 text-center text-white text-xs font-mono font-bold focus:outline-none focus:border-zinc-400"
+                          />
+                        </div>
+
+                        {/* Giá trị */}
+                        <div className="w-full lg:col-span-2 flex items-center gap-1.5">
+                          <span className="lg:hidden text-[11px] text-zinc-500 font-bold w-20 shrink-0">Giá:</span>
+                          <input 
+                            type="text" 
+                            value={formatCurrencyInput(tool.value)} 
+                            onChange={e => handleUpdateToolRow(tool.id, 'value', e.target.value)} 
+                            placeholder="0"
+                            className="w-full bg-[#18181b] border border-zinc-700/60 rounded-lg px-2.5 py-2 text-right text-amber-300 font-mono font-bold text-xs focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+
+                        {/* Khấu hao & Xoá dòng */}
+                        <div className="w-full lg:col-span-1 flex items-center gap-1.5 justify-between">
+                          <select 
+                            value={tool.depreciation} 
+                            onChange={e => handleUpdateToolRow(tool.id, 'depreciation', e.target.value)}
+                            className="w-full bg-[#18181b] border border-zinc-700/60 rounded-lg px-1.5 py-2 text-zinc-300 text-[11px] focus:outline-none focus:border-zinc-400"
+                          >
+                            <option value="3 tháng">3T</option>
+                            <option value="6 tháng">6T</option>
+                            <option value="12 tháng">12T</option>
+                            <option value="24 tháng">24T</option>
+                            <option value="36 tháng">36T</option>
+                            <option value="Không khấu hao">Vĩnh viễn</option>
+                            <option value="Đã thanh lý">Đã thanh lý (0đ)</option>
+                          </select>
+
+                          <button 
+                            type="button" 
+                            onClick={() => handleRemoveToolRow(tool.id)}
+                            className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-rose-500/20 text-zinc-500 hover:text-rose-400 flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+                            title="Xoá dòng này"
+                          >
+                            <i className="fa-solid fa-trash-can text-xs"></i>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    <button 
+                      type="button"
+                      onClick={handleAddToolRow}
+                      className="w-full py-2.5 bg-[#18181b] hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-xl border border-dashed border-zinc-700 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+                    >
+                      <i className="fa-solid fa-plus text-xs"></i> Thêm Thiết Bị / Dụng Cụ Khác
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Phần Báo Sự Cố & Phạt */}
+                <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-5 text-rose-200 text-xs sm:text-sm leading-relaxed relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-rose-500"></div>
+                  Biên bản sự cố thiết bị tại <strong className="text-white">{ws.name}</strong>.<br/>
+                  Nhân sự chịu trách nhiệm trực tiếp: <strong className="text-white underline">{itemForPenalty ? (itemForPenalty.user || ws.user) : ws.user}</strong> {itemForPenalty && `(Món đồ: ${itemForPenalty.name} - Bàn giao lúc: ${itemForPenalty.conditionPct || 100}%)`}.<br/>
+                  Trách nhiệm đền bù sẽ được tự động khấu trừ vào bảng lương của đúng nhân sự này và phát cảnh báo Ntfy 0ms.
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-zinc-400 mb-2 uppercase tracking-wider">Tình Trạng Hư Tổn</label>
+                  <div className="flex gap-3">
+                    {['Hỏng', 'Mất'].map(st => (
+                      <button 
+                        key={st} 
+                        type="button"
+                        onClick={() => setReportStatus(st)} 
+                        className={`flex-1 py-3 rounded-xl border text-xs sm:text-sm font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                          reportStatus === st 
+                            ? (st === 'Hỏng' 
+                                ? 'bg-amber-500/20 border-amber-500 text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.2)]' 
+                                : 'bg-rose-500/20 border-rose-500 text-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.2)]') 
+                            : 'bg-[#09090b] border-zinc-800 text-zinc-500 hover:border-zinc-700'
+                        }`}
+                      >
+                        <i className={`fa-solid ${st === 'Hỏng' ? 'fa-wrench' : 'fa-circle-xmark'} mr-2`}></i>
+                        {st} Thiết Bị
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-zinc-400 mb-2 uppercase tracking-wider">Chi Tiết Sự Cố & Món Đồ Bị Ảnh Hưởng</label>
+                  <textarea 
+                    value={reportNote} 
+                    onChange={e => setReportNote(e.target.value)} 
+                    placeholder="VD: Làm rơi vỡ máy mài kính trong ca chiều ngày 26/08..." 
+                    rows="3" 
+                    className="w-full bg-[#09090b] border border-zinc-800 rounded-xl px-4 py-3 text-white placeholder-zinc-700 focus:outline-none focus:border-rose-500 transition-all text-xs sm:text-sm resize-y"
+                  ></textarea>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-rose-400 mb-2 uppercase tracking-wider">
+                    Số Tiền Đền Bù (Khấu trừ trực tiếp vào lương của {itemForPenalty ? (itemForPenalty.user || ws.user) : ws.user})
+                  </label>
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      value={penaltyAmount} 
+                      onChange={e => setPenaltyAmount(formatCurrencyInput(e.target.value))} 
+                      placeholder="Nhập số tiền phạt đền bù..." 
+                      className="w-full bg-[#09090b] border border-rose-500/40 rounded-xl px-4 py-3.5 pl-10 text-rose-400 font-bold focus:outline-none focus:border-rose-500 transition-all text-base sm:text-lg font-mono" 
+                    />
+                    <i className="fa-solid fa-dong-sign absolute left-4 top-1/2 -translate-y-1/2 text-rose-500/50"></i>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Modal Footer */}
+          <div className="p-5 sm:p-6 border-t border-zinc-800 bg-[#18181b]/50 flex justify-end gap-3">
+            <button 
+              onClick={onClose} 
+              className="px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors cursor-pointer"
+            >
+              Huỷ Bỏ
+            </button>
+            <button 
+              onClick={action === 'assign' ? handleSaveAssign : handleSaveReport} 
+              disabled={isSaving}
+              className={`px-7 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all shadow-lg flex items-center gap-2 cursor-pointer ${
+                action === 'assign' 
+                  ? 'bg-white text-zinc-950 hover:bg-zinc-200' 
+                  : 'bg-rose-600 text-white hover:bg-rose-500 shadow-rose-600/30'
+              }`}
+            >
+              {isSaving ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-check"></i>}
+              {action === 'assign' ? 'Lưu Bàn Giao Thiết Bị' : 'Xác Nhận Phạt Đền Bù'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+</script>

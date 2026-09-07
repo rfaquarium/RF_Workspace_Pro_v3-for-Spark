@@ -1,0 +1,19 @@
+{
+  "name": "RF Workspace Pro",
+  "short_name": "RF Workspace",
+  "description": "Hệ thống quản trị xưởng Rich Fish Aquarium",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "icons": [
+    {
+      "src": "https://i.postimg.cc/TYD5NncZ/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

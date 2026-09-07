@@ -1,0 +1,1575 @@
+<script type="text/babel">
+// =========================================================================
+// 👑 FILE: Components.html
+// CHỨC NĂNG: Hệ thống Atomic Components chuẩn Hallmark Royal Workbench v2.12.0
+// =========================================================================
+
+window.safeJSONParse = (jsonString) => {
+    if (!jsonString) return [];
+    try {
+        const parsed = JSON.parse(jsonString);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        console.error("FATAL PARSE ERROR: ", e);
+        throw new Error("FATAL_DATA_CORRUPTION");
+    }
+};
+
+class ErrorBoundary extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+    static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+    }
+    render() {
+        if (this.state.hasError) {
+            if (this.state.error && this.state.error.message === "FATAL_DATA_CORRUPTION") {
+                return (
+                    <div className="fixed inset-0 z-[999999] bg-[#09090b] flex flex-col items-center justify-center text-white p-8 animate-fade-in">
+                        <i className="fas fa-skull-crossbones text-6xl mb-6 text-rose-500 animate-pulse"></i>
+                        <h1 className="text-2xl font-black mb-4 uppercase text-center text-rose-400">Hệ Thống Tạm Khoá Tránh Mất Dữ Liệu</h1>
+                        <p className="text-sm text-center max-w-2xl mb-8 leading-relaxed text-zinc-300">
+                            Phát hiện dữ liệu lưu trữ bị gián đoạn. Để bảo vệ an toàn dữ liệu và <b className="text-white">chống đè xoá</b>, hệ thống đã tạm khoá thao tác.
+                        </p>
+                        <button onClick={() => window.location.reload()} className="bg-rose-600 hover:bg-rose-500 text-white px-8 py-3 rounded-xl font-bold uppercase tracking-wider transition-all">Tải Lại Trang (F5)</button>
+                    </div>
+                );
+            }
+            return (
+                <div className="p-8 text-center bg-[#09090b] text-white min-h-[400px] flex flex-col justify-center items-center rounded-2xl border border-white/10 m-4">
+                    <i className="fas fa-exclamation-triangle text-4xl text-amber-400 mb-4"></i>
+                    <h2 className="text-lg font-bold mb-2 text-zinc-100">Đã xảy ra lỗi hiển thị khối giao diện</h2>
+                    <p className="text-zinc-400 text-xs font-mono max-w-lg truncate">{this.state.error?.toString()}</p>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
+const getDrivePreviewUrl = (url) => {
+    if (!url) return '';
+    const match = url.match(/[-\w]{25,}/);
+    if (match) return ('https:\x2F\x2Fdrive.google.com/file/d/' + match[0] + '/preview');
+    return url;
+};
+
+// PERF: Chuyển đổi Google Drive URL sang thumbnail proxy nhẹ hơn ~10-20x
+// size: 'sm' (120px), 'md' (300px), 'lg' (600px), 'full' (ảnh gốc)
+window.rfOptimizeImageUrl = (url, size = 'sm') => {
+    if (!url || typeof url !== 'string') return '';
+    const str = url.trim();
+    
+    // Đã là thumbnail proxy rồi thì không cần convert lại
+    if (str.includes('lh3.googleusercontent.com/d/')) return str;
+    
+    // Nếu là postimg, imgur, hoặc URL ngoài thì giữ nguyên
+    if (!str.includes('drive.google.com') && !str.includes('googleusercontent.com')) return str;
+    
+    // Extract Google Drive file ID
+    let fileId = null;
+    const patterns = [
+        /\/d\/([a-zA-Z0-9_-]{20,})/,         // /file/d/ID/...
+        /id=([a-zA-Z0-9_-]{20,})/,            // ?id=ID
+        /[-\w]{25,}/                            // raw ID fallback
+    ];
+    for (const p of patterns) {
+        const m = str.match(p);
+        if (m) { fileId = m[1] || m[0]; break; }
+    }
+    if (!fileId) return str;
+    
+    // Chuyển sang lh3 proxy với kích thước nhỏ
+    const sizeMap = { sm: 'w120-h120', md: 'w300-h300', lg: 'w600-h600', full: 'w0' };
+    const sizeParam = sizeMap[size] || sizeMap.sm;
+    return `https:\x2F\x2Flh3.googleusercontent.com/d/${fileId}=${sizeParam}`;
+};
+
+// PERF: Component ảnh tối ưu — lazy load, skeleton, tự nén URL Drive
+window.RFImage = React.memo(function RFImage({ src, alt = 'img', className = '', size = 'sm', onClick, title, style }) {
+    const [loaded, setLoaded] = React.useState(false);
+    const [errored, setErrored] = React.useState(false);
+    const optimizedSrc = React.useMemo(() => window.rfOptimizeImageUrl(src, size), [src, size]);
+    
+    if (!optimizedSrc || errored) {
+        return (
+            <div className={`bg-[#18181c] border border-white/[0.08] flex items-center justify-center text-zinc-600 ${className}`} style={style}>
+                <i className="fas fa-box text-[11px] opacity-60"></i>
+            </div>
+        );
+    }
+    
+    return (
+        <div className={`relative overflow-hidden ${className}`} style={style}>
+            {!loaded && <div className="absolute inset-0 skeleton-loader rounded"></div>}
+            <img
+                src={optimizedSrc}
+                alt={alt}
+                loading="lazy"
+                decoding="async"
+                className={`w-full h-full object-cover transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'} ${onClick ? 'cursor-pointer' : ''}`}
+                onLoad={() => setLoaded(true)}
+                onError={() => setErrored(true)}
+                onClick={onClick}
+                title={title}
+            />
+        </div>
+    );
+});
+
+window.resizeImage = (file, maxWidth = 800, maxHeight = 800, initialQuality = 0.5) => {
+    return new Promise((resolve, reject) => {
+        if (!file || !file.type.match(/image.*/)) return reject(new Error("Not an image"));
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const image = new Image();
+            image.onload = () => {
+                let width = image.width; let height = image.height;
+                if (width > height && width > maxWidth) { height = Math.round((height * maxWidth) / width); width = maxWidth; }
+                else if (height > maxHeight) { width = Math.round((width * maxHeight) / height); height = maxHeight; }
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = width; canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(image, 0, 0, width, height);
+                
+                let quality = initialQuality;
+                let dataUrl = canvas.toDataURL('image/jpeg', quality);
+                
+                // Google Sheets cell limit is 50,000 chars. We aim for < 45,000.
+                while (dataUrl.length > 45000 && quality > 0.1) {
+                    quality -= 0.1;
+                    dataUrl = canvas.toDataURL('image/jpeg', Math.max(0.1, quality));
+                }
+                
+                while (dataUrl.length > 45000 && width > 100) {
+                    width = Math.round(width * 0.7);
+                    height = Math.round(height * 0.7);
+                    canvas.width = width; canvas.height = height;
+                    ctx.drawImage(image, 0, 0, width, height);
+                    dataUrl = canvas.toDataURL('image/jpeg', quality);
+                }
+                
+                resolve(dataUrl);
+            };
+            image.onerror = reject;
+            image.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+};
+
+const RFLogo = React.memo(({ className = "w-9 h-9", size = 36 }) => (
+  <svg width={size} height={size} viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" className={className}>
+    <defs>
+      <linearGradient id="rfFinGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+        <stop offset="0%" stopColor="#1e3a8a" />
+        <stop offset="40%" stopColor="#0284c7" />
+        <stop offset="70%" stopColor="#06b6d4" />
+        <stop offset="100%" stopColor="#38bdf8" />
+      </linearGradient>
+    </defs>
+    <path 
+      d="M25,80 C25,80 30,45 50,30 C65,18 80,25 78,35 C75,45 60,52 65,65 C70,78 78,80 78,80 C50,80 37,80 25,80 Z" 
+      fill="url(#rfFinGrad)" 
+      style={{ filter: "drop-shadow(0px 2px 4px rgba(6, 182, 212, 0.35))" }}
+    />
+  </svg>
+));
+
+// =========================================================================
+// ATOMIC COMPONENTS (CORE DESIGN SYSTEM - ROYAL WORKBENCH)
+// =========================================================================
+
+const RFCard = React.memo(({ children, className = "", noPadding = false, onClick = null }) => {
+    return (
+        <div 
+            onClick={onClick}
+            className={`bg-[#121215] border border-white/[0.08] rounded-2xl shadow-[0_4px_20px_rgba(0,0,0,0.3)] overflow-hidden transition-all duration-200 ${onClick ? 'cursor-pointer hover:border-[#d4af37]/40 hover:shadow-[0_4px_24px_rgba(212,175,55,0.12)] active:scale-[0.99]' : ''} ${noPadding ? '' : 'p-3.5 sm:p-4'} ${className}`}
+        >
+            {children}
+        </div>
+    );
+});
+
+const RFButton = React.memo(({ children, onClick, variant = 'primary', className = "", disabled = false, icon = null, isLoading = false, title = "" }) => {
+    let baseStyles = "relative overflow-hidden rounded-xl font-bold text-[11.5px] uppercase tracking-wider transition-all duration-180 flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-40 disabled:active:scale-100 disabled:cursor-not-allowed select-none whitespace-nowrap";
+    
+    const variants = {
+        primary: "bg-gradient-to-r from-[#d4af37] to-[#f0ca5e] text-[#09090b] shadow-[0_2px_12px_rgba(212,175,55,0.25)] hover:shadow-[0_4px_18px_rgba(212,175,55,0.4)] border border-[#f0ca5e]/40 font-black",
+        secondary: "bg-[#18181c] text-zinc-200 border border-white/[0.08] hover:border-white/[0.18] hover:bg-[#222228]",
+        danger: "bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-[0_2px_12px_rgba(225,29,72,0.25)] hover:shadow-[0_4px_18px_rgba(225,29,72,0.4)] border border-rose-400/30",
+        success: "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-[0_2px_12px_rgba(5,150,105,0.25)] hover:shadow-[0_4px_18px_rgba(5,150,105,0.4)] border border-emerald-400/30",
+        outline: "bg-transparent text-[#d4af37] border border-[#d4af37]/40 hover:bg-[#d4af37]/10",
+        ghost: "bg-transparent text-zinc-400 hover:text-white hover:bg-white/5"
+    };
+
+    const handleClick = (e) => {
+        if (disabled || isLoading) return;
+        if (typeof window.triggerHaptic === 'function') {
+            window.triggerHaptic(variant === 'danger' ? 'heavy' : variant === 'success' ? 'success' : 'light');
+        } else {
+            try { if (navigator.vibrate) navigator.vibrate(15); } catch(err) {}
+        }
+        if (onClick) onClick(e);
+    };
+
+    return (
+        <button 
+            onClick={handleClick} 
+            disabled={disabled || isLoading} 
+            title={title}
+            className={`${baseStyles} ${variants[variant] || variants.primary} py-2.5 px-3.5 ${className}`}
+        >
+            {isLoading ? <i className="fas fa-spinner fa-spin text-xs"></i> : (icon && <i className={`fas ${icon} text-xs`}></i>)}
+            <span>{children}</span>
+        </button>
+    );
+});
+
+const RFBadge = React.memo(({ text, type = 'default', className = "", icon = null }) => {
+    const types = {
+        default: "bg-zinc-800/80 text-zinc-300 border-white/[0.08]",
+        warning: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+        danger: "bg-rose-500/10 text-rose-400 border-rose-500/30",
+        success: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+        info: "bg-blue-500/10 text-blue-400 border-blue-500/30",
+        primary: "bg-[#d4af37]/10 text-[#d4af37] border-[#d4af37]/30",
+        purple: "bg-purple-500/10 text-purple-400 border-purple-500/30",
+    };
+    
+    return (
+        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[9.5px] font-bold tracking-wider uppercase border whitespace-nowrap ${types[type] || types.default} ${className}`}>
+            {icon && <i className={`fas ${icon} text-[8.5px]`}></i>}
+            <span>{text}</span>
+        </span>
+    );
+});
+
+const RFInput = React.memo(({ value, onChange, placeholder, icon, type = "text", className = "", label = null }) => {
+    return (
+        <div className="flex flex-col w-full">
+            {label && <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">{label}</label>}
+            <div className="relative w-full">
+                {icon && <i className={`fas ${icon} absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-xs`}></i>}
+                <input 
+                    type={type}
+                    value={value}
+                    onChange={onChange}
+                    placeholder={placeholder}
+                    className={`rf-input-glass rounded-xl px-4 py-2.5 text-[13px] text-white outline-none font-medium placeholder-zinc-600 w-full ${icon ? 'pl-9' : ''} ${className}`}
+                />
+            </div>
+        </div>
+    );
+});
+
+// =========================================================================
+// 🤖 RICH FISH WORKSHOP ASSISTANT WIDGET (QUẢN ĐỐC ẢO XƯỞNG)
+// =========================================================================
+const KCS_LOCAL_URL = (typeof window !== 'undefined' && (window.RF_AI_SERVICE_URL || (window.localStorage && window.localStorage.getItem('rf_ai_service_url')))) || (function() { const KCS_LOCAL_URL = 'http' + '://' + '127.0.0.1:8000'; return KCS_LOCAL_URL; })();
+const KCS_API_KEY = (typeof window !== 'undefined' && (window.RF_AI_API_KEY || (window.localStorage && window.localStorage.getItem('rf_ai_api_key')))) || 'rf-kcs-internal-2026';
+
+const WorkshopAssistantWidget = React.memo(function WorkshopAssistantWidget({ currentUser, activeTab }) {
+    const [isOpen, setIsOpen] = React.useState(false);
+    const [messages, setMessages] = React.useState([
+        {
+            id: 'init_1',
+            sender: 'assistant',
+            text: 'Chào bạn! Tôi là Quản Đốc Ảo Rich Fish. Bạn cần hướng dẫn kỹ thuật gia công, kiểm tra định mức hay hỗ trợ khắc phục lỗi KCS?',
+            time: 'Vừa xong'
+        }
+    ]);
+    const [input, setInput] = React.useState('');
+    const [isLoading, setIsLoading] = React.useState(false);
+    const [isOnline, setIsOnline] = React.useState(null);
+    const [currentContext, setCurrentContext] = React.useState({ phase: 'Xưởng', product: '', defect: '' });
+    const messagesEndRef = React.useRef(null);
+
+    const scrollToBottom = () => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    };
+
+    React.useEffect(() => {
+        if (isOpen) {
+            scrollToBottom();
+            fetch(KCS_LOCAL_URL + '/health')
+                .then(res => res.ok ? res.json() : null)
+                .then(data => setIsOnline(Boolean(data && data.status)))
+                .catch(() => setIsOnline(false));
+        }
+    }, [isOpen, messages]);
+
+    React.useEffect(() => {
+        window.openWorkshopAssistant = (opt = {}) => {
+            setIsOpen(true);
+            if (opt.phase || opt.product || opt.defect) {
+                setCurrentContext({
+                    phase: opt.phase || 'Xưởng',
+                    product: opt.product || '',
+                    defect: opt.defect || ''
+                });
+            }
+            if (opt.message) {
+                handleSend(opt.message, {
+                    phase: opt.phase || 'Xưởng',
+                    product: opt.product || '',
+                    defect: opt.defect || ''
+                });
+            }
+        };
+        return () => {
+            delete window.openWorkshopAssistant;
+        };
+    }, []);
+
+    const handleSend = async (customText, overrideContext) => {
+        const textToSend = (customText !== undefined ? customText : input).trim();
+        if (!textToSend || isLoading) return;
+
+        const ctx = overrideContext || currentContext;
+        const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+
+        const userMsg = {
+            id: 'u_' + Date.now(),
+            sender: 'user',
+            text: textToSend,
+            time: nowStr
+        };
+
+        setMessages(prev => [...prev, userMsg]);
+        if (customText === undefined) setInput('');
+        setIsLoading(true);
+
+        if (textToSend.toLowerCase().includes('chủ nhật') || textToSend.toLowerCase().includes('sunday')) {
+            try {
+                fetch(KCS_LOCAL_URL + '/api/alarm/test?type=sunday', { headers: { 'X-RF-API-KEY': KCS_API_KEY } });
+            } catch (e) {}
+        } else if (textToSend.toLowerCase().includes('báo thức') || textToSend.toLowerCase().includes('alarm') || textToSend.includes('07:45')) {
+            try {
+                fetch(KCS_LOCAL_URL + '/api/alarm/test?type=workday', { headers: { 'X-RF-API-KEY': KCS_API_KEY } });
+            } catch (e) {}
+        }
+
+        try {
+            const resp = await fetch(KCS_LOCAL_URL + '/api/assistant/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-RF-API-KEY': KCS_API_KEY },
+                body: JSON.stringify({
+                    message: textToSend,
+                    employee_name: currentUser || 'Thợ xưởng',
+                    context_phase: ctx.phase || (activeTab === 'production' ? 'Xưởng Sản Xuất' : 'Chung'),
+                    product_name: ctx.product || '',
+                    defect_note: ctx.defect || ''
+                })
+            });
+
+            if (!resp.ok) {
+                throw new Error(`Mã lỗi HTTP ${resp.status}`);
+            }
+
+            const data = await resp.json();
+            const replyText = data.reply || (data.status === 'error' ? ('Lỗi: ' + data.message) : 'Không nhận được câu trả lời từ máy chủ AI.');
+
+            setMessages(prev => [
+                ...prev,
+                {
+                    id: 'a_' + Date.now(),
+                    sender: 'assistant',
+                    text: replyText,
+                    time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+                    isError: data.status === 'error'
+                }
+            ]);
+            setIsOnline(true);
+        } catch (err) {
+            console.warn('Workshop Assistant offline:', err);
+            setIsOnline(false);
+            setMessages(prev => [
+                ...prev,
+                {
+                    id: 'err_' + Date.now(),
+                    sender: 'assistant',
+                    text: '⚠️ Không thể kết nối tới máy chủ AI KCS (Cổng 8000). Vui lòng nhấp đúp file start_kcs.vbs để kích hoạt dịch vụ chạy ngầm.',
+                    time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+                    isError: true
+                }
+            ]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const QUICK_CHIPS = [
+        '⏰ Thử báo thức 07:45',
+        '☕ Thử lời chúc Chủ Nhật',
+        'Xử lý bọt khí đường keo',
+        'Chuẩn mài xiết vát 45°'
+    ];
+
+    return (
+        <React.Fragment>
+            {/* NÚT TRÒN NỔI GÓC PHẢI DƯỚI */}
+            <div className="fixed bottom-5 right-5 z-[9990] flex items-center gap-2">
+                {!isOpen && (
+                    <button
+                        type="button"
+                        onClick={() => setIsOpen(true)}
+                        className="group relative flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-tr from-[#1a1710] to-[#2a2418] border border-[#d4af37]/50 shadow-[0_8px_24px_rgba(0,0,0,0.6)] text-[#d4af37] hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
+                        title="Mở Quản Đốc Ảo Rich Fish"
+                    >
+                        <i className="fas fa-robot text-lg group-hover:rotate-12 transition-transform"></i>
+                        <span className={`absolute top-0.5 right-0.5 w-3 h-3 rounded-full border-2 border-[#121214] ${isOnline === true ? 'bg-emerald-400 animate-pulse' : isOnline === false ? 'bg-rose-500' : 'bg-amber-400'}`}></span>
+                    </button>
+                )}
+            </div>
+
+            {/* HỘP THOẠI CHAT POPUP */}
+            {isOpen && (
+                <div className="fixed bottom-5 right-5 z-[9995] w-[92vw] sm:w-[360px] h-[520px] max-h-[85vh] bg-[#121216] border border-white/10 rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden backdrop-blur-xl animate-scale-up">
+                    {/* Header */}
+                    <div className="px-4 py-3 bg-gradient-to-r from-[#1a1710] to-[#121216] border-b border-white/10 flex items-center justify-between shrink-0">
+                        <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-[#d4af37]/20 border border-[#d4af37]/40 flex items-center justify-center text-[#d4af37] text-sm shadow-sm">
+                                <i className="fas fa-hard-hat"></i>
+                            </div>
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <h4 className="text-[13px] font-black text-white uppercase tracking-wider">Quản Đốc Ảo</h4>
+                                    <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-full border ${isOnline ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border-rose-500/30'}`}>
+                                        {isOnline ? 'ONLINE' : 'OFFLINE'}
+                                    </span>
+                                </div>
+                                <p className="text-[10px] text-zinc-400 font-medium">Hỗ trợ kỹ thuật & an toàn xưởng</p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setIsOpen(false)}
+                            className="w-7 h-7 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors cursor-pointer"
+                        >
+                            <i className="fas fa-times text-xs"></i>
+                        </button>
+                    </div>
+
+                    {/* Quick Chips */}
+                    <div className="px-3 py-2 bg-[#0c0c0e] border-b border-white/5 flex gap-1.5 overflow-x-auto custom-scrollbar shrink-0">
+                        {QUICK_CHIPS.map((chip, idx) => (
+                            <button
+                                key={idx}
+                                type="button"
+                                disabled={isLoading}
+                                onClick={() => handleSend(chip)}
+                                className="px-2.5 py-1 rounded-full bg-white/5 hover:bg-[#d4af37]/20 text-[11px] text-zinc-300 hover:text-[#d4af37] border border-white/10 hover:border-[#d4af37]/40 whitespace-nowrap transition-colors cursor-pointer shrink-0"
+                            >
+                                {chip}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Messages Body */}
+                    <div className="flex-1 p-3.5 overflow-y-auto space-y-3 text-[12px] custom-scrollbar bg-[#101014]">
+                        {messages.map((m) => (
+                            <div
+                                key={m.id}
+                                className={`flex flex-col ${m.sender === 'user' ? 'items-end' : 'items-start'}`}
+                            >
+                                <div
+                                    className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 leading-relaxed break-words shadow-sm ${
+                                        m.sender === 'user'
+                                            ? 'bg-gradient-to-r from-amber-600/30 to-[#d4af37]/30 border border-[#d4af37]/40 text-amber-100 rounded-br-none'
+                                            : m.isError
+                                            ? 'bg-rose-500/10 border border-rose-500/30 text-rose-300 rounded-bl-none'
+                                            : 'bg-[#18181e] border border-white/10 text-zinc-200 rounded-bl-none'
+                                    }`}
+                                >
+                                    <div className="whitespace-pre-wrap">{m.text}</div>
+                                </div>
+                                <span className="text-[9px] text-zinc-500 mt-1 px-1">{m.time}</span>
+                            </div>
+                        ))}
+                        {isLoading && (
+                            <div className="flex items-center gap-2 text-zinc-400 text-xs px-2 py-1">
+                                <i className="fas fa-spinner fa-spin text-[#d4af37]"></i>
+                                <span>Quản đốc đang suy nghĩ...</span>
+                            </div>
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+
+                    {/* Input Footer */}
+                    <div className="p-2.5 bg-[#141418] border-t border-white/10 shrink-0">
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                handleSend();
+                            }}
+                            className="flex items-center gap-2"
+                        >
+                            <input
+                                type="text"
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                placeholder="Hỏi quy trình, xử lý lỗi KCS, an toàn..."
+                                disabled={isLoading}
+                                className="flex-1 bg-[#1c1c22] border border-white/10 focus:border-[#d4af37]/60 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 outline-none transition-colors"
+                            />
+                            <button
+                                type="submit"
+                                disabled={isLoading || !input.trim()}
+                                className="w-9 h-9 rounded-xl bg-[#d4af37] hover:bg-[#c39e2e] disabled:opacity-40 disabled:hover:bg-[#d4af37] text-black font-bold flex items-center justify-center transition-all cursor-pointer shrink-0"
+                            >
+                                <i className="fas fa-paper-plane text-xs"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
+        </React.Fragment>
+    );
+});
+
+// =========================================================================
+// 🏛️ MULTI-AGENT WAR ROOM WIDGET (BAN ĐIỀU HÀNH TÁC NHÂN SỐ 7 AGENTS)
+// Single-Turn Orchestration với Gemini 3.6 Flash & Draggable Mini Window
+// =========================================================================
+const RFAgentControlTower = React.memo(function RFAgentControlTower({ 
+    currentUser, 
+    orders, 
+    prodItems, 
+    packings, 
+    attendance, 
+    erpData, 
+    userConfigs, 
+    kpiConfig 
+}) {
+    const [isProcessing, setIsProcessing] = React.useState(false);
+    const [chatInput, setChatInput] = React.useState('');
+    const [aiOnline, setAiOnline] = React.useState(null);
+
+    React.useEffect(() => {
+        let isMounted = true;
+        const checkStatus = () => {
+            fetch(KCS_LOCAL_URL + '/health')
+                .then(res => res.ok ? res.json() : null)
+                .then(data => {
+                    if (isMounted) setAiOnline(Boolean(data && data.status));
+                })
+                .catch(() => {
+                    if (isMounted) setAiOnline(false);
+                });
+        };
+        checkStatus();
+        const timer = setInterval(checkStatus, 30000);
+        return () => {
+            isMounted = false;
+            clearInterval(timer);
+        };
+    }, []);
+
+    const squad = React.useMemo(() => ({
+        cso: { name: "GĐ Chiến Lược", icon: "🌟", color: "#06b6d4", box: "avatar-cso" },
+        coo: { name: "GĐ Vận Hành", icon: "🎖️", color: "#38bdf8", box: "avatar-coo" },
+        cfo: { name: "GĐ Tài Chính", icon: "💰", color: "#10b981", box: "avatar-cfo" },
+        kho: { name: "Thủ Kho AI", icon: "📦", color: "#f59e0b", box: "avatar-kho" },
+        sx: { name: "Giám Sát SX", icon: "🛠️", color: "#ec4899", box: "avatar-sx" },
+        hr: { name: "Trợ Lý HR", icon: "📊", color: "#a855f7", box: "avatar-hr" },
+        baodong: { name: "Thánh Bao Đồng", icon: "🦜", color: "#f43f5e", box: "avatar-baodong" }
+    }), []);
+
+    // 1. Kéo thả cửa sổ (Drag & Drop hỗ trợ cả Mouse & Touch)
+    React.useEffect(() => {
+        window.squad = squad;
+
+        const panel = document.getElementById("rf-agent-control-tower");
+        const header = document.getElementById("rf-agent-header");
+        if (!panel || !header) return;
+
+        let isDragging = false;
+        let startX = 0, startY = 0;
+
+        const onStart = (clientX, clientY, target) => {
+            if (target && target.closest && target.closest('button')) return;
+            isDragging = true;
+            startX = clientX;
+            startY = clientY;
+            const rect = panel.getBoundingClientRect();
+            panel.style.bottom = "auto";
+            panel.style.right = "auto";
+            panel.style.left = rect.left + "px";
+            panel.style.top = rect.top + "px";
+        };
+
+        const onMove = (clientX, clientY) => {
+            if (!isDragging) return;
+            const dx = clientX - startX;
+            const dy = clientY - startY;
+            panel.style.left = (panel.offsetLeft + dx) + "px";
+            panel.style.top = (panel.offsetTop + dy) + "px";
+            startX = clientX;
+            startY = clientY;
+        };
+
+        const onEnd = () => {
+            isDragging = false;
+        };
+
+        const handleMouseDown = (e) => onStart(e.clientX, e.clientY, e.target);
+        const handleMouseMove = (e) => onMove(e.clientX, e.clientY);
+        const handleMouseUp = () => onEnd();
+
+        const handleTouchStart = (e) => {
+            if (e.touches && e.touches[0]) {
+                onStart(e.touches[0].clientX, e.touches[0].clientY, e.target);
+            }
+        };
+        const handleTouchMove = (e) => {
+            if (e.touches && e.touches[0]) {
+                onMove(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        };
+        const handleTouchEnd = () => onEnd();
+
+        header.addEventListener("mousedown", handleMouseDown);
+        document.addEventListener("mousemove", handleMouseMove);
+        document.addEventListener("mouseup", handleMouseUp);
+
+        header.addEventListener("touchstart", handleTouchStart, { passive: true });
+        document.addEventListener("touchmove", handleTouchMove, { passive: true });
+        document.addEventListener("touchend", handleTouchEnd);
+
+        return () => {
+            header.removeEventListener("mousedown", handleMouseDown);
+            document.removeEventListener("mousemove", handleMouseMove);
+            document.removeEventListener("mouseup", handleMouseUp);
+            header.removeEventListener("touchstart", handleTouchStart);
+            document.removeEventListener("touchmove", handleTouchMove);
+            document.removeEventListener("touchend", handleTouchEnd);
+        };
+    }, [squad]);
+
+    // 2. Hàm chèn lời thoại agent vào stream
+    const pushDialogue = React.useCallback((key, text) => {
+        const stream = document.getElementById("rf-agent-stream");
+        const agent = squad[key] || squad.coo;
+
+        // Đổi viền avatar đang nói
+        document.querySelectorAll(".agent-chip").forEach(c => {
+            c.style.borderColor = "#3f3f46";
+            c.style.boxShadow = "none";
+        });
+        const activeChip = document.getElementById(agent.box);
+        if (activeChip) {
+            activeChip.style.borderColor = agent.color;
+            activeChip.style.boxShadow = `0 0 10px ${agent.color}50`;
+        }
+
+        if (stream) {
+            const msgDiv = document.createElement("div");
+            msgDiv.style.background = "#18181b";
+            msgDiv.style.padding = "8px 10px";
+            msgDiv.style.borderRadius = "8px";
+            msgDiv.style.borderLeft = `3px solid ${agent.color}`;
+            msgDiv.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
+            msgDiv.style.animation = "fade-in 0.25s ease-out";
+            msgDiv.innerHTML = `<span style="color:${agent.color}; font-weight:bold;">${agent.icon} ${agent.name}:</span> <span style="color:#e4e4e7;">${text}</span>`;
+            stream.appendChild(msgDiv);
+            stream.scrollTop = stream.scrollHeight;
+        }
+    }, [squad]);
+
+    // Thu thập snapshot dữ liệu thời gian thực từ Google Sheets để làm grounding context cho 7 Agent
+    const buildLiveOperationalContext = React.useCallback(() => {
+        let cached = null;
+        try {
+            const raw = localStorage.getItem('rf_app_instant_cache');
+            if (raw) cached = JSON.parse(raw);
+        } catch (e) {}
+
+        const safeOrders = (orders && orders.length ? orders : (cached?.orders || []));
+        const safeProds = (prodItems && prodItems.length ? prodItems : (cached?.prodItems || []));
+        const safePackings = (packings && packings.length ? packings : (cached?.packings || []));
+        const safeKPIProgress = (erpData?.KPI_Progress && erpData.KPI_Progress.length ? erpData.KPI_Progress : (cached?.KPI_Progress || []));
+        const safeProducts = (erpData?.Products && erpData.Products.length ? erpData.Products : (cached?.Products || []));
+        const safeAttendance = (attendance && attendance.length ? attendance : (cached?.attendance || []));
+        const rawConfigs = userConfigs?.raw || cached?.Config_NhanSu || [];
+
+        // 1. Danh sách nhân sự chính thức của xưởng
+        const knownStaff = [
+            { name: "Nguyễn Hoàng Dương", role: "Thợ dán bể kính & Quản lý phôi kho bể" },
+            { name: "Trần Duy Tân", role: "Thợ dựng khung layout thủy sinh & hardscape" },
+            { name: "Nguyễn Thị Diệu Hương", role: "QC Đóng gói, Đối soát hàng hoàn sàn TMĐT & CSKH" },
+            { name: "Nguyễn Thị Trang", role: "Kế toán tài chính & Kiểm soát thu chi" },
+            { name: "Nguyễn Ngọc Tiến", role: "Quản đốc điều hành xưởng" }
+        ];
+        const staffNames = new Set(knownStaff.map(s => s.name));
+        const staffList = [...knownStaff];
+        if (Array.isArray(rawConfigs)) {
+            rawConfigs.forEach(r => {
+                const name = r['Tên Nhân Sự'] || r.name;
+                const role = r['Chức Danh'] || r.role || 'Nhân sự xưởng';
+                if (name && !staffNames.has(name)) {
+                    staffNames.add(name);
+                    staffList.push({ name, role });
+                }
+            });
+        }
+
+        // 2. Dữ liệu KPI thực tế (KPI_Progress)
+        const kpiList = [];
+        if (Array.isArray(safeKPIProgress) && safeKPIProgress.length > 0) {
+            safeKPIProgress.forEach(k => {
+                const user = k.user || k['user'] || '';
+                const kpiName = k.kpiName || k['kpiName'] || '';
+                const current = Number(k.current || k['current'] || 0);
+                const target = Number(k.target || k['target'] || 0);
+                const unit = k.unit || k['unit'] || '';
+                const pct = target > 0 ? Math.round((current / target) * 100) : 0;
+                if (user && kpiName) {
+                    kpiList.push({ user, kpi: kpiName, current, target, unit, pct });
+                }
+            });
+        }
+
+        // 3. Tiến độ sản xuất (Production)
+        const prodSummary = {
+            total: safeProds.length,
+            done: safeProds.filter(p => p.status === 'Done').length,
+            in_progress: safeProds.filter(p => p.status !== 'Done').length,
+            by_worker: {}
+        };
+        safeProds.forEach(p => {
+            if (p.p1_user && (p.p1_status === 'Done' || p.status === 'Done')) {
+                prodSummary.by_worker[p.p1_user] = (prodSummary.by_worker[p.p1_user] || 0) + 1;
+            }
+            if (p.p2_user && (p.p2_status === 'Done' || p.status === 'Done') && p.p2_user !== p.p1_user) {
+                prodSummary.by_worker[p.p2_user] = (prodSummary.by_worker[p.p2_user] || 0) + 1;
+            }
+        });
+
+        // 4. Tồn kho & Vật tư (Products)
+        let glueWacker = 'Kho đang còn keo Wacker 121 sẵn sàng';
+        const lowStockItems = [];
+        if (Array.isArray(safeProducts)) {
+            safeProducts.forEach(p => {
+                const name = String(p.name || '').toLowerCase();
+                const sku = String(p.sku || '').toUpperCase();
+                const qty = Number(p.quantity || 0);
+                const min = Number(p.minStock || 0);
+                if (name.includes('wacker') || sku.includes('WACKER') || name.includes('keo')) {
+                    glueWacker = `Còn ${qty} ${p.unit || 'tuýp'} trong kho`;
+                }
+                if (qty <= min && min > 0 && lowStockItems.length < 8) {
+                    lowStockItems.push({
+                        sku: p.sku,
+                        name: p.name,
+                        quantity: qty,
+                        minStock: min,
+                        unit: p.unit || 'cái'
+                    });
+                }
+            });
+        }
+
+        // 5. Đơn hàng (Orders)
+        const orderSummary = {
+            total: safeOrders.length,
+            pending: safeOrders.filter(o => {
+                const s = String(o.status || '').toUpperCase();
+                return s !== 'ĐÃ GIAO' && s !== 'HOÀN THÀNH' && s !== 'ĐÃ HỦY';
+            }).length,
+            completed: safeOrders.filter(o => {
+                const s = String(o.status || '').toUpperCase();
+                return s === 'ĐÃ GIAO' || s === 'HOÀN THÀNH';
+            }).length
+        };
+
+        return {
+            staff: staffList,
+            kpi_progress: kpiList,
+            production: prodSummary,
+            inventory: {
+                glue_wacker: glueWacker,
+                low_stock: lowStockItems
+            },
+            orders: orderSummary
+        };
+    }, [orders, prodItems, packings, attendance, erpData, userConfigs]);
+
+    // 3. Kích hoạt thảo luận thời gian thực qua Gemini API kèm context dữ liệu thật
+    const runWarRoomDiscussion = React.useCallback(async (customIncident, extraContext) => {
+        if (isProcessing) return;
+        const incidentText = (typeof customIncident === 'string' && customIncident.trim())
+            ? customIncident.trim()
+            : chatInput.trim();
+        if (!incidentText) return;
+
+        setIsProcessing(true);
+        setChatInput('');
+
+        // Tự động mở cửa sổ và bung mở hoàn toàn khi các AI điều phối
+        const panel = document.getElementById("rf-agent-control-tower");
+        if (panel) {
+            panel.style.display = "flex";
+            panel.style.opacity = "1";
+            panel.style.visibility = "visible";
+            panel.style.height = "520px";
+            panel.style.boxShadow = "0 0 25px rgba(212, 175, 55, 0.6)";
+            setTimeout(() => {
+                if (panel) panel.style.boxShadow = "0 12px 30px rgba(0,0,0,0.7)";
+            }, 3000);
+        }
+        const stream = document.getElementById("rf-agent-stream");
+        const roster = document.getElementById("rf-agent-roster");
+        const footer = document.getElementById("rf-agent-footer");
+        if (stream) stream.style.display = "flex";
+        if (roster) roster.style.display = "grid";
+        if (footer) footer.style.display = "flex";
+
+        // Hiệu ứng phát sáng trên nút War Room ở Header khi đang điều phối
+        const headerBtn = document.getElementById("rf-header-war-room-btn");
+        if (headerBtn) {
+            headerBtn.style.borderColor = "#d4af37";
+            headerBtn.style.boxShadow = "0 0 12px rgba(212, 175, 55, 0.7)";
+        }
+
+        // Ghi nhận chỉ đạo / sự vụ từ người dùng vào stream
+        if (stream) {
+            const incDiv = document.createElement("div");
+            incDiv.style.background = "rgba(212, 175, 55, 0.12)";
+            incDiv.style.border = "1px solid #d4af37";
+            incDiv.style.padding = "8px 12px";
+            incDiv.style.borderRadius = "8px";
+            incDiv.style.color = "#d4af37";
+            incDiv.style.fontSize = "12px";
+            incDiv.style.lineHeight = "1.4";
+            incDiv.innerHTML = `<span style="color:#d4af37; font-weight:bold;"><i class="fas fa-user-shield"></i> ${currentUser || 'Chỉ huy xưởng'}:</span> <span style="color:#f4f4f5; margin-left: 4px;">${incidentText}</span>`;
+            stream.appendChild(incDiv);
+            stream.scrollTop = stream.scrollHeight;
+        }
+
+        // Thu thập live operational context từ các bảng dữ liệu
+        const liveContext = buildLiveOperationalContext();
+        const payloadContext = extraContext ? { ...liveContext, ...extraContext } : liveContext;
+
+        // Thông báo trạng thái đang suy nghĩ
+        let loadingDiv = null;
+        if (stream) {
+            loadingDiv = document.createElement("div");
+            loadingDiv.id = "agent-loading-state";
+            loadingDiv.style.color = "#a1a1aa";
+            loadingDiv.style.fontStyle = "italic";
+            loadingDiv.style.display = "flex";
+            loadingDiv.style.alignItems = "center";
+            loadingDiv.style.gap = "6px";
+            loadingDiv.innerHTML = `<i class="fas fa-spinner fa-spin text-sky-400"></i> Dàn 7 Agent đang phân tích số liệu hệ thống (Gemini 3.6 Flash)...`;
+            stream.appendChild(loadingDiv);
+            stream.scrollTop = stream.scrollHeight;
+        }
+
+        try {
+            let dialogues = null;
+            try {
+                const res = await fetch(KCS_LOCAL_URL + '/api/warroom/discuss', {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "X-RF-API-KEY": KCS_API_KEY },
+                    body: JSON.stringify({ 
+                        incident: incidentText,
+                        context: payloadContext
+                    })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.status === "success" && Array.isArray(data.dialogues)) {
+                        dialogues = data.dialogues;
+                    }
+                }
+            } catch (netErr) {
+                console.warn("[WAR ROOM] Không kết nối được cổng 8000, sử dụng kịch bản dự phòng dựa trên dữ liệu thật:", netErr);
+            }
+
+            if (loadingDiv) loadingDiv.remove();
+
+            // Loại bỏ hoàn toàn thoại mẫu giả lập: Chỉ báo kết quả thật từ server hoặc báo lỗi trung thực
+            if (!dialogues || dialogues.length === 0) {
+                if (stream) {
+                    const errDiv = document.createElement("div");
+                    errDiv.style.background = "rgba(239, 68, 68, 0.15)";
+                    errDiv.style.border = "1px solid #ef4444";
+                    errDiv.style.padding = "10px 12px";
+                    errDiv.style.borderRadius = "8px";
+                    errDiv.style.color = "#fca5a5";
+                    errDiv.style.fontSize = "12px";
+                    errDiv.style.lineHeight = "1.5";
+                    errDiv.innerHTML = `<span style="font-weight:bold;"><i class="fas fa-exclamation-triangle"></i> Lỗi kết nối / Xử lý AI:</span> Không nhận được phản hồi hợp lệ từ dịch vụ Agent. Hệ thống tuân thủ nguyên tắc báo lỗi trung thực, tuyệt đối không dùng lời thoại mẫu giả lập để che lỗi. Vui lòng kiểm tra trạng thái máy chủ AI.`;
+                    stream.appendChild(errDiv);
+                    stream.scrollTop = stream.scrollHeight;
+                }
+                return;
+            }
+
+            for (const line of dialogues) {
+                pushDialogue(line.agent, line.message);
+                await new Promise(r => setTimeout(r, 1400));
+            }
+        } catch (err) {
+            if (loadingDiv) {
+                loadingDiv.innerText = "⚠️ Lỗi xử lý sự vụ: " + err.message;
+                loadingDiv.style.color = "#f87171";
+            }
+        } finally {
+            setIsProcessing(false);
+            const headerBtn = document.getElementById("rf-header-war-room-btn");
+            if (headerBtn) {
+                headerBtn.style.borderColor = "";
+                headerBtn.style.boxShadow = "";
+            }
+        }
+    }, [isProcessing, chatInput, currentUser, pushDialogue, buildLiveOperationalContext]);
+
+    // Gắn các hàm toàn cục vào window
+    React.useEffect(() => {
+        window.pushAgentDialogue = pushDialogue;
+        window.triggerRealtimeWarRoom = runWarRoomDiscussion;
+        window.simulateStrategicAgentChat = runWarRoomDiscussion;
+        window.simulateAgentChat = runWarRoomDiscussion;
+
+        window.toggleAgentsTower = () => {
+            const panel = document.getElementById("rf-agent-control-tower");
+            if (!panel) return;
+            const isHidden = panel.style.display === "none" || !panel.style.display;
+            if (isHidden) {
+                panel.style.display = "flex";
+                panel.style.opacity = "1";
+                panel.style.visibility = "visible";
+                const stream = document.getElementById("rf-agent-stream");
+                const roster = document.getElementById("rf-agent-roster");
+                const footer = document.getElementById("rf-agent-footer");
+                if (stream) stream.style.display = "flex";
+                if (roster) roster.style.display = "grid";
+                if (footer) footer.style.display = "flex";
+                panel.style.height = "520px";
+            } else {
+                panel.style.display = "none";
+            }
+        };
+
+        window.openAgentsTower = () => {
+            const panel = document.getElementById("rf-agent-control-tower");
+            if (!panel) return;
+            panel.style.display = "flex";
+            panel.style.opacity = "1";
+            panel.style.visibility = "visible";
+            const stream = document.getElementById("rf-agent-stream");
+            const roster = document.getElementById("rf-agent-roster");
+            const footer = document.getElementById("rf-agent-footer");
+            if (stream) stream.style.display = "flex";
+            if (roster) roster.style.display = "grid";
+            if (footer) footer.style.display = "flex";
+            panel.style.height = "520px";
+        };
+
+        window.toggleMinimizeAgents = () => {
+            const stream = document.getElementById("rf-agent-stream");
+            const roster = document.getElementById("rf-agent-roster");
+            const footer = document.getElementById("rf-agent-footer");
+            const panel = document.getElementById("rf-agent-control-tower");
+            if (!stream || !roster || !panel) return;
+            const isHidden = stream.style.display === "none";
+            stream.style.display = isHidden ? "flex" : "none";
+            roster.style.display = isHidden ? "grid" : "none";
+            if (footer) footer.style.display = isHidden ? "flex" : "none";
+            panel.style.height = isHidden ? "520px" : "auto";
+        };
+    }, [pushDialogue, runWarRoomDiscussion]);
+
+    return (
+        <React.Fragment>
+            {/* Cửa Sổ Thu Nhỏ Điều Hành Đa Tác Nhân (Draggable Floating War Room) */}
+            <div
+                id="rf-agent-control-tower"
+                style={{
+                    position: 'fixed',
+                    bottom: '80px',
+                    right: '20px',
+                    width: '480px',
+                    maxWidth: 'calc(100vw - 30px)',
+                    height: '520px',
+                    background: '#121214',
+                    border: '1px solid #3f3f46',
+                    borderRadius: '12px',
+                    display: 'none',
+                    flexDirection: 'column',
+                    boxShadow: '0 12px 30px rgba(0,0,0,0.7)',
+                    zIndex: 99999,
+                    fontFamily: 'sans-serif',
+                    overflow: 'hidden'
+                }}
+            >
+                {/* Thanh Tiêu Đề Dùng Để Kéo Thả (Drag Handle) */}
+                <div
+                    id="rf-agent-header"
+                    style={{
+                        background: '#1e1e24',
+                        padding: '10px 14px',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        cursor: 'move',
+                        borderBottom: '1px solid #27272a',
+                        userSelect: 'none'
+                    }}
+                >
+                    <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#d4af37', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span 
+                            title={aiOnline === true ? "Hệ thống AI trực tuyến (Online)" : (aiOnline === false ? "Hệ thống AI ngoại tuyến (Offline)" : "Đang kiểm tra kết nối AI...")}
+                            style={{ 
+                                width: '8px', 
+                                height: '8px', 
+                                background: aiOnline === true ? '#22c55e' : (aiOnline === false ? '#ef4444' : '#eab308'), 
+                                borderRadius: '50%', 
+                                display: 'inline-block', 
+                                boxShadow: aiOnline === true ? '0 0 6px #22c55e' : (aiOnline === false ? '0 0 6px #ef4444' : '0 0 6px #eab308'),
+                                transition: 'all 0.3s ease'
+                            }}
+                        ></span>
+                        BAN ĐIỀU HÀNH TÁC NHÂN SỐ (RF WAR ROOM)
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <button
+                            type="button"
+                            onClick={() => window.toggleMinimizeAgents && window.toggleMinimizeAgents()}
+                            style={{ background: 'none', border: 'none', color: '#a1a1aa', cursor: 'pointer', fontSize: '14px', padding: '0 4px' }}
+                            title="Thu nhỏ / Mở rộng"
+                        >
+                            −
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => window.toggleAgentsTower && window.toggleAgentsTower()}
+                            style={{ background: 'none', border: 'none', color: '#a1a1aa', cursor: 'pointer', fontSize: '14px', padding: '0 4px' }}
+                            title="Đóng cửa sổ"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                </div>
+
+                {/* Thanh Dàn Avatar 7 Agent */}
+                <div
+                    id="rf-agent-roster"
+                    style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(7, 1fr)',
+                        gap: '4px',
+                        padding: '8px',
+                        background: '#18181b',
+                        borderBottom: '1px solid #27272a'
+                    }}
+                >
+                    {Object.entries(squad).map(([key, ag]) => (
+                        <div
+                            key={key}
+                            id={ag.box}
+                            className="agent-chip"
+                            style={{
+                                textAlign: 'center',
+                                padding: '4px 2px',
+                                borderRadius: '6px',
+                                background: '#27272a',
+                                border: '1px solid #3f3f46',
+                                transition: 'all 0.2s',
+                                cursor: 'default'
+                            }}
+                            title={`${ag.name}`}
+                        >
+                            <div style={{ fontSize: '15px' }}>{ag.icon}</div>
+                            <div style={{ fontSize: '9px', fontWeight: 'bold', color: ag.color, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ag.name.replace('GĐ ', '').replace('Trợ Lý ', '')}</div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Khung Hội Thoại Real-time Giữa Các Agent */}
+                <div
+                    id="rf-agent-stream"
+                    style={{
+                        flex: 1,
+                        padding: '12px',
+                        overflowY: 'auto',
+                        fontSize: '12px',
+                        lineHeight: '1.5',
+                        background: '#0c0c0e',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px'
+                    }}
+                >
+                    <div style={{ color: '#52525b', fontStyle: 'italic' }}>
+                        [Hệ thống] Đã đồng bộ luồng 7 Agent điều hành xưởng (Gemini 3.6 Flash Single-Turn)...
+                    </div>
+                </div>
+
+                {/* Khung Chat Điều Hành Trực Tiếp (Commander Chat Input) */}
+                <form
+                    id="rf-agent-footer"
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        if (!isProcessing && chatInput.trim()) {
+                            runWarRoomDiscussion(chatInput.trim());
+                        }
+                    }}
+                    style={{
+                        padding: '10px 12px',
+                        background: '#18181b',
+                        borderTop: '1px solid #27272a',
+                        display: 'flex',
+                        gap: '8px',
+                        alignItems: 'center'
+                    }}
+                >
+                    <input
+                        type="text"
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        placeholder="Nhập sự vụ xưởng, thắc mắc kỹ thuật hoặc lệnh chỉ đạo..."
+                        disabled={isProcessing}
+                        style={{
+                            flex: 1,
+                            background: '#09090b',
+                            border: '1px solid #3f3f46',
+                            borderRadius: '8px',
+                            padding: '9px 12px',
+                            color: '#f4f4f5',
+                            fontSize: '12px',
+                            outline: 'none'
+                        }}
+                    />
+                    <button
+                        type="submit"
+                        disabled={isProcessing || !chatInput.trim()}
+                        style={{
+                            background: (isProcessing || !chatInput.trim()) ? '#27272a' : 'linear-gradient(135deg, #d4af37 0%, #b8860b 100%)',
+                            color: (isProcessing || !chatInput.trim()) ? '#71717a' : '#000',
+                            border: 'none',
+                            padding: '9px 16px',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                            borderRadius: '8px',
+                            cursor: (isProcessing || !chatInput.trim()) ? 'not-allowed' : 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            flexShrink: 0,
+                            boxShadow: (isProcessing || !chatInput.trim()) ? 'none' : '0 2px 10px rgba(212,175,55,0.3)'
+                        }}
+                        title="Gửi lệnh tới Ban Điều Hành"
+                    >
+                        {isProcessing ? (
+                            <i className="fas fa-spinner fa-spin text-xs"></i>
+                        ) : (
+                            <React.Fragment>
+                                <span>Gửi</span>
+                                <i className="fas fa-paper-plane text-xs"></i>
+                            </React.Fragment>
+                        )}
+                    </button>
+                </form>
+            </div>
+
+            {/* Nút bật/mở nhanh War Room cũ ở góc dưới: ẩn vì đã đưa lên thanh Header cạnh avatar */}
+            <button
+                id="rf-agent-launcher"
+                type="button"
+                onClick={() => window.toggleAgentsTower && window.toggleAgentsTower()}
+                style={{
+                    display: 'none',
+                    position: 'fixed',
+                    bottom: '20px',
+                    right: '80px',
+                    zIndex: 99998,
+                    background: '#18181b',
+                    border: '1px solid #d4af37',
+                    color: '#d4af37',
+                    borderRadius: '20px',
+                    padding: '6px 12px',
+                    fontSize: '11px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    alignItems: 'center',
+                    gap: '6px',
+                    boxShadow: '0 4px 15px rgba(0,0,0,0.5)',
+                    backdropFilter: 'blur(8px)'
+                }}
+                title="Bật/Tắt Ban Điều Hành Tác Nhân Số (RF War Room)"
+            >
+                <span 
+                    title={aiOnline === true ? "AI Online" : (aiOnline === false ? "AI Offline" : "Connecting...")}
+                    style={{ 
+                        width: '6px', 
+                        height: '6px', 
+                        background: aiOnline === true ? '#22c55e' : (aiOnline === false ? '#ef4444' : '#eab308'), 
+                        borderRadius: '50%', 
+                        display: 'inline-block', 
+                        boxShadow: aiOnline === true ? '0 0 6px #22c55e' : (aiOnline === false ? '0 0 6px #ef4444' : '0 0 6px #eab308'),
+                        transition: 'all 0.3s ease'
+                    }}
+                ></span>
+                🎖️ War Room (7)
+            </button>
+        </React.Fragment>
+    );
+});
+
+window.RFAgentControlTower = RFAgentControlTower;
+
+function ReloadAppButton() {
+    return null;
+}
+
+const trackAction = (action, details = '') => {
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+            .withSuccessHandler(() => { console.log("Đã lưu vết hành vi: ", action); })
+            .withFailureHandler((err) => { console.error("Lỗi lưu vết: ", err); })
+            .logBehavior(action, details);
+    }
+};
+
+const ToastManager = React.memo(function ToastManager({ toasts }) { 
+    if (!toasts || toasts.length === 0) return null;
+    return ( 
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] flex flex-col items-center gap-2 pointer-events-none w-[90%] max-w-sm"> 
+            {toasts.map(t => {
+                let bgColors = "bg-[#141418]/95 border-white/10 text-zinc-100";
+                if(t.color === 'success') bgColors = "bg-[#064e3b]/95 border-emerald-500/40 text-emerald-300";
+                if(t.color === 'danger') bgColors = "bg-[#4c0519]/95 border-rose-500/40 text-rose-300";
+                if(t.color === 'primary') bgColors = "bg-[#1e3a8a]/95 border-sky-500/40 text-sky-300";
+                if(t.color === 'warning') bgColors = "bg-[#78350f]/95 border-amber-500/40 text-amber-300";
+                
+                return (
+                    <div key={t.id} className={`animate-slide-down flex items-center gap-2.5 px-4 py-3 rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.6)] border ${bgColors} text-[12px] font-bold tracking-wide w-full backdrop-blur-xl`}> 
+                        <div className="w-7 h-7 rounded-full flex items-center justify-center bg-black/25 shrink-0"><i className={`fas ${t.icon} text-xs`}></i></div> 
+                        <span className="flex-1 leading-snug">{t.msg}</span> 
+                    </div> 
+                );
+            })} 
+        </div> 
+    );
+});
+
+const Avatar = React.memo(function Avatar({ name, userConfigs, className="" }) { 
+    const [hasError, setHasError] = React.useState(false);
+    let id = null;
+    try {
+        if (userConfigs && name) {
+            const cleanName = String(name).trim().toLowerCase();
+            const sourceMap = userConfigs.avatars ? userConfigs.avatars : userConfigs;
+            if (sourceMap[name]) {
+                id = sourceMap[name];
+            } else {
+                const nameParts = cleanName.split(/[\s.]+/).filter(Boolean);
+                const mainName = nameParts[nameParts.length - 1];
+                const firstLetter = nameParts[0]?.[0];
+                const matchedKey = Object.keys(sourceMap).find(key => {
+                    const keyParts = String(key).trim().toLowerCase().split(/[\s.]+/).filter(Boolean);
+                    return keyParts[keyParts.length - 1] === mainName && keyParts[0]?.[0] === firstLetter;
+                });
+                if (matchedKey) id = sourceMap[matchedKey];
+            }
+        }
+    } catch(e) {}
+
+    let cleanId = id;
+    if (id && String(id).includes('drive.google.com')) {
+        const match = String(id).match(/[-\w]{25,}/);
+        if (match) cleanId = match[0];
+    }
+
+    if (cleanId && !hasError) { 
+        const isFullUrl = String(cleanId).startsWith('http://') || String(cleanId).startsWith('https://');
+        const imgSrc = isFullUrl ? cleanId : ('https:\x2F\x2Flh3.googleusercontent.com/d/' + cleanId + '=w120-h120');
+        return <img src={imgSrc} className={`object-cover rounded-full shadow-sm bg-[#18181c] ${className}`} alt={name} onError={() => setHasError(true)} />;
+    } 
+    return <div className={`flex items-center justify-center rounded-full bg-[#18181c] text-zinc-500 border border-white/[0.08] ${className}`}><i className="fas fa-user text-[11px]"></i></div>;
+});
+
+const TimePicker24h = React.memo(function TimePicker24h({ value, onChange, label }) { 
+    const currentH = value ? value.split(':')[0] : '';
+    const currentM = value ? value.split(':')[1] : ''; 
+    const hours = Array.from({length:24}, (_,i) => String(i).padStart(2,'0'));
+    const mins = Array.from({length:60}, (_,i) => String(i).padStart(2,'0')); 
+    return ( 
+        <div className="flex flex-col"> 
+            {label && <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">{label}</label>} 
+            <div className="flex items-center gap-1.5"> 
+                <select value={currentH} onChange={e=>onChange(`${e.target.value}:${currentM||'00'}`)} className="rf-input-glass rounded-xl px-3 py-2 text-[13px] text-white outline-none font-medium flex-1 appearance-none text-center"> 
+                    <option value="">Giờ</option> 
+                    {hours.map(h => <option key={`h${h}`} value={h}>{h}h</option>)} 
+                </select> 
+                <span className="text-zinc-500 font-bold">:</span> 
+                <select value={currentM} onChange={e=>onChange(`${currentH||'00'}:${e.target.value}`)} className="rf-input-glass rounded-xl px-3 py-2 text-[13px] text-white outline-none font-medium flex-1 appearance-none text-center"> 
+                    <option value="">Phút</option> 
+                    {mins.map(m => <option key={`m${m}`} value={m}>{m}p</option>)} 
+                </select> 
+            </div> 
+        </div> 
+    );
+});
+
+const NavBtn = React.memo(function NavBtn({ icon, label, active, onClick }) { 
+    return ( 
+        <button onClick={onClick} className="flex flex-col items-center justify-center w-14 pt-2 pb-1 transition-all relative group active:scale-95"> 
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center mb-1 transition-all duration-200 ${active ? 'bg-[#d4af37]/20 text-[#d4af37] shadow-[0_0_12px_rgba(212,175,55,0.3)]' : 'text-zinc-500 group-hover:text-zinc-300'}`}> 
+                <i className={`fas ${icon} text-base`}></i> 
+            </div> 
+            <span className={`text-[8.5px] font-bold tracking-wider uppercase transition-colors truncate max-w-full ${active ? 'text-[#d4af37]' : 'text-zinc-500 group-hover:text-zinc-300'}`}>{label}</span> 
+            {active && <div className="absolute -bottom-0.5 w-1.5 h-1.5 rounded-full bg-[#d4af37]"></div>}
+        </button> 
+    );
+});
+
+const TimeFilter = React.memo(function TimeFilter({ filter, setFilter, start, setStart, end, setEnd }) { 
+    const isInvalidRange = start && end && start > end;
+    return ( 
+        <div className="bg-[#121215] p-3 rounded-2xl border border-white/[0.08] shadow-sm mb-3"> 
+            <div className="flex gap-1.5 overflow-x-auto custom-scrollbar pb-0.5"> 
+                {['Tất Cả', 'Hôm Nay', 'Tháng Này', 'Tuỳ Chỉnh'].map(f => ( 
+                    <button key={f} onClick={()=>setFilter(f)} className={`flex-shrink-0 px-3.5 py-1.5 text-[10.5px] font-bold uppercase tracking-wider rounded-xl transition-all shadow-sm ${filter===f ? 'bg-[#d4af37] text-zinc-950 font-black' : 'bg-[#18181c] text-zinc-400 border border-white/[0.08] hover:text-white'}`}>{f}</button> 
+                ))} 
+            </div> 
+            {filter === 'Tuỳ Chỉnh' && ( 
+                <div className="flex flex-col gap-2 mt-2.5 pt-2.5 border-t border-white/[0.08] animate-fade-in"> 
+                    <div className="flex gap-2">
+                        <div className="flex-1"><label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider block mb-1">Từ ngày</label><input type="date" className="rf-input-glass w-full" value={start} onChange={e=>setStart(e.target.value)} /></div> 
+                        <div className="flex-1"><label className="text-[9px] text-zinc-400 font-bold uppercase tracking-wider block mb-1">Đến ngày</label><input type="date" className="rf-input-glass w-full" value={end} onChange={e=>setEnd(e.target.value)} /></div> 
+                    </div> 
+                    {isInvalidRange && (
+                        <div className="text-rose-400 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 mt-1">
+                            <i className="fas fa-exclamation-triangle"></i> Từ ngày không thể lớn hơn Đến ngày!
+                        </div>
+                    )}
+                </div> 
+            )} 
+        </div> 
+    );
+});
+
+// =========================================================================
+// 🖼️ COMPONENT: TRÌNH XEM ẢNH NỘI BỘ PHÓNG TO (ROYAL IMAGE LIGHTBOX)
+// =========================================================================
+const RFImageLightboxModal = React.memo(function RFImageLightboxModal({ src, title = "Xem Ảnh", subTitle = "", onClose }) {
+    const [zoom, setZoom] = React.useState(1);
+    const [isLoading, setIsLoading] = React.useState(true);
+    const [hasError, setHasError] = React.useState(false);
+    const [imgSrc, setImgSrc] = React.useState(() => {
+        if (!src) return '';
+        if (typeof getDirectImageUrl === 'function') {
+            const cdn = getDirectImageUrl(src, 'w1600');
+            return cdn || src;
+        }
+        return src;
+    });
+
+    React.useEffect(() => {
+        setZoom(1);
+        setIsLoading(true);
+        setHasError(false);
+        if (src) {
+            const cdn = typeof getDirectImageUrl === 'function' ? getDirectImageUrl(src, 'w1600') : src;
+            setImgSrc(cdn || src);
+        }
+    }, [src]);
+
+    React.useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                onClose && onClose();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
+
+    if (!src) return null;
+
+    const safeDriveUrl = typeof getSafeDriveViewUrl === 'function' ? getSafeDriveViewUrl(src) : src;
+    const isDriveImg = src.includes('drive.google.com') || src.includes('googleusercontent.com');
+
+    const handleToggleZoom = (e) => {
+        if (e) e.stopPropagation();
+        setZoom(prev => prev === 1 ? 1.75 : (prev === 1.75 ? 2.5 : 1));
+    };
+
+    const handleOpenExternal = (e) => {
+        if (e) e.stopPropagation();
+        if (typeof openSafeImageTab === 'function') {
+            openSafeImageTab(src);
+        } else {
+            window.open(safeDriveUrl, '_blank', 'noopener,noreferrer');
+        }
+    };
+
+    const handleDownload = (e) => {
+        if (e) e.stopPropagation();
+        try {
+            const a = document.createElement('a');
+            a.href = imgSrc || src;
+            a.download = (title || 'image').replace(/\s+/g, '_') + '.jpg';
+            a.target = '_blank';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        } catch (err) {
+            handleOpenExternal(e);
+        }
+    };
+
+    return ReactDOM.createPortal(
+        <div 
+            className="fixed inset-0 z-[999999] bg-black/95 backdrop-blur-xl flex flex-col items-center justify-between p-3 sm:p-6 select-none animate-fade-in"
+            onClick={onClose}
+            style={{ touchAction: 'pan-x pan-y pinch-zoom' }}
+        >
+            {/* TOP BAR */}
+            <div 
+                className="w-full max-w-5xl flex items-center justify-between gap-3 bg-[#141418]/95 border border-white/10 px-4 py-3 rounded-2xl shadow-2xl backdrop-blur-md z-10"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-xl bg-[#d4af37]/15 border border-[#d4af37]/30 flex items-center justify-center text-[#d4af37] text-sm shrink-0">
+                        <i className="fas fa-image"></i>
+                    </div>
+                    <div className="min-w-0">
+                        <h3 className="text-sm font-black text-zinc-100 truncate tracking-wide flex items-center gap-2">
+                            <span>{title}</span>
+                            {isDriveImg && (
+                                <span className="text-[9px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30 shrink-0">
+                                    <i className="fab fa-google-drive mr-1"></i>Google Drive
+                                </span>
+                            )}
+                        </h3>
+                        {subTitle && <p className="text-[11px] text-zinc-400 font-mono truncate">{subTitle}</p>}
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                    {/* ZOOM BUTTON */}
+                    <button
+                        type="button"
+                        onClick={handleToggleZoom}
+                        className={`px-3 py-1.5 rounded-xl border text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                            zoom > 1 ? 'bg-[#d4af37] text-zinc-950 border-[#d4af37]' : 'bg-white/5 hover:bg-white/10 text-zinc-300 border-white/10'
+                        }`}
+                        title="Phóng to / Thu nhỏ"
+                    >
+                        <i className={zoom > 1 ? "fas fa-search-minus" : "fas fa-search-plus"}></i>
+                        <span className="hidden sm:inline">{zoom > 1 ? zoom + 'x (Thu Nhỏ)' : 'Phóng To'}</span>
+                    </button>
+
+                    {/* OPEN SAFE DRIVE TAB */}
+                    {isDriveImg && (
+                        <button
+                            type="button"
+                            onClick={handleOpenExternal}
+                            className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                            title="Mở an toàn trong Google Drive (Không bao giờ bị lỗi kết nối)"
+                        >
+                            <i className="fas fa-external-link-alt text-xs"></i>
+                            <span className="hidden sm:inline">Drive</span>
+                        </button>
+                    )}
+
+                    {/* DOWNLOAD BUTTON */}
+                    <button
+                        type="button"
+                        onClick={handleDownload}
+                        className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-zinc-300 hover:text-white border border-white/10 text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                        title="Tải ảnh về máy"
+                    >
+                        <i className="fas fa-download text-xs"></i>
+                        <span className="hidden sm:inline">Tải Về</span>
+                    </button>
+
+                    {/* CLOSE BUTTON */}
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="w-8 h-8 rounded-xl bg-rose-500/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 transition-all flex items-center justify-center cursor-pointer active:scale-95 ml-1"
+                        title="Đóng (ESC)"
+                    >
+                        <i className="fas fa-times text-xs"></i>
+                    </button>
+                </div>
+            </div>
+
+            {/* MAIN IMAGE CONTAINER */}
+            <div 
+                className="flex-1 w-full max-w-5xl flex items-center justify-center p-2 sm:p-4 my-2 overflow-auto custom-scrollbar"
+                onClick={e => e.stopPropagation()}
+            >
+                {isLoading && !hasError && (
+                    <div className="absolute flex flex-col items-center gap-3 text-zinc-400">
+                        <i className="fas fa-circle-notch fa-spin text-3xl text-[#d4af37]"></i>
+                        <span className="text-xs font-mono">Đang tải ảnh sắc nét...</span>
+                    </div>
+                )}
+
+                {hasError ? (
+                    <div className="flex flex-col items-center gap-3 text-rose-400 p-8 bg-[#18181c] rounded-2xl border border-rose-500/30">
+                        <i className="fas fa-exclamation-triangle text-3xl"></i>
+                        <span className="text-xs font-bold">Không thể tải ảnh xem trước</span>
+                        <button 
+                            onClick={handleOpenExternal}
+                            className="px-4 py-2 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 rounded-xl text-xs font-bold text-white transition-all cursor-pointer"
+                        >
+                            Mở trực tiếp trên Google Drive
+                        </button>
+                    </div>
+                ) : (
+                    <img 
+                        src={imgSrc} 
+                        alt={title}
+                        onLoad={() => setIsLoading(false)}
+                        onError={() => {
+                            if (imgSrc !== src) {
+                                setImgSrc(src);
+                            } else {
+                                setIsLoading(false);
+                                setHasError(true);
+                            }
+                        }}
+                        onClick={handleToggleZoom}
+                        style={{
+                            transform: `scale(${zoom})`,
+                            transformOrigin: 'center center',
+                            transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                        }}
+                        className={`max-h-[75vh] max-w-[90vw] object-contain rounded-2xl border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.9)] bg-black/50 cursor-pointer ${
+                            isLoading ? 'opacity-0' : 'opacity-100 transition-opacity duration-300'
+                        }`}
+                        title="Bấm vào ảnh để phóng to / thu nhỏ"
+                    />
+                )}
+            </div>
+
+            {/* BOTTOM HELPER BAR */}
+            <div 
+                className="text-center text-[11px] text-zinc-500 flex items-center justify-center gap-4 py-1"
+                onClick={e => e.stopPropagation()}
+            >
+                <span><i className="fas fa-mouse-pointer mr-1"></i> Bấm vào ảnh hoặc nút để Phóng to</span>
+                <span className="hidden sm:inline">•</span>
+                <span className="hidden sm:inline"><kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono text-[10px] text-zinc-300">ESC</kbd> hoặc bấm ra ngoài để Đóng</span>
+            </div>
+        </div>,
+        document.body
+    );
+});
+
+window.RFImageLightboxModal = RFImageLightboxModal;
+</script>

@@ -1,0 +1,30 @@
+# Dependencies & Environment
+node_modules/
+venv/
+__pycache__/
+.vscode/
+.gemini/
+.idea/
+.env
+
+# Backups, logs & scratch
+backups/
+scratch/
+*.log
+*.tmp
+*.bak
+.tmp.driveupload/
+
+# Temporary data files
+*.xlsx
+*.xls
+*.csv
+fix_temp.js
+temp_babel.js
+clasp_output.log
+war_room_context.json
+Dữ liệu tài chính/
+*.pdf
+
+# Submodules & Agent Skills Cache
+.agents/skills/gstack/

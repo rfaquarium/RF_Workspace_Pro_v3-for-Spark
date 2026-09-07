@@ -1,0 +1,413 @@
+<script type="text/babel">
+function Viewer3DTab({ models3D, pushDeltas, erpProducts = [], userRole: propUserRole, currentUser: propCurrentUser, hasPerm: propHasPerm }) {
+    const [formName, setFormName] = React.useState('');
+    const [formUrl, setFormUrl] = React.useState('');
+    const [formMaterials, setFormMaterials] = React.useState('');
+    const [selectedProductId, setSelectedProductId] = React.useState('');
+    const [searchProd, setSearchProd] = React.useState('');
+    const [showDropdown, setShowDropdown] = React.useState(false);
+    
+    const [saving, setSaving] = React.useState(false);
+    const [selectedModel, setSelectedModel] = React.useState(null);
+    const [editingModelId, setEditingModelId] = React.useState(null);
+    const [showMaterials, setShowMaterials] = React.useState(false);
+    const [modelLoading, setModelLoading] = React.useState(false);
+    const viewerRef = React.useRef(null);
+
+    const currentRole = propUserRole || localStorage.getItem('rf_role') || '';
+    const currentUser = propCurrentUser || localStorage.getItem('rf_user') || '';
+    const isBoss = localStorage.getItem('rf_boss') === 'true' || currentRole === 'TỐI CAO' || currentUser.includes('Tiến');
+
+    const hasPerm = React.useCallback((actionCode) => {
+        if (isBoss || currentRole === 'TỐI CAO') return true;
+        if (typeof propHasPerm === 'function') return propHasPerm(actionCode);
+        if (typeof canUserDo === 'function') return canUserDo(actionCode, currentRole, currentUser);
+        return isBoss;
+    }, [propHasPerm, currentRole, currentUser, isBoss]);
+
+    const canManage3D = hasPerm('VIEWER3D_MANAGE'); // Chỉ Tiến
+    const canExportRender = hasPerm('VIEWER3D_EXPORT_RENDER'); // Tiến, Tân, Dương, Hương, Kiên
+
+    React.useEffect(() => {
+        if (typeof window.ensureModelViewerLoaded === 'function') {
+            window.ensureModelViewerLoaded();
+        }
+    }, []);
+
+    React.useEffect(() => {
+        setShowMaterials(false);
+    }, [selectedModel]);
+
+    React.useEffect(() => {
+        const viewer = viewerRef.current;
+        if (!viewer) return;
+        const handleLoad = () => setModelLoading(false);
+        const handleError = () => setModelLoading(false);
+        viewer.addEventListener('load', handleLoad);
+        viewer.addEventListener('error', handleError);
+        return () => {
+            viewer.removeEventListener('load', handleLoad);
+            viewer.removeEventListener('error', handleError);
+        };
+    }, []);
+
+    const processGithubUrl = (url) => {
+        if (!url) return '';
+        if (url.includes('github.com') && url.includes('/blob/')) {
+            return url.replace('github.com', 'raw.githubusercontent.com').replace('/blob/', '/');
+        }
+        return url;
+    };
+
+    const uniqueProducts = React.useMemo(() => {
+        const map = new Map();
+        erpProducts.forEach(p => {
+            let baseName = p.name || '';
+            let variant = 'Mặc định';
+            if (baseName.includes(' - ')) {
+                const parts = baseName.split(' - ');
+                baseName = parts[0].trim();
+                variant = parts.slice(1).join(' - ').trim();
+            }
+            const key = baseName.toLowerCase();
+            if (!key) return;
+            if (map.has(key)) {
+                const existing = map.get(key);
+                existing.variants.push({ ...p, variantLabel: variant });
+            } else {
+                map.set(key, { ...p, name: baseName, variants: [{ ...p, variantLabel: variant }] });
+            }
+        });
+        return Array.from(map.values());
+    }, [erpProducts]);
+
+    const getCategoryForModel = React.useCallback((model) => {
+        if (!model.productId) return 'Chưa Liên Kết';
+        const prod = uniqueProducts.find(p => p.id === model.productId || p.variants?.some(v => v.id === model.productId));
+        if (prod && prod.category) return prod.category;
+        return 'Chưa Phân Loại';
+    }, [uniqueProducts]);
+
+    const groupedModels = React.useMemo(() => {
+        if (!models3D || !uniqueProducts) return {};
+        const groups = {};
+        models3D.forEach(m => {
+            const cat = getCategoryForModel(m);
+            if (!groups[cat]) groups[cat] = [];
+            groups[cat].push(m);
+        });
+        return groups;
+    }, [models3D, getCategoryForModel]);
+
+    const filteredProds = uniqueProducts.filter(p => p.name?.toLowerCase().includes(searchProd.toLowerCase()));
+
+    const handleEdit = (model) => {
+        setEditingModelId(model.id);
+        setFormName(model.name || '');
+        setFormUrl(model.url || '');
+        setFormMaterials(model.materials || '');
+        setSelectedProductId(model.productId || '');
+        
+        if (model.productId) {
+            const prod = erpProducts.find(p => p.id === model.productId);
+            setSearchProd(prod ? prod.name : '');
+        } else {
+            setSearchProd('');
+        }
+    };
+
+    const handleCancelEdit = () => {
+        setEditingModelId(null);
+        setFormName('');
+        setFormUrl('');
+        setFormMaterials('');
+        setSelectedProductId('');
+        setSearchProd('');
+    };
+
+    const handleSave = async () => {
+        if (!formName.trim() || !formUrl.trim()) return;
+        setSaving(true);
+        try {
+            const finalUrl = processGithubUrl(formUrl.trim());
+            const modelToSave = {
+                id: editingModelId || Date.now().toString(),
+                name: formName.trim(),
+                url: finalUrl,
+                productId: selectedProductId,
+                materials: formMaterials.trim(),
+                createdAt: editingModelId ? (models3D.find(m => m.id === editingModelId)?.createdAt || new Date().toISOString()) : new Date().toISOString(),
+                createdBy: editingModelId ? (models3D.find(m => m.id === editingModelId)?.createdBy || localStorage.getItem('rf_user')) : (localStorage.getItem('rf_user') || 'Admin')
+            };
+            await pushDeltas({ Models3D: [modelToSave] });
+            handleCancelEdit();
+            setSelectedModel(modelToSave);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="flex flex-col space-y-4 animate-fade-in relative z-10">
+            {/* Header */}
+            <div className="bg-[#141414]/90 backdrop-blur-xl rounded-2xl p-5 border border-white/5 shadow-xl relative overflow-hidden shrink-0">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-[#3b82f6]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none"></div>
+                <div className="flex items-center gap-4 relative z-10">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#3b82f6] to-[#0284c7] text-white flex items-center justify-center text-2xl shadow-[0_0_20px_rgba(59,130,246,0.3)]">
+                        <i className="fas fa-cube"></i>
+                    </div>
+                    <div className="flex-1">
+                        <h2 className="text-xl font-black text-white uppercase tracking-wider mb-1">Trình Chiếu 3D Xưởng</h2>
+                        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+                            {models3D?.length || 0} Mẫu Thiết Kế Sẵn Sàng
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-4">
+                {/* Form Add New */}
+                {canManage3D && (
+                    <div className="w-full md:w-80 shrink-0 bg-[#141414]/90 backdrop-blur-xl rounded-2xl border border-white/5 p-4 flex flex-col shadow-xl h-max">
+                        <label className="text-[10px] font-black text-[#3b82f6] block mb-3 uppercase tracking-widest border-b border-[#3b82f6]/20 pb-2">
+                            {editingModelId ? 'Cập Nhật Mẫu' : 'Thêm Mẫu Mới'}
+                        </label>
+                        <div className="space-y-3">
+                            <input 
+                                type="text" 
+                                value={formName} 
+                                onChange={(e) => setFormName(e.target.value)} 
+                                placeholder="Tên mẫu (VD: Bể Hang ver 2)"
+                                className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-3 py-2.5 text-white text-[11px] outline-none focus:border-[#3b82f6] transition-colors"
+                            />
+                            <input 
+                                type="text" 
+                                value={formUrl} 
+                                onChange={(e) => setFormUrl(e.target.value)} 
+                                placeholder="Link raw GitHub .glb"
+                                className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-3 py-2.5 text-white text-[11px] outline-none focus:border-[#3b82f6] transition-colors"
+                            />
+                            <div className="relative">
+                                <input 
+                                    type="text" 
+                                    value={searchProd} 
+                                    onChange={(e) => { setSearchProd(e.target.value); setShowDropdown(true); }} 
+                                    onFocus={() => setShowDropdown(true)}
+                                    placeholder="Tìm hàng hoá liên kết..."
+                                    className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-3 py-2.5 text-white text-[11px] outline-none focus:border-[#3b82f6] transition-colors"
+                                />
+                                {showDropdown && searchProd && (
+                                    <div className="absolute top-full left-0 right-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-xl max-h-48 overflow-y-auto z-50 shadow-2xl custom-scrollbar">
+                                        {filteredProds.map(p => (
+                                            <div 
+                                                key={p.id} 
+                                                className="px-3 py-2.5 text-[11px] text-gray-300 hover:bg-[#3b82f6] hover:text-white cursor-pointer border-b border-white/5 last:border-0 flex justify-between items-center"
+                                                onClick={() => {
+                                                    setSelectedProductId(p.id);
+                                                    setSearchProd(p.name);
+                                                    setShowDropdown(false);
+                                                }}
+                                            >
+                                                <span className="truncate">{p.name}</span>
+                                                <span className="text-[9px] opacity-70 border border-white/20 px-1.5 py-0.5 rounded ml-2 shrink-0">{p.category || 'Khác'}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            <textarea 
+                                value={formMaterials}
+                                onChange={(e) => setFormMaterials(e.target.value)}
+                                placeholder="Danh sách nguyên liệu..."
+                                className="w-full bg-[#0a0a0a] border border-white/10 rounded-xl px-3 py-2.5 text-white text-[11px] outline-none focus:border-[#3b82f6] resize-none h-20 transition-colors"
+                            />
+                            <div className="flex gap-2 mt-2">
+                                <button 
+                                    onClick={handleSave}
+                                    disabled={saving || !formName.trim() || !formUrl.trim()}
+                                    className={`flex-1 text-white rounded-xl py-2.5 flex items-center justify-center transition-all shadow-lg active:scale-95 text-[11px] font-black uppercase tracking-widest ${saving || !formName.trim() || !formUrl.trim() ? 'bg-gray-600 opacity-50 cursor-not-allowed' : 'bg-[#3b82f6] hover:bg-[#2563eb] hover:shadow-[#3b82f6]/30 hover:shadow-lg cursor-pointer'}`}
+                                >
+                                    {saving ? <i className="fas fa-spinner fa-spin"></i> : <><i className="fas fa-save mr-1.5"></i> {editingModelId ? 'CẬP NHẬT' : 'LƯU MẪU'}</>}
+                                </button>
+                                {editingModelId && (
+                                    <button 
+                                        onClick={handleCancelEdit}
+                                        className="w-11 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+                                        title="Hủy"
+                                    >
+                                        <i className="fas fa-times"></i>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Grid List */}
+                <div className="flex-1 bg-[#141414]/90 backdrop-blur-xl rounded-2xl border border-white/5 p-4 flex flex-col shadow-xl">
+                    <div className="flex justify-between items-center mb-4 shrink-0 border-b border-white/5 pb-3">
+                        <span className="text-[12px] font-black text-white uppercase tracking-widest"><i className="fas fa-grid-2 mr-1.5 text-[#3b82f6]"></i> Danh Sách 3D ({models3D?.length || 0})</span>
+                    </div>
+
+                    <div className="w-full">
+                        {!models3D || models3D.length === 0 ? (
+                            <div className="text-center py-12 text-gray-500 text-[11px] font-bold border border-dashed border-white/10 rounded-2xl h-full flex flex-col items-center justify-center">
+                                <i className="fas fa-cube text-4xl mb-3 opacity-20"></i>
+                                Chưa có mô hình nào. Hãy thêm ở bên trái.
+                            </div>
+                        ) : (
+                            <div className="pb-4">
+                                {Object.entries(groupedModels).sort((a, b) => a[0].localeCompare(b[0])).map(([category, items]) => (
+                                    <div key={category} className="mb-6 last:mb-0 animate-fade-in">
+                                        <div className="flex items-center gap-2 mb-3 px-1">
+                                            <div className="h-4 w-1 bg-[#d4af37] rounded-full shadow-[0_0_8px_rgba(212,175,55,0.5)]"></div>
+                                            <span className="text-[12px] font-black text-[#d4af37] uppercase tracking-widest">{category}</span>
+                                            <span className="text-[10px] text-gray-400 font-bold bg-white/5 px-2 py-0.5 rounded-full border border-white/10">{items.length}</span>
+                                        </div>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                                            {items.map(p => {
+                                                const linkedProd = uniqueProducts.find(prod => prod.id === p.productId || prod.variants?.some(v => v.id === p.productId));
+                                                const displayImage = linkedProd?.image || linkedProd?.variants?.find(v => v.image)?.image;
+                                                
+                                                return (
+                                                    <button 
+                                                        key={p.id}
+                                                        onClick={() => { setSelectedModel(p); setModelLoading(true); }}
+                                                        className="bg-[#0a0a0a] border border-white/5 hover:border-[#3b82f6]/50 rounded-xl overflow-hidden flex flex-col group transition-all shadow-lg hover:shadow-[#3b82f6]/10 text-left"
+                                                    >
+                                                        <div className="aspect-square bg-[#1a1a1a] relative flex items-center justify-center w-full">
+                                                            {canManage3D && (
+                                                                <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                                                    <button 
+                                                                        onClick={(e) => { e.stopPropagation(); handleEdit(p); }} 
+                                                                        className="w-8 h-8 rounded-lg bg-black/60 text-white hover:bg-[#3b82f6] flex items-center justify-center transition-colors shadow-lg backdrop-blur-sm border border-white/10 cursor-pointer"
+                                                                        title="Sửa mẫu"
+                                                                    >
+                                                                        <i className="fas fa-pen text-[10px]"></i>
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                            {displayImage ? (
+                                                                <img src={displayImage} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Thumb" />
+                                                            ) : (
+                                                                <i className="fas fa-cube text-4xl text-gray-700 group-hover:scale-110 transition-transform duration-500"></i>
+                                                            )}
+                                                            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent opacity-90"></div>
+                                                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/40 backdrop-blur-sm">
+                                                                <div className="w-12 h-12 rounded-full bg-[#3b82f6] text-white flex items-center justify-center shadow-lg transform scale-75 group-hover:scale-100 transition-all duration-300">
+                                                                    <i className="fas fa-play ml-1"></i>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="p-3 w-full border-t border-white/5">
+                                                            <div className="font-bold text-[12px] text-white truncate group-hover:text-[#3b82f6] transition-colors">{p.name}</div>
+                                                            <div className="text-[9px] font-black uppercase tracking-widest mt-1.5 text-gray-500 flex justify-between items-center">
+                                                                <span className="flex items-center gap-1"><i className="fas fa-clock"></i> {String(p.createdAt || '').substring(0, 10)}</span>
+                                                                {linkedProd && <span className="bg-[#3b82f6]/10 text-[#3b82f6] px-1.5 py-0.5 rounded border border-[#3b82f6]/20 truncate max-w-[60px]" title={linkedProd.name}><i className="fas fa-link"></i></span>}
+                                                            </div>
+                                                        </div>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* Full Screen Modal Viewer */}
+            <div className={`fixed inset-0 z-[9999] bg-black flex-col animate-fade-in ${selectedModel ? 'flex' : 'hidden'}`}>
+                {/* Header bar */}
+                <div className="h-16 bg-[#0a0a0a] border-b border-white/10 flex items-center justify-between px-4 sm:px-6 shrink-0 relative z-20">
+                    <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-[#10b981] animate-pulse"></div>
+                        <span className="text-[14px] font-black text-white">{selectedModel?.name || ''}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button 
+                            onClick={() => setSelectedModel(null)} 
+                            className="px-4 h-10 rounded-xl bg-rose-500/10 hover:bg-rose-500 text-rose-500 hover:text-white flex items-center justify-center transition-colors shadow-[0_0_15px_rgba(244,63,94,0.2)] gap-2 font-black text-[11px] uppercase tracking-wider"
+                        >
+                            <i className="fas fa-times text-sm"></i> ĐÓNG LẠI
+                        </button>
+                    </div>
+                </div>
+                
+                {/* Viewer Container */}
+                <div className="flex-1 relative bg-[#09090b]">
+                    {/* Materials Info Panel */}
+                    <div className="absolute top-4 left-4 z-10 flex flex-col items-start pointer-events-auto">
+                        <button 
+                            onClick={() => setShowMaterials(!showMaterials)}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-xl backdrop-blur-md border border-white/10 shadow-lg transition-all ${showMaterials ? 'bg-[#d4af37] text-black' : 'bg-black/60 text-[#d4af37] hover:bg-black/80 hover:text-white'}`}
+                        >
+                            <i className="fas fa-box-open"></i>
+                            <span className="text-[10px] font-black uppercase tracking-widest">Nguyên Liệu & Kích Thước</span>
+                        </button>
+
+                        {showMaterials && (
+                            <div className="mt-2 bg-black/80 backdrop-blur-md border border-white/10 rounded-xl p-4 shadow-2xl w-64 sm:w-80 animate-fade-in flex flex-col gap-3">
+                                {selectedModel?.materials && (
+                                    <div>
+                                        <div className="text-[10px] font-black text-[#d4af37] uppercase tracking-widest mb-1.5 border-b border-[#d4af37]/20 pb-1">
+                                            <i className="fas fa-clipboard-list mr-1.5 text-sm"></i> Ghi chú nguyên liệu
+                                        </div>
+                                        <div className="text-[12px] text-gray-300 whitespace-pre-wrap leading-relaxed">{selectedModel.materials}</div>
+                                    </div>
+                                )}
+
+                                {/* Linked Product Variants */}
+                                {(() => {
+                                    if (!selectedModel) return null;
+                                    const linkedProd = uniqueProducts.find(prod => prod.id === selectedModel.productId || prod.variants?.some(v => v.id === selectedModel.productId));
+                                    if (!linkedProd || !linkedProd.variants || linkedProd.variants.length === 0) return null;
+                                    return (
+                                        <div className={selectedModel.materials ? "pt-2 border-t border-white/10" : ""}>
+                                            <div className="text-[10px] font-black text-[#3b82f6] uppercase tracking-widest mb-2 flex items-center">
+                                                <i className="fas fa-ruler-combined mr-1.5 text-sm"></i> Kích thước / Phân loại
+                                            </div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {linkedProd.variants.map((v, idx) => (
+                                                    <span key={idx} className="bg-white/10 text-white text-[10px] px-2 py-1 rounded border border-white/20">
+                                                        {v.variantLabel}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        )}
+                    </div>
+
+                    <div id="main-3d-viewer" className="w-full h-full relative">
+                        {modelLoading && selectedModel && (
+                            <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#09090b]">
+                                <div className="flex flex-col items-center">
+                                    <i className="fas fa-spinner fa-spin text-[#3b82f6] text-4xl mb-4"></i>
+                                    <span className="text-white text-xs font-bold uppercase tracking-widest animate-pulse">Đang nạp mô hình 3D...</span>
+                                </div>
+                            </div>
+                        )}
+                        <model-viewer 
+                            ref={viewerRef}
+                            src={selectedModel?.url || ''} 
+                            camera-controls="true" 
+                            touch-action="pan-y"
+                            shadow-intensity="1"
+                            environment-image="neutral"
+                            exposure="1"
+                            style={{width: '100%', height: '100%', backgroundColor: '#09090b', outline: 'none', display: 'block'}}
+                        ></model-viewer>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+</script>

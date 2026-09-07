@@ -1,0 +1,1351 @@
+<script>
+// ==========================================
+// CONFIG.TXT - SINGLE SOURCE OF TRUTH CHO TOÀN BỘ HẰNG SỐ + HÀM TIỆN ÍCH
+// ==========================================
+// File này là nguồn duy nhất cho constants và utility functions.
+// KHÔNG duplicate các hàm parseDateTimeSafe, extractTime, formatMoney... ở file khác.
+// Nếu cần thêm hàm mới → thêm vào đây.
+// ==========================================
+
+// ==========================================
+// 1. HẰNG SỐ CẤU HÌNH GỐC
+// ==========================================
+const SALARY_PER_HOUR = 20000;
+
+const USER_PINS = {}; // Đã chuyển sang quản lý qua sheet Config_NhanSu – xem getUserConfig() ở backend
+const ADMIN_PIN = ''; // Đã chuyển sang quản lý qua sheet Config_NhanSu – xem validatePin() ở backend
+const CHANNELS = ['Shopee VN', 'Tiktok Shop', 'Bán Lẻ', 'Bán Sỉ', 'Cộng Tác Viên', 'Shopee SG', 'Shopee MA', 'Shopee TH', 'Shopee PH', 'Bảo Hành'];
+const ORDER_STATUS = { AUTO_SCAN: 'Quét Tự Động', PENDING_PROD: 'Chờ Sản Xuất', READY_PACK: 'Sẵn sàng đóng gói', PENDING_HANDOVER: 'Chờ Bàn Giao', HANDED_OVER: 'Đã Bàn Giao', CANCELLED: 'Đơn Huỷ' };
+const CATEGORIES = ['LAYOUT', 'BỂ KÍNH', 'PHỤ KIỆN', 'DANH MỤC SẢN XUẤT'];
+const SUB_CATEGORIES = { 
+    'LAYOUT': ['LINH THÚ', 'VÁCH SUỐI', 'HẺM NÚI', 'NATURE', 'NHẤT TRỤ', 'TRĂNG', 'BONSAI', 'CẦU VỒNG', 'BIOTOP CUỘI', 'HANG ĐỘNG', 'RỪNG', 'ĐẢO BAY', 'CỔNG VÒM', 'COVER'], 
+    'BỂ KÍNH': ['BỂ MINI', 'TERRARIUM', 'BÁN CẠN', 'BỂ BETTA', 'BỂ NÂNG ĐÁY', 'BỂ LẺ SIZE'], 
+    'PHỤ KIỆN': ['CÁT, PHÂN NỀN', 'BƠM LỌC', 'VẬT LIỆU LỌC', 'ĐÈN LED', 'THỨC ĂN', 'PHỤ KIỆN KHÁC'], 
+    'DANH MỤC SẢN XUẤT': ['NGUYÊN LIỆU LAYOUT', 'NGUYÊN LIỆU BỂ KÍNH', 'NGUYÊN LIỆU ĐÓNG GÓI', 'VẬT TƯ SẢN XUẤT'] 
+};
+
+// Phân nhóm hiển thị Danh mục Kho: THÀNH PHẨM vs NGUYÊN VẬT LIỆU SẢN XUẤT
+const INVENTORY_GROUPS = {
+    FINISHED: { label: 'HÀNG HOÁ THÀNH PHẨM', icon: 'fa-cube', categories: ['LAYOUT', 'BỂ KÍNH', 'PHỤ KIỆN'] },
+    RAW_MATERIALS: { label: 'NGUYÊN LIỆU SẢN XUẤT', icon: 'fa-boxes-stacked', categories: ['DANH MỤC SẢN XUẤT'] },
+    DEFECT: { label: 'HÀNG HỎNG VỠ', icon: 'fa-heart-crack', categories: ['HÀNG HỎNG VỠ'] }
+};
+
+/**
+ * Hàm tìm kiếm nguyên liệu chuẩn xác trong Products (Kho Nguyên Liệu)
+ * Khớp chuẩn SKU, ID, Alias SKU (NLSX-NOIN <-> NLSX-NHAMNONOI, NLSX-RE <-> NLSX-REEN...) 
+ * và tên sản phẩm trong kho.
+ */
+function findMaterialInProducts(matSku, matId, prodList) {
+    if (!prodList || prodList.length === 0) return null;
+    const s = String(matSku || '').trim().toUpperCase();
+    const cleanS = s.replace(/[^A-Z0-9]/g, '');
+
+    // 1. Khớp chính xác ID hoặc SKU
+    let found = prodList.find(p => 
+        (matId && String(p.id) === String(matId)) ||
+        (s && String(p.sku || '').trim().toUpperCase() === s)
+    );
+    if (found) return found;
+
+    // 2. Tra cứu từ điển Alias SKU chuẩn xác
+    const ALIAS_MAP = {
+        'NLSX-KINH-5LI': ['KINH 5LI', 'KINH 5 LI', 'KINH 5MM', 'KINH 5 LY', 'NLSX-KINH-5MM', 'KINH 5', 'KINH 5LY', 'KINH SIEU TRONG 5LI'],
+        'NLSX-KINH-8LI': ['KINH 8LI', 'KINH 8 LI', 'KINH 8MM', 'KINH 8 LY', 'NLSX-KINH-8MM', 'KINH 8', 'KINH 8LY', 'KINH SIEU TRONG 8LI'],
+        'NLSX-MAI-CNC': ['MAI CNC', 'MAI VI TINH', 'MAI CNC VI TINH', 'CONG MAI CNC', 'MAI VI TINH CNC', 'GIA CONG MAI CNC'],
+        'NLSX-KEO-WACKER': ['KEO WACKER', 'WACKER', 'SILICONE WACKER', 'KEO DAN BE WACKER', 'KEO WACKER 121', 'KEO SILICONE WACKER'],
+        'NLSX-NOIN': ['NLSX-NHONOI', 'NHONOI', 'NHO NOI', 'LUA NHO NOI'],
+        'NLSX-NHONOI': ['NLSX-NOIN', 'NOIN', 'NHO NOI', 'LUA NHO NOI'],
+        'NLSX-NHAMXANH': ['NLSX-NHAM', 'NHAM', 'NHAM XANH', 'DA NHAM XANH'],
+        'NLSX-NHAM': ['NLSX-NHAMXANH', 'NHAMXANH', 'NHAM XANH'],
+        'NLSX-VIAVOI': ['NLSX-VIA', 'VIA', 'VIA VOI', 'DA VIA VOI', 'DA VIA'],
+        'NLSX-VIA': ['NLSX-VIAVOI', 'VIAVOI', 'VIA VOI', 'DA VIA VOI'],
+        'NLSX-DANHCANH': ['NLSX-LUASANCANH', 'LUASANCANH', 'SAN CANH', 'DANG CANH', 'LUA DANG CANH', 'LUA SAN CANH'],
+        'NLSX-LUASANHTHANG': ['NLSX-LUASANCANH', 'LUASANTHANG', 'SAN THANG', 'LUA SAN THANG'],
+        'NLSX-LUASANCANH': ['NLSX-DANHCANH', 'NLSX-LUASANHTHANG', 'SAN CANH', 'DANG CANH'],
+        'NLSX-REEN': ['NLSX-RE', 'RE', 'RE RUNG', 'LUA RE RUNG', 'RE EN'],
+        'NLSX-RE': ['NLSX-REEN', 'REEN', 'RE RUNG', 'LUA RE RUNG'],
+        'NLSX-LUASANMIENG': ['LUASANMIENG', 'SAN MIENG', 'LUA SAN MIENG', 'LUA SAM MIENG'],
+        'NLSX-TAIMEO': ['TAIMEO', 'TAI MEO', 'DA TAI MEO'],
+        'NLSX-CUOI': ['CUOI', 'DA CUOI', 'BIOTOP CUOI'],
+        'NLSX-DOQUYEN': ['DOQUYEN', 'DO QUYEN', 'LUA DO QUYEN'],
+        'NLSX-THACHSUNG': ['THACHSUNG', 'THACH SUNG', 'LUA THACH SUNG'],
+        'NLSX-REU-A04': ['REU-A04', 'A04', 'REU BOT MAU XANH', 'REU XANH', 'REU BOT XANH'],
+        'NLSX-REU-A11': ['REU-A11', 'A11', 'REU BOT MAU DO', 'REU DO', 'REU BOT DO'],
+        'NLSX-FOMEX-8LI': ['FOMEX-8LI', 'FOMEX 8LI', 'FOMEX 8', 'FOMEX8'],
+        'NLSX-FOMEX10-54': ['FOMEX10-54', 'FOMEX-10LI', 'FOMEX 10LI', 'FOMEX 10', 'FOMEX10'],
+        'NLSX-502-1CHAI': ['502', 'KEO 502', 'KEO 502 CHAI', '502-1CHAI', 'NLSX-502', 'NLSX-KEO-502'],
+        'NLSX-KEO-502': ['502', 'KEO 502', 'KEO 502 CHAI', '502-1CHAI', 'NLSX-502', 'NLSX-502-1CHAI']
+    };
+
+    const aliases = ALIAS_MAP[s] || [];
+    for (const alias of aliases) {
+        found = prodList.find(p => {
+            const pSkuUpper = String(p.sku || '').trim().toUpperCase();
+            const pNameUpper = String(p.name || '').trim().toUpperCase();
+            return pSkuUpper === alias || pSkuUpper.includes(alias) || pNameUpper.includes(alias);
+        });
+        if (found) return found;
+    }
+
+    // 3. Khớp SKU chuẩn hoá không dấu / không ký tự đặc biệt
+    found = prodList.find(p => {
+        const pSkuClean = String(p.sku || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+        return cleanS && pSkuClean && (pSkuClean === cleanS || pSkuClean.includes(cleanS) || cleanS.includes(pSkuClean));
+    });
+    if (found) return found;
+
+    // 4. Khớp theo Tên sản phẩm
+    found = prodList.find(p => {
+        const pName = String(p.name || '').trim().toLowerCase();
+        const matSkuLower = s.toLowerCase();
+        return pName && (pName === matSkuLower || matSkuLower.includes(pName) || pName.includes(matSkuLower));
+    });
+
+    return found || null;
+}
+
+/**
+ * Hàm tính toán chi phí và quy đổi đơn vị định mức BOM chuẩn xác
+ * Hỗ trợ tự động nhận diện: Kg/Gam, Lít/Ml, Mét/Cm/Mm ngay cả khi tên hàng có đuôi (Kg), (L)
+ */
+function calculateBomItemCost(mat, rawQty, rawBomUnit) {
+    const qty = Number(rawQty) || 0;
+    const unitPrice = Number(mat?.costPrice || mat?.price || 0);
+    if (!unitPrice || !qty) return { unitPrice, convertedPrice: unitPrice, subTotal: 0, convertedQty: qty, conversionNote: '' };
+
+    let bomUnit = String(rawBomUnit || mat?.unit || '').toLowerCase().trim();
+    let matUnit = String(mat?.unit || '').toLowerCase().trim();
+    let matName = String(mat?.name || '').toLowerCase();
+    let matSku = String(mat?.sku || '').toLowerCase();
+
+    // Nhận diện khối lượng: Kg / Gam
+    const isMatKg = matUnit === 'kg' || matUnit === 'cân' || matUnit === 'kí' || matUnit === 'kilogram' || 
+                    matName.includes('(kg)') || matName.includes(' kg') || matName.includes('/kg');
+    const isBomGram = bomUnit === 'gam' || bomUnit === 'g' || bomUnit === 'gram' || bomUnit === 'gr';
+    const isBomKg = bomUnit === 'kg' || bomUnit === 'cân' || bomUnit === 'kí' || bomUnit === 'kilogram';
+    const isMatGram = matUnit === 'gam' || matUnit === 'g' || matUnit === 'gram' || matUnit === 'gr';
+
+    // Nhận diện thể tích: Lít / Ml
+    const isMatLit = matUnit === 'lít' || matUnit === 'lit' || matUnit === 'l' || matName.includes('(l)') || matName.includes('(lít)');
+    const isBomMl = bomUnit === 'ml' || bomUnit === 'mililit' || bomUnit === 'cc';
+
+    // Nhận diện chiều dài/diện tích: Mét / Cm / Mm
+    const isMatMet = matUnit === 'm' || matUnit === 'mét' || matUnit === 'met' || matName.includes('(m)') || matName.includes('(mét)');
+    const isBomCm = bomUnit === 'cm' || bomUnit === 'centimet';
+    const isBomMm = bomUnit === 'mm' || bomUnit === 'milimet';
+
+    // Nhận diện Keo 502: 1 chai 162g - vỏ 62g = 100g keo thực tế, giá 22.000đ / 100g = 220đ/gam
+    const isKeo502 = matSku.includes('502') || matName.includes('502') || matName.includes('keo');
+    const isMatChai502 = matUnit.includes('chai') || matName.includes('chai') || matUnit.includes('100') || matUnit.includes('162') || matName.includes('162');
+
+    let convertedPrice = unitPrice;
+    let convertedQty = qty;
+    let conversionNote = '';
+
+    if (isKeo502 && isMatChai502 && isBomGram) {
+        convertedPrice = unitPrice / 100; // 22.000đ / 100g = 220đ/gam keo thực tế
+        convertedQty = qty / 100;         // Quy đổi số chai: 1 chai = 100g keo (162g tổng - 62g vỏ)
+        conversionNote = '1 chai = 100g keo (vỏ 62g, tổng 162g)';
+    } else if (isMatKg && isBomGram) {
+        convertedPrice = unitPrice / 1000;
+        convertedQty = qty / 1000;
+        conversionNote = '1kg = 1.000g';
+    } else if (isMatGram && isBomKg) {
+        convertedPrice = unitPrice * 1000;
+        convertedQty = qty * 1000;
+        conversionNote = '1g = 0.001kg';
+    } else if (isMatLit && isBomMl) {
+        convertedPrice = unitPrice / 1000;
+        convertedQty = qty / 1000;
+        conversionNote = '1L = 1.000ml';
+    } else if (isMatMet && isBomCm) {
+        convertedPrice = unitPrice / 100;
+        convertedQty = qty / 100;
+        conversionNote = '1m = 100cm';
+    } else if (isMatMet && isBomMm) {
+        convertedPrice = unitPrice / 1000;
+        convertedQty = qty / 1000;
+        conversionNote = '1m = 1.000mm';
+    }
+
+    const subTotal = qty * convertedPrice;
+    return { unitPrice, convertedPrice, subTotal, convertedQty, conversionNote };
+}
+
+const CAT_THU = ['Bán Hàng', 'COD Đối Tác Giao Hàng', 'Sàn TMĐT', 'Đầu Tư', 'Thu Khác', 'Bán Phế Liệu'];
+const CAT_CHI = ['Nguyên Liệu Sản Xuất', 'Vật Tư Sản Xuất', 'Quảng Cáo & Marketing', 'Thanh Toán Hoá Đơn', 'Phần Mềm Dịch Vụ', 'Cước Vận Chuyển', 'Bảo Hành Đơn Hàng', 'Lương Nhân Sự', 'Công Cụ Máy Móc', 'Trang Thiết Bị', 'Khác'];
+
+// Hệ thống rào chắn phân hệ tài chính (Sub-ledger Isolation)
+const FINANCE_CATEGORIES = [
+    { name: "Thu Tiền Bán Hàng", type: "Thu", module: "SALES" },
+    { name: "Thu Cọc Đơn Hàng", type: "Thu", module: "SALES" },
+    { name: "Thu Khác", type: "Thu", module: "FINANCE" },
+    { name: "Thanh Toán NCC", type: "Chi", module: "PURCHASE" },
+    { name: "Nhập Hàng", type: "Chi", module: "PURCHASE" },
+    { name: "Trả Lương", type: "Chi", module: "HR" },
+    { name: "Tạm Ứng", type: "Chi", module: "HR" },
+    { name: "Chi Phí Điện Nước", type: "Chi", module: "FINANCE" },
+    { name: "Chi Phí Mặt Bằng", type: "Chi", module: "FINANCE" },
+    { name: "Văn Phòng Phẩm", type: "Chi", module: "FINANCE" },
+    { name: "Tiếp Khách", type: "Chi", module: "FINANCE" },
+    { name: "Lãi Vay", type: "Chi", module: "FINANCE" },
+    { name: "Phí Ngân Hàng", type: "Chi", module: "FINANCE" },
+    { name: "Rút/Nạp Tiền Nội Bộ", type: "Chi", module: "FINANCE" },
+    { name: "Chi Phí Khác", type: "Chi", module: "FINANCE" },
+    { name: "Chờ Xử Lý", type: "Chờ Xử Lý", module: "SYSTEM" }
+];
+
+// ==========================================
+// 2. CÁC HÀM TIỆN ÍCH XỬ LÝ (LOGIC & THỜI GIAN)
+// ==========================================
+const parseDateTimeSafe = (val) => {
+    const now = new Date();
+    const defaultDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    if (!val) return { date: defaultDate, time: '00:00', fullStr: `${defaultDate} 00:00`, timestamp: 0 };
+    let str = String(val).trim();
+    
+    let datePart = defaultDate;
+    const dateMatch = str.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (dateMatch) {
+        datePart = `${dateMatch[1]}-${dateMatch[2].padStart(2, '0')}-${dateMatch[3].padStart(2, '0')}`;
+    } else {
+        const reverseDateMatch = str.match(/(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+        if (reverseDateMatch) {
+            datePart = `${reverseDateMatch[3]}-${reverseDateMatch[2].padStart(2, '0')}-${reverseDateMatch[1].padStart(2, '0')}`;
+        }
+    }
+    
+    let timePart = '00:00';
+    const timeMatch = str.match(/([0-1]?[0-9]|2[0-3]):([0-5][0-9])/);
+    if (timeMatch) {
+        timePart = `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}`;
+    }
+    
+    const [y, m, d] = datePart.split('-').map(Number);
+    const [hr, min] = timePart.split(':').map(Number);
+    const ts = new Date(y, m - 1, d, hr, min, 0).getTime();
+    
+    return {
+        date: datePart,
+        time: timePart,
+        fullStr: `${datePart} ${timePart}`,
+        timestamp: isNaN(ts) ? 0 : ts
+    };
+};
+
+const formatDateTime = (val) => {
+    if (!val) return '';
+    const obj = parseDateTimeSafe(val);
+    if (!obj || !obj.date) return String(val);
+    const [y, m, d] = obj.date.split('-');
+    return `${obj.time} ${d}/${m}`;
+};
+
+const getLocalISODate = () => { 
+    try {
+        const tzOffset = (new Date()).getTimezoneOffset() * 60000;
+        return new Date(Date.now() - tzOffset).toISOString().slice(0, -1); 
+    } catch(e) {
+        return new Date().toISOString();
+    }
+};
+
+const formatMoney = (m) => new Intl.NumberFormat('vi-VN').format(Math.round(m || 0)) + 'đ';
+
+/**
+ * Thuật toán Tự Động Định Giá & Ước Tính Định Mức BOM cho Layout / Cover
+ */
+const calcLayoutPricingAndBOM = ({ l, w, h, selectedMaterial, configGiaLayout = [], kpiConfig = [] }) => {
+    const lNum = Math.max(0, Number(l) || 0);
+    const wNum = Math.max(0, Number(w) || 0);
+    const hNum = Math.max(0, Number(h) || 0);
+    if (!lNum || !wNum || !hNum) return null;
+
+    const dimStr = `${lNum}x${wNum}x${hNum}cm`;
+    const skuSuffix = `${lNum}${wNum}${hNum}`;
+    const volume = (lNum * wNum * hNum) / 1000; // Thể tích lít
+    const maxSize = Math.max(lNum, wNum, hNum);
+
+    // 1. Tính Giá Bán Lẻ theo Barem Thể Tích & Config_GiaLayout
+    const LAYOUT_BASE_MODES = [
+        { volume: 8, basePrice: 350000 },
+        { volume: 12, basePrice: 500000 },
+        { volume: 23, basePrice: 700000 },
+        { volume: 36, basePrice: 800000 },
+        { volume: 45, basePrice: 900000 },
+        { volume: 54, basePrice: 1100000 },
+        { volume: 96, basePrice: 1250000 }
+    ];
+    const sortedModes = [...LAYOUT_BASE_MODES].sort((a, b) => a.volume - b.volume);
+    let baseRetailPrice = 0;
+    const minMode = sortedModes[0];
+    const maxMode = sortedModes[sortedModes.length - 1];
+
+    if (volume <= minMode.volume) {
+        baseRetailPrice = minMode.basePrice;
+    } else if (volume >= maxMode.volume) {
+        baseRetailPrice = maxMode.basePrice + (volume - maxMode.volume) * 10000;
+    } else {
+        for (let i = 0; i < sortedModes.length - 1; i++) {
+            if (volume >= sortedModes[i].volume && volume <= sortedModes[i + 1].volume) {
+                const modeA = sortedModes[i];
+                const modeB = sortedModes[i + 1];
+                baseRetailPrice = modeA.basePrice + ((volume - modeA.volume) / (modeB.volume - modeA.volume)) * (modeB.basePrice - modeA.basePrice);
+                break;
+            }
+        }
+    }
+
+    // Tra cứu phụ phí theo barem Size_Max nếu có
+    let matchingRows = (configGiaLayout || []).filter(r => Number(r.Size_Max || 0) >= maxSize).sort((a, b) => Number(a.Size_Max) - Number(b.Size_Max));
+    let heSoGia = 1.0;
+    if (matchingRows.length > 0 && matchingRows[0].He_So_Gia) {
+        const val = Number(matchingRows[0].He_So_Gia) || 1.0;
+        // Chỉ nhận nếu là hệ số nhân hợp lệ (0.1 -> 3.0). Tránh nhân với số tiền trực tiếp (VD: 540.000đ) gây ra giá hàng trăm tỷ!
+        if (val >= 0.1 && val <= 3.0) {
+            heSoGia = val;
+        }
+    }
+    const finalRetailPrice = Math.round((baseRetailPrice * heSoGia) / 10000) * 10000;
+
+    // 2. Tính Định Mức BOM Vật Tư Ước Tính
+    // Lượng nguyên liệu chính (Lũa/Đá): ~0.14 kg / Lít thể tích bể
+    const matQty = Math.round((volume * 0.14) * 10) / 10;
+    const matPrice = Number(selectedMaterial?.costPrice || selectedMaterial?.price || 35000);
+    const matCostTotal = Math.round(matQty * matPrice);
+
+    // Keo dán layout: tối thiểu 1 tuýp, cứ 25L thêm 1 tuýp
+    const glueQty = Math.max(1, Math.round(volume / 25));
+    const glueCostTotal = glueQty * 18000; // ~18.000đ/tuýp keo
+
+    // Mút/bông chèn: 1 gói nhỏ ~ 15.000đ
+    const spongeCostTotal = 15000;
+
+    // Tiền công thợ khâu 1 + khâu 2 (ước tính theo thể tích)
+    let laborCost = 150000;
+    if (volume <= 15) laborCost = 90000;
+    else if (volume <= 30) laborCost = 120000;
+    else if (volume <= 60) laborCost = 160000;
+    else laborCost = 220000;
+
+    const calculatedCostPrice = Math.round((matCostTotal + glueCostTotal + spongeCostTotal + laborCost) / 1000) * 1000;
+    const minSafeCost = Math.round((finalRetailPrice * 0.48) / 1000) * 1000;
+    const finalCostPrice = Math.max(minSafeCost, calculatedCostPrice);
+
+    // Chuẩn bị danh sách BOM Items
+    const bomItems = [];
+    if (selectedMaterial && selectedMaterial.sku) {
+        bomItems.push({
+            materialSku: selectedMaterial.sku,
+            materialName: selectedMaterial.name || 'Nguyên liệu chính',
+            defaultQty: matQty,
+            unit: selectedMaterial.unit || 'Kg'
+        });
+    }
+
+    return {
+        dimStr,
+        skuSuffix,
+        volume: Math.round(volume * 10) / 10,
+        suggestedPrice: finalRetailPrice,
+        suggestedCostPrice: finalCostPrice,
+        matQty,
+        glueQty,
+        laborCost,
+        bomItems
+    };
+};
+
+const extractTime = (val) => { 
+    if(!val) return '';
+    let s = String(val).replace(/'/g, '').trim(); 
+    if(s.includes('T')) { let p = s.split('T')[1]; if(p) return p.substring(0,5); } 
+    let match = s.match(/\d{1,2}:\d{2}/); 
+    if (match) return match[0].padStart(5, '0'); 
+    return '';
+};
+
+const calcDurationMins = (start, end) => { 
+    let s = extractTime(start);
+    let e = extractTime(end); 
+    if(!s || !e || !s.includes(':') || !e.includes(':')) return 0; 
+    let [sh, sm] = s.split(':').map(Number);
+    let [eh, em] = e.split(':').map(Number); 
+    let m = (eh*60 + em) - (sh*60 + sm); return m > 0 ? m : 0; 
+};
+
+const formatTotalTime = (mins) => { 
+    if (mins <= 0) return '0h';
+    const h = Math.floor(mins/60); const m = Math.round(mins % 60); 
+    return `${h}h${m > 0 ? m+'p' : ''}`; 
+};
+
+const checkIsPast = (recordDate, isMorning) => { 
+    const now = new Date();
+    const tzOffset = now.getTimezoneOffset() * 60000; 
+    const localNow = new Date(now.getTime() - tzOffset); 
+    const today = localNow.toISOString().split('T')[0];
+    const currentHour = now.getHours(); 
+    if (!recordDate || recordDate < today) return true; 
+    if (recordDate === today) return isMorning ? currentHour >= 12 : currentHour >= 18; 
+    return false; 
+};
+
+const isDateInRange = (dateStr, filter, startStr, endStr) => {
+    if (!dateStr) return false;
+    const f = String(filter).trim().toLowerCase();
+    if (f === 'tất cả' || f === 'tất cả vị trí') return true;
+
+    const parseAdvancedDate = (val) => {
+        if (!val) return null;
+        let str = String(val).trim();
+        let y = null, m = null, d = null;
+        
+        const matchYMD = str.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+        if (matchYMD) {
+            y = parseInt(matchYMD[1]);
+            m = parseInt(matchYMD[2]);
+            d = parseInt(matchYMD[3]);
+        } else {
+            const matchDMY = str.match(/(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+            if (matchDMY) {
+                d = parseInt(matchDMY[1]);
+                m = parseInt(matchDMY[2]);
+                y = parseInt(matchDMY[3]);
+            }
+        }
+        if (!y || !m || !d) return null;
+        return { year: y, month: m, day: d, dateObj: new Date(y, m - 1, d) };
+    };
+
+    const parsed = parseAdvancedDate(dateStr);
+    if (!parsed) return false;
+
+    const now = new Date();
+    const tYear = now.getFullYear();
+    const tMonth = now.getMonth() + 1;
+    const tDay = now.getDate();
+
+    if (f === 'hôm nay') {
+        return parsed.year === tYear && parsed.month === tMonth && parsed.day === tDay;
+    }
+    if (f === 'hôm qua') {
+        const yesterday = new Date(tYear, tMonth - 1, tDay - 1);
+        return parsed.year === yesterday.getFullYear() && 
+               parsed.month === (yesterday.getMonth() + 1) && 
+               parsed.day === yesterday.getDate();
+    }
+    if (f === 'tháng này') {
+        return parsed.year === tYear && parsed.month === tMonth;
+    }
+    if (f === 'tháng trước') {
+        const lastMonth = new Date(tYear, tMonth - 2, 1);
+        return parsed.year === lastMonth.getFullYear() && parsed.month === (lastMonth.getMonth() + 1);
+    }
+    if (f === 'tuần này') {
+        const todayObj = new Date(tYear, tMonth - 1, tDay);
+        const dayOfWeek = todayObj.getDay();
+        const diffToMonday = todayObj.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+        const monday = new Date(todayObj.setDate(diffToMonday));
+        monday.setHours(0,0,0,0);
+        
+        const targetDate = parsed.dateObj;
+        targetDate.setHours(0,0,0,0);
+        return targetDate >= monday && targetDate <= new Date(tYear, tMonth - 1, tDay, 23, 59, 59);
+    }
+    if (f === 'tùy chọn' && startStr && endStr) {
+        const startParsed = parseAdvancedDate(startStr);
+        const endParsed = parseAdvancedDate(endStr);
+        if (!startParsed || !endParsed) return false;
+        
+        const tDate = parsed.dateObj.getTime();
+        const sDate = startParsed.dateObj.getTime();
+        const eDate = endParsed.dateObj.getTime() + (24 * 60 * 60 * 1000 - 1);
+        return tDate >= sDate && tDate <= eDate;
+    }
+    return true;
+};
+
+const getShiftStatus = (inTime, outTime, isMorning, leaveType, recordDate) => {
+  const actIn = extractTime(inTime);
+  const actOut = extractTime(outTime); const isPast = checkIsPast(recordDate, isMorning);
+  if (leaveType) return { text: leaveType, color: 'text-primary bg-primaryLight font-bold', mins: 0 };
+  if (!actIn && !actOut) { 
+      if (isPast) return { text: 'Nghỉ không phép', color: 'text-danger bg-red-50 font-black', mins: 0 };
+      return { text: 'Chưa chấm', color: 'text-gray-400 bg-gray-100', mins: 0 };
+  }
+  const lateLimit = isMorning ? '08:10' : '14:10'; const halfDayLimit = isMorning ? '09:00' : '14:30'; const earlyLimit = isMorning ? '11:45' : '17:45';
+  let mins = calcDurationMins(actIn, actOut);
+  const isLate = actIn && actIn > lateLimit; const isVeryLate = actIn && actIn > halfDayLimit;
+  const isEarly = actOut && actOut < earlyLimit;
+  if (isVeryLate && actOut) return { text: 'Muộn >1h (-0.5 Công)', color: 'text-danger bg-red-50 font-black', mins };
+  if (isVeryLate && !actOut) return { text: 'Muộn >1h (Đang làm)', color: 'text-accent bg-orange-50 font-black', mins: 0 };
+  if (!actOut && isPast) return { text: 'Quên chấm ra', color: 'text-danger bg-red-50 font-bold', mins: 0 };
+  if (!actOut) return { text: 'Đang làm...', color: 'text-primary bg-primaryLight font-bold animate-pulse', mins: 0 };
+  if (isLate && isEarly) return { text: 'Muộn & Về sớm', color: 'text-accent bg-orange-50 font-bold', mins };
+  if (isLate) return { text: 'Đi muộn', color: 'text-accent bg-orange-50 font-bold', mins };
+  if (isEarly) return { text: 'Về sớm', color: 'text-accent bg-orange-50 font-bold', mins };
+  return { text: 'Đúng giờ', color: 'text-success bg-green-50 font-bold', mins };
+};
+
+const getAutoDeadline = (ch, rawDate = null, shippingMethod = '') => { 
+    const d = rawDate ? new Date(rawDate) : new Date();
+    const h = d.getHours(); const m = d.getMinutes(); 
+    const chStr = String(ch || '').toUpperCase();
+    const shipStr = String(shippingMethod || '').toUpperCase();
+    const isInstant = shipStr.includes('HỎA TỐC') || shipStr.includes('TRONG NGÀY') || shipStr.includes('INSTANT') || shipStr.includes('NOW') || chStr.includes('HỎA TỐC') || chStr.includes('TRONG NGÀY');
+
+    // 1. ĐƠN HỎA TỐC / TRONG NGÀY (SLA CẤP TỐC 1.5H)
+    if (isInstant) {
+        if (h < 8) {
+            // Trước 8h: Chuẩn bị hàng trước 9:30 cùng ngày
+            d.setHours(9, 30, 0, 0);
+        } else if (h < 18) {
+            // Từ 8h đến trước 18h: Xử lý trong vòng 1.5 giờ (90 phút)
+            d.setMinutes(d.getMinutes() + 90);
+        } else {
+            // Từ 18h trở đi: Chuẩn bị hàng trước 9:30 ngày kế tiếp
+            d.setDate(d.getDate() + 1);
+            d.setHours(9, 30, 0, 0);
+        }
+        return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }
+
+    // 2. ĐƠN SÀN TMĐT (SHOPEE, TIKTOK SHOP, LAZADA) - CHUẨN ĐIỀU KHOẢN SHOPEE 19948
+    if (chStr.includes('SHOPEE') || chStr.includes('TIKTOK') || chStr.includes('LAZADA') || chStr.includes('SÀN')) { 
+        const dayOfWeek = d.getDay(); // 0: Chủ Nhật, 6: Thứ Bảy
+        let addDays = 0;
+        let th = 17; let tm = 30;
+
+        if (dayOfWeek === 0) {
+            // Chủ Nhật: ĐVVC nghỉ lấy/giao ➔ chuyển hạn bàn giao sang Thứ Hai lúc 11:30 (Shopee hạn 23:59 Thứ Hai)
+            addDays = 1; th = 11; tm = 30;
+        } else if (dayOfWeek === 6) {
+            // Thứ Bảy:
+            if (h >= 14) {
+                // Sau 14h Thứ Bảy: Shopee gia hạn đến Thứ Hai 23:59 ➔ Hạn xưởng Thứ Hai lúc 11:30
+                addDays = 2; th = 11; tm = 30;
+            } else {
+                // Trước 14h Thứ Bảy: Bàn giao trước 23:59 Thứ Bảy ➔ Hạn xưởng 17:30 cùng ngày
+                addDays = 0; th = 17; tm = 30;
+            }
+        } else {
+            // Thứ Hai - Thứ Sáu:
+            if (h < 14) {
+                // Phát sinh trước 14h: Bàn giao trước 23:59 cùng ngày ➔ Hạn xưởng 17:30 cùng ngày
+                addDays = 0; th = 17; tm = 30;
+            } else {
+                // Phát sinh từ 14h trở đi: Bàn giao trước 23:59 ngày kế tiếp ➔ Hạn xưởng 11:30 hôm sau
+                addDays = 1; th = 11; tm = 30;
+            }
+        }
+        d.setDate(d.getDate() + addDays); d.setHours(th, tm, 0, 0);
+        return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }
+
+    // 3. ĐƠN BÁN LẺ, CTV, BÁN SỈ, NỘI BỘ (CHU TRÌNH 6 NGÀY)
+    d.setDate(d.getDate() + 6);
+    d.setHours(18, 0, 0, 0);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); 
+};
+
+const checkTimeFilter = (dateStr, mode) => { 
+    if (!dateStr || mode === 'Tất Cả') return true;
+    const tzOffset = (new Date()).getTimezoneOffset() * 60000; 
+    const now = new Date(Date.now() - tzOffset); 
+    const todayStr = now.toISOString().split('T')[0];
+    now.setDate(now.getDate() - 1); const yestStr = now.toISOString().split('T')[0]; 
+    now.setDate(now.getDate() + 1); const thisMonthStr = now.toISOString().slice(0, 7); 
+    now.setMonth(now.getMonth() - 1);
+    const lastMonthStr = now.toISOString().slice(0, 7); 
+    if (mode === 'Hôm Nay') return String(dateStr).startsWith(todayStr); 
+    if (mode === 'Hôm Qua') return String(dateStr).startsWith(yestStr);
+    if (mode === 'Tháng Này') return String(dateStr).startsWith(thisMonthStr); 
+    if (mode === 'Tháng Trước') return String(dateStr).startsWith(lastMonthStr); 
+    return true; 
+};
+
+function isExportChannel(raw) {
+  if (!raw) return false;
+  raw = String(raw).toUpperCase().trim();
+  if (raw.includes('XUẤT KHẨU') || raw.includes('EXPORT') || raw.includes('QUỐC TẾ') || raw.includes('INTERNATIONAL') || raw.includes('GLOBAL')) return true;
+  if (/\b(MALAYSIA|THAILAND|PHILIPPINES|SINGAPORE|TAIWAN)\b/i.test(raw)) return true;
+  if (/\bSHOPEE\s*[-_]?\s*(TH|MA|MY|SG|TW|PH)\b/i.test(raw)) return true;
+  if (/\b(SHOPEE_TH|SHOPEE_MA|SHOPEE_MY|SHOPEE_SG|SHOPEE_TW|SHOPEE_PH)\b/i.test(raw)) return true;
+  if (/\b(MY|TH|PH|SG|TW|MA)\b/i.test(raw) && raw.includes('SHOPEE')) return true;
+  return false;
+}
+
+function getSopAndReward(item, phaseName, kpiConfig = [], channel = '') {
+  if (!item?.name || !kpiConfig?.length) { return { time: 30, reward: 0 }; }
+  const rawName = String(item.name).toLowerCase().trim();
+  const phase = String(phaseName || '').toLowerCase();
+  const itemType = String(item.type || '').toUpperCase();
+  const isLayoutItem = itemType === 'LAYOUT' || /rừng|layout|đảo|bonsai|trang|cover|nature|suối|vách|hẻm|núi|cầu|thác|hang|tiểu cảnh/i.test(rawName);
+
+  let matchedRow = kpiConfig.find(row => {
+    const sku = String(row['Từ Khoá'] || '').toLowerCase().trim();
+    const name = String(row['Tên Hàng'] || '').toLowerCase().trim();
+    if (sku && rawName.includes(sku)) return true;
+    if (name && (rawName === name || rawName.includes(name))) return true;
+    return false;
+  });
+
+  if (!matchedRow && (rawName.includes('bể') || rawName.includes('terra')) && !isLayoutItem && !rawName.includes('combo') && !rawName.includes('setup')) {
+    let reward = 0;
+    let time = 30;
+    if (phase.includes('phase1') || phase.includes('cắt') || phase.includes('dán') || phase.includes('dựng') || phase.includes('khâu 1') || phase === 'v1') {
+      reward = 5000;
+    } else if (phase.includes('phase2') || phase.includes('gọt') || phase.includes('keo') || phase.includes('gia cố') || phase.includes('khâu 2') || phase === 'v2') {
+      reward = 2000;
+    } else if (phase.includes('đóng gói') || phase.includes('pack')) {
+      reward = 2000;
+    }
+    if (isExportChannel(channel)) reward *= 3;
+    return { time, reward };
+  }
+
+  if (!matchedRow && isLayoutItem) {
+    const sizeMatch = rawName.match(/size\s*(\d{2,3})|(\d{2,3})[x×]/);
+    const size = sizeMatch ? parseInt(sizeMatch[1] || sizeMatch[2]) : 0;
+
+    if (size > 0) {
+      matchedRow = kpiConfig.find(row => {
+        const rowGroup = String(row['Nhóm Hàng'] || '').toUpperCase().trim();
+        if (rowGroup && !rowGroup.includes('LAYOUT')) return false;
+
+        const rowName = String(row['Tên Hàng'] || '').toLowerCase();
+        if (size >= 130) return rowName.includes('130');
+        if (size >= 110) return rowName.includes('110') || rowName.includes('120');
+        if (size >= 90) return rowName.includes('90') || rowName.includes('100');
+        if (size >= 70) return rowName.includes('70') || rowName.includes('80');
+        if (size >= 60) return rowName.includes('60');
+        if (size >= 50) return rowName.includes('50');
+        if (size >= 40) return rowName.includes('40');
+        if (size >= 30) return rowName.includes('30');
+        if (size > 0) return rowName.includes('20') || rowName.includes('15');
+        return false;
+      });
+    }
+  }
+
+  if (!matchedRow) {
+    const specialKeywords = ['rồng', 'đại bàng', 'phượng hoàng', 'cá voi', 'khủng long', 'tê giác'];
+    if (specialKeywords.some(kw => rawName.includes(kw))) {
+      matchedRow = kpiConfig.find(row =>
+        String(row['Tên Hàng'] || '').toLowerCase().includes('đặc biệt') || String(row['Tên Hàng'] || '').toLowerCase().includes('special')
+      );
+    }
+  }
+
+  if (!matchedRow) return { time: 30, reward: 0 };
+
+  let reward = 0;
+  let time = 30;
+
+  if (phase.includes('phase1') || phase.includes('cắt') || phase.includes('dán') || phase.includes('dựng') || phase.includes('khâu 1') || phase === 'v1') {
+    reward = Number(matchedRow['Tiền Khâu 1']) || 0;
+    time = Number(matchedRow['Thời gian Khâu 1']) || 30;
+  } 
+  else if (phase.includes('phase2') || phase.includes('gọt') || phase.includes('keo') || phase.includes('gia cố') || phase.includes('khâu 2') || phase === 'v2') {
+    reward = Number(matchedRow['Tiền Khâu 2']) || 0;
+    time = Number(matchedRow['Thời gian Khâu 2']) || 30;
+  }
+  else if (phase.includes('đóng gói') || phase.includes('pack')) {
+    reward = Number(matchedRow['Tiền Đóng Gói']) || Number(matchedRow['Thưởng Đóng Gói']) || 0;
+    time = Number(matchedRow['Thời gian Đóng Gói']) || 15;
+  }
+  else if (phase.includes('bảo hành') || phase.includes('sửa')) {
+    reward = 5000; time = 60;
+  }
+
+  if (isExportChannel(channel)) {
+    reward *= 3;
+  }
+
+  return { time, reward };
+}
+
+function getPackingReward(itemInput, kpiConfig = [], channel = '') {
+  const mult = (typeof isExportChannel === 'function' ? isExportChannel(channel) : /SG|MY|TH|PH|MA|TW|Quốc Tế|Xuất Khẩu/i.test(channel)) ? 3 : 1;
+  if (!kpiConfig || kpiConfig.length === 0) return 0;
+
+  // 1. Thu thập danh sách tên sản phẩm
+  let namesToScan = [];
+  const addNameOrSku = (val) => {
+    if (!val) return;
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (!trimmed || trimmed === '[object Object]') return;
+      if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) parsed.forEach(p => addNameOrSku(p));
+          else if (typeof parsed === 'object') { addNameOrSku(parsed.name); addNameOrSku(parsed.sku); }
+          return;
+        } catch (e) {}
+      }
+      const splitNames = trimmed.split(/[\n,;+]/).map(s => s.trim()).filter(Boolean);
+      if (splitNames.length > 1) {
+        splitNames.forEach(s => { if (s && s !== '[object Object]') namesToScan.push(s); });
+      } else {
+        namesToScan.push(trimmed);
+      }
+    } else if (typeof val === 'object') {
+      if (val.name) addNameOrSku(String(val.name));
+      if (val.sku) addNameOrSku(String(val.sku));
+    }
+  };
+
+  if (Array.isArray(itemInput)) {
+    itemInput.forEach(i => addNameOrSku(i));
+  } else if (itemInput && typeof itemInput === 'object') {
+    if (itemInput.items && Array.isArray(itemInput.items)) itemInput.items.forEach(i => addNameOrSku(i));
+    if (itemInput.products) addNameOrSku(itemInput.products);
+    if (itemInput.accessories) addNameOrSku(itemInput.accessories);
+    if (itemInput.name) addNameOrSku(itemInput.name);
+    if (itemInput.sku) addNameOrSku(itemInput.sku);
+  } else if (typeof itemInput === 'string') {
+    addNameOrSku(itemInput);
+  }
+
+  if (namesToScan.length === 0) {
+    const defaultRow = kpiConfig.find(row => {
+      const n = String(row['Tên Hàng'] || row['Nhóm Hàng'] || row['Từ Khoá'] || '').toLowerCase();
+      return n.includes('mặc định') || n.includes('đơn thường') || n.includes('khác') || n.includes('phụ kiện');
+    });
+    const defReward = defaultRow ? (Number(defaultRow['Thưởng Đóng Gói']) || Number(defaultRow['Tiền Đóng Gói']) || 0) : 0;
+    return defReward * mult;
+  }
+
+  // 2. Tìm mức thưởng đóng gói cao nhất từ danh sách sản phẩm khớp với Config_KPI
+  let maxReward = 0;
+
+  for (const rawName of namesToScan) {
+    const lowerName = rawName.toLowerCase().trim();
+    if (!lowerName) continue;
+
+    // A. Khớp chính xác hoặc chứa Từ Khoá / Tên Hàng trong Config_KPI
+    let matchedRow = kpiConfig.find(row => {
+      const sku = String(row['Từ Khoá'] || '').toLowerCase().trim();
+      const name = String(row['Tên Hàng'] || '').toLowerCase().trim();
+      if (sku && (lowerName.includes(sku) || sku === lowerName)) return true;
+      if (name && (lowerName.includes(name) || name === lowerName)) return true;
+      return false;
+    });
+
+    // B. Khớp theo Size (nếu là Layout hoặc Bể hoặc sản phẩm có kích thước)
+    if (!matchedRow) {
+      const sizeMatch = lowerName.match(/size\s*(\d{2,3})|(\d{2,3})\s*(x|×|\*|cm|\s|$)/i);
+      const size = sizeMatch ? parseInt(sizeMatch[1] || sizeMatch[2]) : 0;
+      if (size > 0) {
+        matchedRow = kpiConfig.find(row => {
+          const rowName = String(row['Tên Hàng'] || row['Từ Khoá'] || '').toLowerCase();
+          if (size >= 130 && (rowName.includes('130') || rowName.includes('140') || rowName.includes('150'))) return true;
+          if (size >= 110 && (rowName.includes('110') || rowName.includes('120'))) return true;
+          if (size >= 90 && (rowName.includes('90') || rowName.includes('100'))) return true;
+          if (size >= 70 && (rowName.includes('70') || rowName.includes('80'))) return true;
+          if (size >= 60 && rowName.includes('60')) return true;
+          if (size >= 50 && rowName.includes('50')) return true;
+          if (size >= 40 && rowName.includes('40')) return true;
+          if (size >= 30 && rowName.includes('30')) return true;
+          if (size >= 20 && rowName.includes('20')) return true;
+          if (size >= 10 && (rowName.includes('10') || rowName.includes('15'))) return true;
+          return false;
+        });
+      }
+    }
+
+    // C. Khớp theo nhóm ngành hàng (Bể kính, Layout, Đèn, Cây, Lũa...)
+    if (!matchedRow) {
+      if (lowerName.includes('bể') || lowerName.includes('hồ') || lowerName.includes('kính') || lowerName.includes('tank')) {
+        matchedRow = kpiConfig.find(row => {
+          const grp = String(row['Nhóm Hàng'] || row['Tên Hàng'] || '').toLowerCase();
+          return grp.includes('bể') || grp.includes('kính') || grp.includes('tank');
+        });
+      } else if (lowerName.includes('layout') || lowerName.includes('rừng') || lowerName.includes('bonsai') || lowerName.includes('núi') || lowerName.includes('hang')) {
+        matchedRow = kpiConfig.find(row => {
+          const grp = String(row['Nhóm Hàng'] || row['Tên Hàng'] || '').toLowerCase();
+          return grp.includes('layout') || grp.includes('rừng') || grp.includes('bonsai');
+        });
+      }
+    }
+
+    if (matchedRow) {
+      const itemReward = Number(matchedRow['Thưởng Đóng Gói']) || Number(matchedRow['Tiền Đóng Gói']) || 0;
+      if (itemReward > maxReward) maxReward = itemReward;
+    }
+  }
+
+  // 3. Nếu vẫn chưa tìm thấy dòng khớp, lấy mức đóng gói từ dòng đầu tiên có thưởng trong Config_KPI
+  if (maxReward === 0) {
+    const fallbackRow = kpiConfig.find(row => (Number(row['Thưởng Đóng Gói']) || Number(row['Tiền Đóng Gói'])) > 0);
+    maxReward = fallbackRow ? (Number(fallbackRow['Thưởng Đóng Gói']) || Number(fallbackRow['Tiền Đóng Gói']) || 0) : 0;
+  }
+
+  return maxReward * mult;
+}
+
+
+
+const resizeImage = (file) => new Promise((resolve, reject) => { 
+    const reader = new FileReader(); 
+    reader.onload = (e) => { 
+        const img = new Image(); 
+        img.onload = () => { 
+            try {
+                const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); 
+                const MAX_WIDTH = 800; let width = img.width; let height = img.height; 
+                if (width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; } 
+                canvas.width = width; canvas.height = height; ctx.drawImage(img, 0, 0, width, height); 
+                resolve(canvas.toDataURL('image/jpeg', 0.6)); 
+            } catch (err) {
+                reject(err);
+            }
+        }; 
+        img.onerror = (err) => reject(new Error("Lỗi tải hình ảnh"));
+        img.src = e.target.result; 
+    }; 
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file); 
+});
+
+function getFullFromName(name, userConfigs) {
+    if (!name) return "";
+    let dbNames = [];
+    try {
+        if (userConfigs && userConfigs.avatars) dbNames = Object.keys(userConfigs.avatars);
+        else if (userConfigs && typeof userConfigs === 'object') dbNames = Object.keys(userConfigs);
+    } catch(e) {}
+    if (dbNames.length === 0) return name;
+    if (dbNames.includes(name)) return name;
+    try {
+        const cleanName = String(name).trim().toLowerCase();
+        const nameParts = cleanName.split(/[\s.]+/).filter(Boolean);
+        const mainName = nameParts[nameParts.length - 1];
+        const firstLetter = nameParts[0]?.[0];
+        const matchedFull = dbNames.find(dbName => {
+            const dbParts = String(dbName).trim().toLowerCase().split(/[\s.]+/).filter(Boolean);
+            return dbParts[dbParts.length - 1] === mainName && dbParts[0]?.[0] === firstLetter;
+        });
+        return matchedFull || name;
+    } catch(e) { return name; }
+}
+
+function getUserTitle(name, userConfigs) {
+    if (!name || !userConfigs || !userConfigs.titles) return "";
+    try {
+        if (userConfigs.titles[name]) return userConfigs.titles[name];
+        const cleanName = String(name).trim().toLowerCase();
+        const nameParts = cleanName.split(/[\s.]+/).filter(Boolean);
+        const mainName = nameParts[nameParts.length - 1];
+        const firstLetter = nameParts[0]?.[0];
+        const matchedKey = Object.keys(userConfigs.titles).find(key => {
+            const keyParts = String(key).trim().toLowerCase().split(/[\s.]+/).filter(Boolean);
+            return keyParts[keyParts.length - 1] === mainName && keyParts[0]?.[0] === firstLetter;
+        });
+        return matchedKey ? userConfigs.titles[matchedKey] : "";
+    } catch(e) { return ""; }
+}
+
+const getChannelBadge = (channel) => { 
+    const ch = String(channel || '').toUpperCase().trim();
+    if (ch.includes('SHOPEE')) {
+        return 'bg-[#f97316] text-black font-black border border-[#ea580c] shadow-sm';
+    }
+    if (ch.includes('TIKTOK')) {
+        return 'bg-[#06b6d4] text-black font-black border border-[#0891b2] shadow-sm';
+    }
+    if (ch.includes('CỘNG TÁC VIÊN') || ch.includes('CTV')) {
+        return 'bg-[#10b981] text-black font-black border border-[#059669] shadow-sm';
+    }
+    if (ch.includes('BÁN LẺ') || ch.includes('OFFLINE') || ch.includes('ZALO') || ch.includes('FACEBOOK') || ch.includes('MESSENGER')) {
+        return 'bg-[#0284c7] text-white font-black border border-[#0369a1] shadow-sm';
+    }
+    if (ch.includes('BÁN SỈ') || ch.includes('WHOLESALE')) {
+        return 'bg-[#14b8a6] text-black font-black border border-[#0d9488] shadow-sm';
+    }
+    if (ch.includes('SẢN XUẤT TỒN') || ch.includes('SẢN XUẤT BÙ KHO') || ch.includes('TỒN XƯỞNG')) {
+        return 'bg-[#a855f7] text-white font-black border border-[#9333ea] shadow-sm';
+    }
+    if (ch.includes('BẢO HÀNH') || ch.includes('SỬA CHỮA')) {
+        return 'bg-[#f43f5e] text-white font-black border border-[#e11d48] shadow-sm';
+    }
+    if (ch.includes('XUẤT KHẨU') || ch.includes('EXPORT') || ch.includes('QUỐC TẾ') || ch.includes('MA') || ch.includes('TH') || ch.includes('TW') || ch.includes('SG') || ch.includes('PH')) {
+        return 'bg-[#eab308] text-black font-black border border-[#ca8a04] shadow-sm';
+    }
+    return 'bg-[#eab308] text-black font-black border border-[#ca8a04] shadow-sm'; 
+};
+
+const getChannelInlineStyle = (groupKey) => {
+    const key = String(groupKey || '').toUpperCase().trim();
+    let accent = '#14b8a6';
+    let glow = 'rgba(20, 184, 166, 0.15)';
+
+    if (key.includes('SHOPEE VN')) {
+        accent = '#f97316';
+        glow = 'rgba(249, 115, 22, 0.15)';
+    } else if (key.includes('SHOPEE TH')) {
+        accent = '#fb923c';
+        glow = 'rgba(251, 146, 60, 0.15)';
+    } else if (key.includes('SHOPEE SG')) {
+        accent = '#ea580c';
+        glow = 'rgba(234, 88, 12, 0.15)';
+    } else if (key.includes('SHOPEE MA') || key.includes('SHOPEE MY')) {
+        accent = '#f59e0b';
+        glow = 'rgba(245, 158, 11, 0.15)';
+    } else if (key.includes('SHOPEE PH')) {
+        accent = '#facc15';
+        glow = 'rgba(250, 204, 21, 0.15)';
+    } else if (key.includes('SHOPEE TW')) {
+        accent = '#ca8a04';
+        glow = 'rgba(202, 138, 4, 0.15)';
+    } else if (key.includes('SHOPEE') || key.includes('XUẤT KHẨU') || key.includes('EXPORT') || key.includes('QUỐC TẾ')) {
+        accent = '#eab308';
+        glow = 'rgba(234, 179, 8, 0.15)';
+    } else if (key.includes('TIKTOK')) {
+        accent = '#06b6d4';
+        glow = 'rgba(6, 182, 212, 0.15)';
+    } else if (key.includes('CỘNG TÁC VIÊN') || key.includes('CTV')) {
+        accent = '#10b981';
+        glow = 'rgba(16, 185, 129, 0.15)';
+    } else if (key.includes('BÁN LẺ') || key.includes('OFFLINE') || key.includes('ZALO') || key.includes('FACEBOOK') || key.includes('MESSENGER')) {
+        accent = '#0ea5e9';
+        glow = 'rgba(14, 165, 233, 0.15)';
+    } else if (key.includes('BÁN SỈ') || key.includes('WHOLESALE')) {
+        accent = '#d4af37';
+        glow = 'rgba(139, 92, 246, 0.15)';
+    } else if (key.includes('SẢN XUẤT TỒN') || key.includes('SẢN XUẤT BÙ KHO') || key.includes('TỒN XƯỞNG')) {
+        accent = '#a855f7';
+        glow = 'rgba(168, 85, 247, 0.15)';
+    } else if (key.includes('BẢO HÀNH') || key.includes('SỬA CHỮA')) {
+        accent = '#f43f5e';
+        glow = 'rgba(244, 63, 94, 0.15)';
+    }
+
+    return {
+        background: 'linear-gradient(90deg, rgba(22, 22, 26, 0.95) 0%, rgba(14, 14, 16, 0.9) 100%)',
+        color: '#ffffff',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderLeft: `4px solid ${accent}`,
+        boxShadow: `0 4px 20px ${glow}`
+    };
+};
+
+
+const deleteOrderHandler = async (order, prods, pack, erpData, erpProducts, pushDeltas, triggerToast) => {
+  if(!window.confirm('XOÁ VĨNH VIỄN đơn này và HOÀN TRẢ toàn bộ tồn kho (nếu có)?')) return;
+  const localCode = (order.orderCode || '').split(' | MVĐ: ')[0];
+  const prodIdsToDelete = (prods || []).map(p => p.id);
+  
+  const relatedLogs = (erpData?.ImportExport || []).filter(log => log.note && log.note.includes(localCode));
+  const logsToDelete = relatedLogs.map(l => l.id);
+  
+  let relatedTransactions = (erpData?.Transactions || []).filter(tx => 
+      (tx.title && tx.title.includes(localCode)) || 
+      (tx.note && tx.note.includes(localCode))
+  );
+  
+  if (relatedTransactions.length > 0) {
+      if (!window.confirm(`Đơn hàng này có ${relatedTransactions.length} phiếu thu/chi kèm theo.\nBạn có muốn XÓA luôn các phiếu này không?\nChọn OK để Xóa, Cancel để Giữ lại.`)) {
+          relatedTransactions = [];
+      }
+  }
+  
+  let updatedProducts = [];
+  if (relatedLogs.length > 0) {
+      let diffMap = new Map();
+      relatedLogs.forEach(log => {
+          try {
+              const items = JSON.parse(log.itemsData || '[]');
+              items.forEach(item => {
+                  let p = (erpProducts || []).find(x => x.name === item.name);
+                  if (p) {
+                      let currentEntry = diffMap.get(p.id) || { product: p, diff: 0 };
+                      let change = Number(item.qty) || 0;
+                      if (log.type === 'Xuất') {
+                          currentEntry.diff += change;
+                      } else if (log.type === 'Nhập') {
+                          currentEntry.diff -= change;
+                      }
+                      diffMap.set(p.id, currentEntry);
+                  }
+              });
+          } catch(e) {}
+      });
+      
+      diffMap.forEach((entry, prodId) => {
+          if (entry.diff !== 0) {
+              updatedProducts.push({
+                  id: prodId,
+                  quantity: Math.max(0, Number(entry.product.quantity || 0) + entry.diff),
+                  _diff: entry.diff
+              });
+          }
+      });
+  }
+
+  // ĐÃ FIX: CHỮ CÁI ĐẦU PHẢI VIẾT HOA ĐỂ MÁY CHỦ NHẬN LỆNH
+  const payload = {
+      deletes: {
+          Orders: [order.id],
+          Production: prodIdsToDelete
+      }
+  };
+  if (logsToDelete.length > 0) payload.deletes.ImportExport = logsToDelete;
+  if (relatedTransactions.length > 0) payload.deletes.Transactions = relatedTransactions.map(tx => tx.id);
+  if (pack && pack.id) payload.deletes.Packings = [pack.id];
+  if (updatedProducts.length > 0) payload.Products = updatedProducts; 
+
+  const relatedKPIs = (erpData?.BonusPenalty || []).filter(bp => 
+      bp.orderCode === order.orderCode || bp.orderCode === localCode || 
+      (bp.note && bp.note.includes(localCode))
+  );
+  if (relatedKPIs.length > 0) payload.deletes.BonusPenalty = relatedKPIs.map(bp => bp.id);
+
+  if (order.shippingCode && String(order.shippingCode).trim().length > 5 && !order.shippingCode.includes(' ')) {
+      try {
+          const TOKEN = "5c588da0-1d0a-11ef-b3d7-824e1db0c320";
+          let shopId = "";
+          const shopRes = await window.safeFetchJSON("https:\/\/online-gateway.ghn.vn/shiip/public-api/v2/shop/all", { headers: { "Content-Type": "application/json", "Token": TOKEN } }).catch(()=>({}));
+          if (shopRes.code === 200 && shopRes.data?.shops?.length > 0) shopId = shopRes.data.shops[0]._id;
+          const h = { "Content-Type": "application/json", "Token": TOKEN };
+          if (shopId) h["ShopId"] = shopId;
+          await fetch("https:\/\/online-gateway.ghn.vn/shiip/public-api/v2/switch-status/cancel", {
+              method: "POST", headers: h, body: JSON.stringify({ order_codes: [String(order.shippingCode).trim()] })
+          }).catch(()=>{});
+      } catch(e){}
+  }
+
+  try {
+      await pushDeltas(payload, 'Đã xóa đơn và hoàn trả tồn kho!', 'fa-trash');
+  } catch(e) {
+      if(typeof triggerToast === 'function') triggerToast('Lỗi xóa đơn!', 'fa-times', 'danger');
+  }
+};
+
+const exportToExcel = async (items, columns, filename = 'export.xlsx') => {
+  if (typeof XLSX === 'undefined' && typeof window.ensureXLSXLoaded === 'function') {
+    await window.ensureXLSXLoaded();
+  }
+  if (typeof XLSX === 'undefined') {
+    alert('Thư viện Excel (SheetJS) chưa được tải xong, vui lòng kiểm tra kết nối mạng!');
+    return;
+  }
+  const data = items.map(item => {
+    const row = {};
+    columns.forEach(c => {
+      let val = item[c.key];
+      if (c.formatter && typeof c.formatter === 'function') {
+        val = c.formatter(val, item);
+      }
+      row[c.label] = val !== undefined && val !== null ? String(val) : '';
+    });
+    return row;
+  });
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Data");
+  XLSX.writeFile(wb, filename);
+};
+
+// ==========================================
+// MA TRẬN PHÂN QUYỀN RBAC CHUẨN XÁC 100% (THEO CHỐT TỪ BOSS TIẾN)
+// ==========================================
+const RF_INTERNAL_ROLES = [
+  'TỐI CAO', 'QUẢN LÝ SẢN XUẤT', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ NHÂN SỰ',
+  'QUẢN LÝ BÁN HÀNG', 'KẾ TOÁN', 'THỢ SẢN XUẤT', 'NHÂN VIÊN',
+  // Các alias tương đương đề phòng tên viết tắt
+  'QUẢN LÝ KHO', 'SẢN XUẤT', 'KHO VẬN', 'BÁN HÀNG', 'NHÂN SỰ', 'FOUNDER', 'ADMIN'
+];
+
+const RF_RBAC_RULES = {
+  // 1. Header & Nút Toàn Cục
+  BLACKBOX_AUDIT: ['TỐI CAO'],
+  RELOAD_DATA: 'ALL',
+  LOGIN_LOGOUT: 'ALL',
+  CALC_FREIGHT: 'ALL',
+  CALC_TANK: 'ALL',
+  CALC_LAYOUT: 'ALL',
+  VIEW_PRICE_LIST: 'ALL_INTERNAL',
+  REIMBURSE_SUBMIT: 'ALL_INTERNAL',
+  REIMBURSE_APPROVE: ['TỐI CAO', 'KẾ TOÁN'],
+  QUICK_PENALTY: ['TỐI CAO', 'QUẢN LÝ SẢN XUẤT', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ NHÂN SỰ', 'QUẢN LÝ BÁN HÀNG', 'KẾ TOÁN'],
+  QUICK_EXPENSE: ['TỐI CAO', 'KẾ TOÁN'],
+
+  // 2. Tab Đơn Hàng
+  ORDER_CREATE: ['TỐI CAO', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ BÁN HÀNG', 'KẾ TOÁN', 'CỘNG TÁC VIÊN', 'CTV'],
+  ORDER_IMPORT: ['TỐI CAO', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ BÁN HÀNG', 'KẾ TOÁN'],
+  ORDER_SCAN_QR: ['TỐI CAO', 'QUẢN LÝ SẢN XUẤT', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ BÁN HÀNG'],
+  ORDER_EDIT: ['TỐI CAO', 'QUẢN LÝ BÁN HÀNG'],
+  ORDER_CANCEL: ['TỐI CAO', 'QUẢN LÝ BÁN HÀNG'],
+  ORDER_DELETE: ['TỐI CAO'],
+  ORDER_STATUS_PENDING_PROD: ['TỐI CAO', 'QUẢN LÝ BÁN HÀNG'],
+  ORDER_STATUS_DELIVERED: ['TỐI CAO', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ BÁN HÀNG'],
+  ORDER_STATUS_RECONCILED: ['TỐI CAO', 'QUẢN LÝ BÁN HÀNG', 'KẾ TOÁN'],
+  ORDER_ARCHIVE_VIEW: ['TỐI CAO', 'QUẢN LÝ SẢN XUẤT', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ NHÂN SỰ', 'QUẢN LÝ BÁN HÀNG', 'KẾ TOÁN'],
+  ORDER_PRINT_EXPORT: ['TỐI CAO', 'QUẢN LÝ SẢN XUẤT', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ NHÂN SỰ', 'QUẢN LÝ BÁN HÀNG', 'KẾ TOÁN'],
+
+  // 3. Tab Sản Xuất
+  PROD_PHASE1_TAKE: ['TỐI CAO', 'QUẢN LÝ SẢN XUẤT', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ NHÂN SỰ', 'THỢ SẢN XUẤT', 'NHÂN VIÊN', 'SẢN XUẤT'],
+  PROD_PHASE1_START: ['TỐI CAO', 'QUẢN LÝ SẢN XUẤT', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ NHÂN SỰ', 'THỢ SẢN XUẤT', 'NHÂN VIÊN', 'SẢN XUẤT'],
+  PROD_PHASE1_SUBMIT: ['TỐI CAO', 'QUẢN LÝ SẢN XUẤT', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ NHÂN SỰ', 'THỢ SẢN XUẤT', 'NHÂN VIÊN', 'SẢN XUẤT'],
+  PROD_PHASE2_TAKE: ['TỐI CAO', 'QUẢN LÝ SẢN XUẤT', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ NHÂN SỰ', 'THỢ SẢN XUẤT', 'NHÂN VIÊN', 'SẢN XUẤT'],
+  PROD_PHASE2_START: ['TỐI CAO', 'QUẢN LÝ SẢN XUẤT', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ NHÂN SỰ', 'THỢ SẢN XUẤT', 'NHÂN VIÊN', 'SẢN XUẤT'],
+  PROD_PHASE2_SUBMIT: ['TỐI CAO', 'QUẢN LÝ SẢN XUẤT', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ NHÂN SỰ', 'THỢ SẢN XUẤT', 'NHÂN VIÊN', 'SẢN XUẤT'],
+  PROD_QC_APPROVE: ['TỐI CAO', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO'],
+  PROD_QC_REJECT: ['TỐI CAO', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO'],
+  PROD_REASSIGN_WORKER: ['TỐI CAO', 'QUẢN LÝ NHÂN SỰ'],
+  PROD_CREATE_STOCK_BATCH: ['TỐI CAO', 'QUẢN LÝ SẢN XUẤT', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ NHÂN SỰ'],
+  PROD_CANCEL_DEFECT: ['TỐI CAO', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO'],
+  PROD_MOVE_TO_PACKING: ['TỐI CAO', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ BÁN HÀNG'],
+
+  // 4. Khâu Đóng Gói
+  PACKING_TAKE: 'ALL_INTERNAL',
+  PACKING_PREFLIGHT: 'ALL_INTERNAL',
+  PACKING_PHOTO: 'ALL_INTERNAL',
+  PACKING_COMPLETE: 'ALL_INTERNAL',
+  PACKING_CARRIED_WH: 'ALL_INTERNAL',
+
+  // 5. Tab Nhân Sự
+  HR_ATTENDANCE_SELF: 'ALL_INTERNAL',
+  HR_LEAVE_SELF: 'ALL_INTERNAL',
+  HR_CLAIM_KPI_REWARD: 'ALL_INTERNAL',
+  HR_EDIT_ATTENDANCE: ['TỐI CAO', 'QUẢN LÝ NHÂN SỰ'],
+  HR_BONUS_PENALTY: ['TỐI CAO', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ NHÂN SỰ', 'QUẢN LÝ BÁN HÀNG', 'KẾ TOÁN'],
+  HR_EDIT_KPI_TARGET: ['TỐI CAO'],
+  HR_VIEW_TOTAL_PAYROLL: 'ALL_INTERNAL',
+  HR_PRINT_PAYSLIP: ['TỐI CAO', 'QUẢN LÝ NHÂN SỰ', 'KẾ TOÁN'],
+  HR_PAY_SALARY_ADVANCE: ['TỐI CAO', 'KẾ TOÁN'],
+  HR_CONFIG_STAFF: ['TỐI CAO'],
+
+  // 6. Tab Kho Hàng & Định Mức BOM
+  INV_VIEW_FINISHED: 'ALL_INTERNAL',
+  INV_VIEW_RAW_MATERIALS: 'ALL_INTERNAL',
+  INV_ADD_PRODUCT: ['TỐI CAO', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'KẾ TOÁN'],
+  INV_EDIT_PRODUCT: ['TỐI CAO', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'KẾ TOÁN'],
+  INV_ADJUST_STOCK: ['TỐI CAO', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ BÁN HÀNG', 'KẾ TOÁN'],
+  INV_DELETE_PRODUCT: ['TỐI CAO'],
+  INV_STOCK_HISTORY: ['TỐI CAO', 'QUẢN LÝ SẢN XUẤT', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'QUẢN LÝ NHÂN SỰ', 'QUẢN LÝ BÁN HÀNG', 'KẾ TOÁN', 'THỢ SẢN XUẤT'],
+  INV_BOM_CONFIG: ['TỐI CAO', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'KẾ TOÁN'],
+
+  // 7. Tab Xuất Nhập Kho
+  IE_CREATE_IMPORT: ['TỐI CAO', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'KẾ TOÁN'],
+  IE_CREATE_EXPORT: ['TỐI CAO', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'KẾ TOÁN'],
+  IE_CREATE_PO: 'ALL_INTERNAL',
+  IE_APPROVE_PO: ['TỐI CAO', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'KẾ TOÁN'],
+  IE_EDIT_LOG: ['TỐI CAO', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'KẾ TOÁN'],
+  IE_DELETE_LOG: ['TỐI CAO'],
+
+  // 8. Tab Tài Chính & Đối Tác
+  FIN_VIEW_ACCOUNTS: ['TỐI CAO', 'QUẢN LÝ BÁN HÀNG', 'KẾ TOÁN'],
+  FIN_CREATE_TRANSACTION: ['TỐI CAO', 'KẾ TOÁN'],
+  FIN_TRANSFER_MONEY: ['TỐI CAO', 'KẾ TOÁN'],
+  FIN_EDIT_DELETE_TRANSACTION: ['TỐI CAO'],
+  FIN_INCOME: ['TỐI CAO', 'QUẢN LÝ BÁN HÀNG', 'KẾ TOÁN'],
+  FIN_EXPENSE: ['TỐI CAO', 'KẾ TOÁN'],
+  FIN_TRANSFER: ['TỐI CAO', 'KẾ TOÁN'],
+  FIN_EDIT_TRANSACTION: ['TỐI CAO', 'KẾ TOÁN'],
+  FIN_DELETE_TRANSACTION: ['TỐI CAO'],
+  FIN_CONFIG_ACCOUNTS: ['TỐI CAO'],
+  SUPPLIER_MANAGE: ['TỐI CAO', 'QUẢN LÝ KHO VẬN', 'QUẢN LÝ KHO', 'KẾ TOÁN'],
+  SUPPLIER_PAY_DEBT: ['TỐI CAO', 'KẾ TOÁN'],
+
+  // 9. Tab Báo Cáo P&L, KQKD & Shopee Global
+  REPORT_PL_VIEW: ['TỐI CAO', 'QUẢN LÝ BÁN HÀNG', 'KẾ TOÁN'],
+  REPORT_BUSINESS_VIEW: ['TỐI CAO', 'KẾ TOÁN'],
+  SHOPEE_GLOBAL_VIEW: ['TỐI CAO', 'QUẢN LÝ BÁN HÀNG', 'KẾ TOÁN'],
+  REPORT_EXPORT_EXCEL: ['TỐI CAO', 'KẾ TOÁN'],
+
+  // 10. Cộng Tác Viên & Tiện Ích
+  CTV_WALLET_MANAGE: ['TỐI CAO', 'QUẢN LÝ BÁN HÀNG', 'KẾ TOÁN'],
+  CTV_LAYOUT_PRICE_CONFIG: ['TỐI CAO', 'QUẢN LÝ BÁN HÀNG'],
+  VIEWER_3D_VIEW: 'ALL',
+  MODELS_3D_UPLOAD: ['TỐI CAO'],
+  DOCUMENTS_UPLOAD: ['TỐI CAO'],
+  WORKSPACES_ASSIGN: ['TỐI CAO', 'QUẢN LÝ NHÂN SỰ']
+};
+
+/**
+ * Hàm kiểm tra quyền tập trung chuẩn xác (Single Source of Truth)
+ * @param {string} actionCode Mã quyền (ví dụ 'ORDER_EDIT', 'PROD_QC_APPROVE')
+ * @param {string} role Phân quyền của user (ví dụ 'TỐI CAO', 'QUẢN LÝ SẢN XUẤT')
+ * @param {string} user Tên nhân sự (ví dụ 'Nguyễn Ngọc Tiến')
+ * @returns {boolean}
+ */
+function canUserDo(actionCode, role, user) {
+  let r = String(role || localStorage.getItem('rf_role') || '').trim().toUpperCase();
+  const u = String(user || localStorage.getItem('rf_user') || '').trim();
+
+  // Boss Tối Cao luôn có 100% quyền
+  if (r === 'TỐI CAO' || u.includes('Tiến') || localStorage.getItem('rf_boss') === 'true') {
+    return true;
+  }
+
+  // Khách (Guest) không có quyền thao tác bất kỳ nút nào ngoại trừ xem
+  if (r === 'KHÁCH') return false;
+
+  // Chuẩn hóa tên phân quyền nếu viết tắt hoặc không dấu
+  if (r === 'KETOAN' || r === 'KE TOAN') r = 'KẾ TOÁN';
+  if (r === 'BAN HANG' || r === 'BANHANG') r = 'QUẢN LÝ BÁN HÀNG';
+  if (r === 'SAN XUAT' || r === 'SANXUAT') r = 'QUẢN LÝ SẢN XUẤT';
+  if (r === 'KHO VAN' || r === 'KHOVAN' || r === 'KHO') r = 'QUẢN LÝ KHO VẬN';
+  if (r === 'NHAN SU' || r === 'NHANSU') r = 'QUẢN LÝ NHÂN SỰ';
+  if (r === 'THO SAN XUAT' || r === 'THOSANXUAT') r = 'THỢ SẢN XUẤT';
+  if (r === 'NHAN VIEN' || r === 'NHANVIEN') r = 'NHÂN VIÊN';
+  if (r === 'CONG TAC VIEN' || r === 'CTV') r = 'CỘNG TÁC VIÊN';
+
+  const rule = RF_RBAC_RULES[actionCode];
+  if (!rule) return false;
+
+  if (rule === 'ALL') return true;
+
+  const isInternal = RF_INTERNAL_ROLES.includes(r);
+  if (rule === 'ALL_INTERNAL') {
+    return isInternal && r !== 'CỘNG TÁC VIÊN' && r !== 'CTV';
+  }
+
+  if (Array.isArray(rule)) {
+    return rule.some(allowed => {
+      const a = String(allowed).trim().toUpperCase();
+      return a === r || (a === 'CTV' && (r === 'CỘNG TÁC VIÊN' || r === 'CTV'));
+    });
+  }
+
+  return false;
+}
+
+/**
+ * Làm tròn số lượng tồn kho tối đa 3 chữ số thập phân (loại bỏ số 0 dư thừa)
+ */
+function formatStockQty(val) {
+  if (val === undefined || val === null || val === '') return '0';
+  const num = Number(val);
+  if (isNaN(num)) return '0';
+  const rounded = Math.round(num * 1000) / 1000;
+  return Number(rounded.toFixed(3)).toLocaleString('vi-VN', { maximumFractionDigits: 3 });
+}
+
+/**
+ * Làm sạch và tối ưu hiển thị thẻ ghi chú lịch sử kho
+ */
+function cleanStockLogNote(rawNote, target) {
+  if (!rawNote && !target) return 'Giao dịch kho';
+  let text = String(rawNote || target || '').trim();
+
+  // 1. Xử lý chuỗi JSON Kiểm Kho
+  if (text.startsWith('{') && text.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(text);
+      const label = parsed.statusLabel || (parsed.status === 'BALANCED' ? 'Đã cân bằng kho' : parsed.status) || 'Cân bằng kho';
+      const user = parsed.createdBy || parsed.user || '';
+      const note = parsed.userNote || parsed.note || '';
+      let res = `${label}`;
+      if (note) res += `: ${note}`;
+      if (user) res += ` (${user})`;
+      return res;
+    } catch (e) {}
+  }
+
+  // 2. Xử lý chuỗi Trừ vật tư BOM
+  if (text.includes('Trừ vật tư') || text.includes('vật tư BOM') || text.startsWith('IE_BOM_')) {
+    let orderCode = '';
+    let prodName = '';
+
+    const orderMatch = text.match(/đơn\s+([A-Za-z0-9_\-]+)/i) || text.match(/ORD_[A-Za-z0-9_\-]+/i);
+    if (orderMatch) {
+      orderCode = orderMatch[1] || orderMatch[0];
+    }
+
+    const nameMatch = text.match(/Lệnh:\s*[^-\n\)]+-\s*([^\)\n]+)/i) || text.match(/\(Lệnh:[^\-]+\-\s*([^\)]+)\)/i);
+    if (nameMatch) {
+      prodName = nameMatch[1].trim();
+    } else {
+      const parts = text.split('-');
+      if (parts.length > 1) {
+        prodName = parts[1].replace(/\).*/, '').trim();
+      }
+    }
+
+    if (prodName && orderCode) {
+      return `Trừ vật tư lệnh sản xuất ${prodName} đơn ${orderCode}`;
+    } else if (prodName) {
+      return `Trừ vật tư lệnh sản xuất ${prodName}`;
+    } else if (orderCode) {
+      return `Trừ vật tư lệnh sản xuất đơn ${orderCode}`;
+    }
+  }
+
+  // 3. Xử lý nhập kho thành phẩm sản xuất
+  if (text.includes('Nhập kho thành phẩm sản xuất:')) {
+    return text.replace('Nhập kho thành phẩm sản xuất:', 'Nhập TP sản xuất:').trim();
+  }
+
+  return text;
+}
+
+// =========================================================================
+// ⚡ HÀM BẮN THÔNG BÁO ĐẨY ĐƠN HỎA TỐC QUA NTFY (NTFY.SH)
+// =========================================================================
+const NTFY_TOPIC = 'rf_workspace_urgent';
+
+async function sendNtfyUrgentAlert(orderCode, productName, channel) {
+  try {
+    const payload = 'Mã đơn: ' + (orderCode || '') + '\nSản phẩm: ' + (productName || 'Hàng xưởng') + '\nKênh bán: ' + (channel || 'Sàn TMĐT') + '\n👉 Yêu cầu thợ xưởng ưu tiên làm ngay!';
+    const ntfyUrl = ['https:', '', 'ntfy.sh', NTFY_TOPIC].join('/');
+    await fetch(ntfyUrl, {
+      method: 'POST',
+      headers: {
+        'Title': '🔥 ĐƠN HỎA TỐC — ƯU TIÊN LÀM NGAY!',
+        'Priority': 'urgent',
+        'Tags': 'rotating_light,fire,package'
+      },
+      body: payload
+    });
+    console.log('✅ Đã phát thông báo ntfy thành công cho đơn:', orderCode);
+  } catch (err) {
+    console.warn('⚠️ Lỗi gửi ntfy:', err);
+  }
+}
+
+// =========================================================================
+// 🖼️ HỆ THỐNG XỬ LÝ ẢNH AN TOÀN CHỐNG CHẶN GOOGLE DRIVE (CORP/COOP/nosniff)
+// =========================================================================
+function extractDriveId(url) {
+  if (!url || typeof url !== 'string') return '';
+  const clean = url.trim();
+  const idMatch = clean.match(/[?&]id=([a-zA-Z0-9_-]+)/i) || 
+                  clean.match(/\/d\/([a-zA-Z0-9_-]+)/i) ||
+                  clean.match(/googleusercontent\.com\/d\/([a-zA-Z0-9_-]+)/i);
+  return idMatch ? idMatch[1] : '';
+}
+
+function getSafeDriveViewUrl(url) {
+  const id = extractDriveId(url);
+  if (id) {
+    return 'https://drive.google.com/file/d/' + id + '/view?usp=drivesdk';
+  }
+  return url || '';
+}
+
+function getDirectImageUrl(url, size) {
+  const id = extractDriveId(url);
+  if (id) {
+    const s = size || 'w1600';
+    return 'https://lh3.googleusercontent.com/d/' + id + '=' + s;
+  }
+  return url || '';
+}
+
+function openSafeImageTab(url) {
+  if (!url) return;
+  const safeUrl = getSafeDriveViewUrl(url);
+  window.open(safeUrl, '_blank', 'noopener,noreferrer');
+}
+
+window.extractDriveId = extractDriveId;
+window.getSafeDriveViewUrl = getSafeDriveViewUrl;
+window.getDirectImageUrl = getDirectImageUrl;
+window.openSafeImageTab = openSafeImageTab;
+</script>

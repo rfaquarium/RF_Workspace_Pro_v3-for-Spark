@@ -1,0 +1,35 @@
+# 1. Bỏ qua toàn bộ mọi file/thư mục mặc định
+**/**
+
+# 2. Chỉ cho phép đẩy các file Apps Script và HTML cần thiết
+!appsscript.json
+!*.html
+!Code.js
+!Operations.js
+!SetupShopeeDB.js
+!ShopeeDbService.js
+!ShopeeWebhookHandler.js
+!ShopeeApiService.js
+!ShopeeSyncEngine.js
+!ShopeeController.js
+!ShopeeDataMigration.js
+!MasterGovernanceAgent.js
+!RFEnterpriseCore.js
+!MigrationFinancialStatements.js
+
+# 3. Tuyệt đối loại trừ thư mục kỹ năng AI, môi trường và service worker
+.agents/**
+node_modules/**
+.git/**
+vercel-wrapper/**
+push_relay_worker.js
+sw.js
+index.html
+vercel_index.html
+manifest.json
+vercel.json
+icon.png
+*.xlsx
+*.csv
+*.log
+install.cmd

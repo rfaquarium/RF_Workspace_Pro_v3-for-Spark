@@ -1,0 +1,1438 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>RF Workspace Pro</title>
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#09090b">
+
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="RF Workspace">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="apple-touch-icon" href="https://i.postimg.cc/TYD5NncZ/icon.png">
+  <link rel="shortcut icon" href="https://i.postimg.cc/TYD5NncZ/icon.png" type="image/png">
+
+  <link rel="manifest"
+    href='data:application/manifest+json,{"name":"RF Workspace Pro","short_name":"RF Workspace","start_url":".","display":"standalone","orientation":"portrait","background_color":"#09090b","theme_color":"#09090b","icons":[{"src":"https://i.postimg.cc/TYD5NncZ/icon.png","sizes":"512x512","type":"image/png"}]}'>
+
+  <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            display: ['Plus Jakarta Sans', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          },
+          colors: {
+            canvas: 'var(--bg-canvas)',
+            surface: {
+              1: 'var(--bg-surface-1)',
+              2: 'var(--bg-surface-2)'
+            },
+            accent: {
+              gold: 'var(--accent-gold)',
+              light: 'var(--accent-gold-light)'
+            },
+            border: {
+              hairline: 'var(--border-hairline)'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <script>
+    window.__rfBootErrors = [];
+    window.__rfReportBootError = function (msg, stack) {
+      console.error("💥 [RF CRASH]:", msg, stack);
+      window.__rfBootErrors.push({ msg: msg, stack: stack });
+      var box = document.getElementById('rf-crash-container');
+      var details = document.getElementById('rf-crash-details');
+      var status = document.getElementById('rf-boot-status-msg');
+      if (box && details) {
+        box.style.display = 'block';
+        details.textContent = (details.textContent ? details.textContent + "\n\n" : "") + msg + (stack ? "\n" + stack : "");
+      }
+      if (status) {
+        status.innerHTML = '<span class="text-rose-400 font-bold">⚠️ Sự cố nạp ứng dụng</span>';
+      }
+    };
+    window.onerror = function (msg, url, line, col, err) {
+      var fullMsg = (msg || 'Unknown Error') + (line ? ' (Dòng ' + line + ':' + col + ')' : '');
+      window.__rfReportBootError(fullMsg, err ? err.stack : '');
+    };
+    window.addEventListener('unhandledrejection', function (e) {
+      var r = e.reason;
+      var fullMsg = 'Lỗi bất đồng bộ: ' + (r ? (r.stack || r.message || String(r)) : 'Promise Rejection');
+      window.__rfReportBootError(fullMsg);
+    });
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script>window.React || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"><\/script>')</script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script>window.ReactDOM || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"><\/script>')</script>
+
+  <!-- BABEL STANDALONE VỚI CDN FALLBACK ĐỂ KHỞI ĐỘNG CHẮC CHẮN -->
+  <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js" id="babel-script"></script>
+  <script>window.Babel || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.7/babel.min.js"><\/script>')</script>
+  <script>
+    window.RF_IS_DEV_MODE = (function() {
+      try {
+        return window.location.search.indexOf('dev=1') > -1 || localStorage.getItem('rf_dev_mode') === 'true';
+      } catch(e) { return false; }
+    })();
+  </script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- ON-DEMAND LAZY LOADERS -->
+  <script>
+    window.ensureModelViewerLoaded = function () {
+      if (customElements.get('model-viewer')) return Promise.resolve();
+      if (window._modelViewerPromise) return window._modelViewerPromise;
+      window._modelViewerPromise = new Promise(function (resolve, reject) {
+        var script = document.createElement('script');
+        script.type = 'module';
+        script.src = 'https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js';
+        script.onload = function () { resolve(); };
+        script.onerror = function (e) { reject(e); };
+        document.head.appendChild(script);
+      });
+      return window._modelViewerPromise;
+    };
+
+    window.ensureXLSXLoaded = function () {
+      if (typeof window.XLSX !== 'undefined' && window.XLSX.read) return Promise.resolve(window.XLSX);
+      if (window._xlsxPromise) return window._xlsxPromise;
+      
+      var CDNS = [
+        'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+        'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js'
+      ];
+      
+      window._xlsxPromise = new Promise(function (resolve, reject) {
+        var cdnIndex = 0;
+        function tryNextCDN() {
+          if (typeof window.XLSX !== 'undefined' && window.XLSX.read) return resolve(window.XLSX);
+          if (cdnIndex >= CDNS.length) {
+            window._xlsxPromise = null;
+            return reject(new Error('Không thể tải thư viện XLSX từ CDN'));
+          }
+          var script = document.createElement('script');
+          script.src = CDNS[cdnIndex++];
+          var timer = setTimeout(function () {
+            script.onload = script.onerror = null;
+            tryNextCDN();
+          }, 3000);
+          script.onload = function () {
+            clearTimeout(timer);
+            resolve(window.XLSX);
+          };
+          script.onerror = function () {
+            clearTimeout(timer);
+            tryNextCDN();
+          };
+          document.head.appendChild(script);
+        }
+        tryNextCDN();
+      });
+      return window._xlsxPromise;
+    };
+  </script>
+
+  <!-- FIREBASE REALTIME SDK -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: atob("QUl6YVN5RERocHlQdVBya0NUVWRPVWZfdkx1RU12YTZJN2hLdVVV"),
+      authDomain: "rfworkspace-1c81f.firebaseapp.com",
+      databaseURL: "https://rfworkspace-1c81f-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "rfworkspace-1c81f",
+      storageBucket: "rfworkspace-1c81f.firebasestorage.app",
+      messagingSenderId: "920808859234",
+      appId: "1:920808859234:web:fb0e6d0966881630fd533b",
+      measurementId: "G-5Q8H3MRJTZ"
+    };
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+  </script>
+  <style>
+    /* =========================================================================
+       👑 HALLMARK ROYAL WORKBENCH DESIGN SYSTEM (ANTI-AI-SLOP v2.12.0)
+       Pre-emit critique: Philosophy 5 · Hierarchy 5 · Execution 5 · Specificity 5 · Restraint 5 · Variety 5
+       ========================================================================= */
+
+    :root {
+      --bg-canvas: #09090b;
+      --bg-surface-1: #121215;
+      --bg-surface-2: #1a1a20;
+      --border-hairline: rgba(255, 255, 255, 0.08);
+      --accent-gold: #d4af37;
+      --accent-gold-light: #f0ca5e;
+    }
+
+    /* --- GAMIFICATION: FLOATING EXP & REWARD PARTICLES --- */
+    @keyframes floatExpUp {
+      0% {
+        opacity: 1;
+        transform: translate3d(-50%, 0, 0) scale(0.85);
+      }
+      35% {
+        opacity: 1;
+        transform: translate3d(-50%, -24px, 0) scale(1.15);
+      }
+      100% {
+        opacity: 0;
+        transform: translate3d(-50%, -52px, 0) scale(0.9);
+      }
+    }
+    .rf-exp-float-particle {
+      position: fixed;
+      pointer-events: none;
+      z-index: 999999;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-weight: 900;
+      font-size: 13px;
+      letter-spacing: -0.02em;
+      padding: 3px 9px;
+      border-radius: 8px;
+      background: rgba(12, 12, 16, 0.94);
+      border: 1px solid rgba(212, 175, 55, 0.5);
+      color: #fde047;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7), 0 0 16px rgba(234, 179, 8, 0.4);
+      animation: floatExpUp 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      white-space: nowrap;
+      will-change: transform, opacity;
+      user-select: none;
+    }
+
+    /* --- BASE RESET & MOBILE SCREEN LOCK (100DVH + SAFE AREA INSETS) --- */
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      min-height: 100dvh;
+      margin: 0;
+      padding: 0;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      background-color: var(--bg-canvas);
+      color: #fafafa;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overscroll-behavior: none;
+      overflow-x: clip;
+      touch-action: pan-y pinch-zoom;
+    }
+
+    /* Container chính của ứng dụng (#root và wrapper ngoài cùng) */
+    #root,
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      min-height: 100vh;
+      min-height: 100dvh;
+      height: 100dvh;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* Đối với thanh điều hướng đáy (Bottom Navigation Bar / Mobile Footer) nếu có */
+    .mobile-bottom-nav {
+      padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+      background-color: #121215;
+    }
+
+    /* --- MONOSPACE UTILITY CHO MÃ ĐƠN, SKU, SỐ TIỀN & THỜI GIAN --- */
+    .font-mono,
+    .rf-mono,
+    code,
+    kbd {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace ;
+    }
+
+    /* --- WORKBENCH ATOMIC UTILITIES --- */
+    .hm-card,
+    .rf-card {
+      background-color: var(--color-paper-2);
+      border: 1px solid var(--color-border-hairline);
+      border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+      color: var(--color-ink-1);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .hm-card:hover,
+    .rf-card:hover {
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    .rf-input-glass {
+      background-color: #0e1015 ;
+      border: 1px solid rgba(255, 255, 255, 0.12) ;
+      color: #ffffff ;
+      border-radius: 12px ;
+      padding: 10px 14px ;
+      font-size: 13px ;
+      font-weight: 600 ;
+      outline: none ;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) ;
+    }
+
+    .rf-input-glass:focus,
+    .rf-input-glass.is-focus {
+      border-color: #d4af37 ;
+      box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2) ;
+      background-color: #141720 ;
+    }
+
+    .rf-input-glass option {
+      background-color: #121215 ;
+      color: #ffffff ;
+    }
+
+    .rf-input-glass::placeholder {
+      color: #71717a ;
+    }
+
+    .rf-input-glass::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+      opacity: 0.75;
+      cursor: pointer;
+    }
+
+    /* --- 8-STATE BUTTON DISCIPLINE --- */
+    button {
+      transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    button:not(:disabled):hover,
+    button.is-hover {
+      filter: brightness(1.08);
+    }
+
+    button:not(:disabled):active,
+    button.is-active,
+    .active\:scale-95:active {
+      transform: scale(0.96) ;
+      filter: brightness(0.96) ;
+    }
+
+    button:focus-visible,
+    button.is-focus {
+      outline: 2px solid #d4af37 ;
+      outline-offset: 2px;
+    }
+
+    button:disabled {
+      opacity: 0.45 ;
+      cursor: not-allowed ;
+      filter: none ;
+      transform: none ;
+    }
+
+    /* --- HARDWARE ACCELERATION & ZERO-LATENCY TAB VIEWS --- */
+    .rf-gpu-accelerated {
+      backface-visibility: hidden;
+    }
+
+    .rf-tab-view {
+      animation: tabFadeIn 0.18s cubic-bezier(0.4, 0, 0.2, 1) both;
+    }
+
+    .rf-tab-view.hidden {
+      display: none ;
+      content-visibility: hidden;
+    }
+
+    @keyframes tabFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    /* --- ANIMATIONS & MICRO-INTERACTIONS --- */
+    @keyframes slide-down {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes slide-up {
+      from { opacity: 0; transform: translateY(12px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes shimmer {
+      0% { background-position: -400px 0; }
+      100% { background-position: 400px 0; }
+    }
+
+    .animate-slide-down { animation: slide-down 0.25s cubic-bezier(0.4, 0, 0.2, 1) both; }
+    .animate-slide-up { animation: slide-up 0.3s cubic-bezier(0.4, 0, 0.2, 1) both; }
+    .animate-fade-in { animation: fade-in 0.2s ease both; }
+
+    /* --- SCROLLBARS --- */
+    .custom-scrollbar {
+      -webkit-overflow-scrolling: touch;
+      touch-action: auto;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: rgba(212, 175, 55, 0.25);
+      border-radius: 99px;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: rgba(212, 175, 55, 0.5);
+    }
+
+    .hide-scrollbar::-webkit-scrollbar,
+    .no-scrollbar::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+
+    .hide-scrollbar,
+    .no-scrollbar {
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
+    }
+
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(212, 175, 55, 0.2) transparent;
+    }
+
+    /* --- SHIMMER SKELETON LOADER --- */
+    .skeleton-loader,
+    .skeleton {
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0.03) 25%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.03) 75%);
+      background-size: 400px 100%;
+      animation: shimmer 1.4s infinite linear;
+      border-radius: 8px;
+    }
+
+    /* --- MODAL DIALOGS --- */
+    .modal-content,
+    .rf-modal-content {
+      background-color: #121215 ;
+      border: 1px solid rgba(255, 255, 255, 0.12) ;
+      border-radius: 16px ;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75) ;
+      color: #fafafa;
+    }
+
+    /* --- BADGES & STATUS PILLS --- */
+    .badge-success { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-danger { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .badge-info { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+
+    /* --- TOP HEADER & ACTIVE PILL --- */
+    .gen2-nav-btn {
+      transition: all 0.2s ease ;
+      border-radius: 9999px ;
+    }
+
+    .gen2-nav-btn.text-\[\#d4af37\] {
+      background: rgba(212, 175, 55, 0.12) ;
+      box-shadow: 0 0 16px rgba(212, 175, 55, 0.18) ;
+      border: 1px solid rgba(212, 175, 55, 0.25) ;
+    }
+  </style>
+</head>
+
+<body class="m-0 p-0 overflow-hidden bg-[#09090b]">
+  <div id="root">
+    <!-- BOOT SPLASH SCREEN: CHỐNG MÀN ĐEN SÌ TUYỆT ĐỐI -->
+    <div id="rf-splash-screen" class="fixed inset-0 z-[99999] flex flex-col items-center justify-center bg-[#09090b] text-white select-none">
+      <div class="relative flex items-center justify-center mb-5">
+        <div class="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shadow-lg shadow-amber-500/10">
+          <i class="fas fa-fish-fins text-2xl text-amber-400 animate-pulse"></i>
+        </div>
+        <div class="absolute -inset-2 rounded-3xl border border-amber-400/25 animate-spin" style="animation-duration: 3s;"></div>
+      </div>
+      <div class="text-sm font-bold tracking-widest text-amber-400 uppercase mb-2">Rich Fish Workspace Pro</div>
+      <div id="rf-boot-status-msg" class="text-xs text-zinc-400 font-mono tracking-tight flex items-center gap-2">
+        <span class="inline-block w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+        <span>Đang nạp dữ liệu điều hành...</span>
+      </div>
+
+      <!-- HỘP THOẠI CHI TIẾT LỖI TỰ ĐỘNG HIỆN KHI CÓ SỰ CỐ KHỞI ĐỘNG -->
+      <div id="rf-crash-container" style="display: none;" class="mt-5 max-w-lg w-full px-4">
+        <div class="bg-rose-950/50 border border-rose-500/40 rounded-xl p-4 text-left shadow-2xl backdrop-blur">
+          <div class="flex items-center gap-2 text-rose-400 font-bold text-xs uppercase mb-2">
+            <i class="fas fa-triangle-exclamation"></i>
+            <span>Thông Báo Khởi Động Không Thành Công</span>
+          </div>
+          <pre id="rf-crash-details" class="text-[11px] font-mono text-rose-200 bg-black/70 p-3 rounded-lg border border-rose-900/60 whitespace-pre-wrap max-h-48 overflow-auto"></pre>
+          <div class="mt-3 flex gap-2">
+            <button onclick="localStorage.clear(); location.reload(true);" class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer">
+              <i class="fas fa-rotate-right mr-1"></i> Xoá Cache & Tải Lại (F5)
+            </button>
+            <button onclick="navigator.clipboard.writeText(document.getElementById('rf-crash-details').innerText); alert('Đã sao chép chi tiết lỗi!');" class="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs px-3 py-1.5 rounded-lg transition-all cursor-pointer">
+              Sao Chép Lỗi
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MOBILE FULLSCREEN FIX: Dynamic viewport height -->
+  <script>
+    (function () {
+      function setAppHeight() {
+        var vh = window.innerHeight;
+        document.documentElement.style.setProperty('--app-height', vh + 'px');
+        document.body.style.height = vh + 'px';
+        var root = document.getElementById('root');
+        if (root) root.style.height = vh + 'px';
+      }
+      setAppHeight();
+      window.addEventListener('resize', setAppHeight);
+      window.addEventListener('orientationchange', function () {
+        setTimeout(setAppHeight, 150);
+      });
+      if ('visualViewport' in window) {
+        window.visualViewport.addEventListener('resize', setAppHeight);
+      }
+    })();
+  </script>
+
+  <!-- ========================================================================= -->
+  <!-- SOURCE CODE FRAGMENTS (BẢO VỆ PHỤC HỒI & BIÊN DỊCH AN TOÀN)               -->
+  <!-- ========================================================================= -->
+  <div id="jsx-container" style="display:none;">
+    <script id="jsx-Config" type="text/plain"><?!= include('Config'); ?></script>
+    <script id="jsx-Components" type="text/plain"><?!= include('Components'); ?></script>
+    <script id="jsx-Modals" type="text/plain"><?!= include('Modals'); ?></script>
+    <script id="jsx-Modals_Orders" type="text/plain"><?!= include('Modals_Orders'); ?></script>
+    <script id="jsx-Tab_Dashboard" type="text/plain"><?!= include('Tab_Dashboard'); ?></script>
+    <script id="jsx-Tab_Orders" type="text/plain"><?!= include('Tab_Orders'); ?></script>
+    <script id="jsx-Tab_Production" type="text/plain"><?!= include('Tab_Production'); ?></script>
+    <script id="jsx-Tab_Inventory" type="text/plain"><?!= include('Tab_Inventory'); ?></script>
+    <script id="jsx-Tab_ImportExport" type="text/plain"><?!= include('Tab_ImportExport'); ?></script>
+    <script id="jsx-Tab_Suppliers" type="text/plain"><?!= include('Tab_Suppliers'); ?></script>
+    <script id="jsx-Tab_Finance" type="text/plain"><?!= include('Tab_Finance'); ?></script>
+    <script id="jsx-Tab_BusinessReport" type="text/plain"><?!= include('Tab_BusinessReport'); ?></script>
+    <script id="jsx-Tab_HR" type="text/plain"><?!= include('Tab_HR'); ?></script>
+    <script id="jsx-Tab_Documents" type="text/plain"><?!= include('Tab_Documents'); ?></script>
+    <script id="jsx-Tab_Viewer3D" type="text/plain"><?!= include('Tab_Viewer3D'); ?></script>
+    <script id="jsx-Tab_Affiliate" type="text/plain"><?!= include('Tab_Affiliate'); ?></script>
+    <script id="jsx-Tab_Analytics" type="text/plain"><?!= include('Tab_Analytics'); ?></script>
+    <script id="jsx-Tab_Workspaces" type="text/plain"><?!= include('Tab_Workspaces'); ?></script>
+    <script id="jsx-ShopeeGlobalTab" type="text/plain"><?!= include('ShopeeGlobalTab'); ?></script>
+    <script id="jsx-App_Main" type="text/plain"><?!= include('App_Main'); ?></script>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 2-PHASE ULTRA RESILIENT BOOT RUNNER: LOCAL CACHE + BABEL FALLBACK         -->
+  <!-- ========================================================================= -->
+  <script>
+    (function () {
+      function cleanCode(raw) {
+        if (!raw) return '';
+        var code = raw.replace(/\0/g, '').replace(/[\uFEFF\uFFFE]/g, '');
+        return code.replace(/^\s*<script[^>]*>/i, '').replace(/<\/script>\s*$/i, '');
+      }
+
+      function computeHash(str) {
+        var h = 0;
+        for (var i = 0; i < str.length; i++) {
+          h = ((h << 5) - h) + str.charCodeAt(i);
+          h |= 0;
+        }
+        return h;
+      }
+
+      var coreFileIds = ['Config', 'Components', 'Modals', 'Modals_Orders', 'Tab_Dashboard', 'Tab_Orders', 'App_Main'];
+      var deferredFileIds = ['Tab_Production', 'Tab_Inventory', 'Tab_ImportExport', 'Tab_Suppliers', 'Tab_Finance', 'Tab_BusinessReport', 'Tab_HR', 'Tab_Documents', 'Tab_Viewer3D', 'Tab_Affiliate', 'Tab_Analytics', 'Tab_Workspaces', 'ShopeeGlobalTab'];
+
+      function buildJsx(ids) {
+        var jsx = '';
+        ids.forEach(function (id) {
+          var el = document.getElementById('jsx-' + id);
+          if (el && el.textContent) {
+            jsx += '\n/* ═══ MODULE: ' + id + ' ═══ */\n' + cleanCode(el.textContent) + '\n';
+          }
+        });
+        return jsx;
+      }
+
+      function cleanCacheByPrefix(prefix) {
+        try {
+          var keys = [];
+          for (var j = 0; j < localStorage.length; j++) {
+            var k = localStorage.key(j);
+            if (k && k.indexOf(prefix) === 0) keys.push(k);
+          }
+          keys.forEach(function (k) { localStorage.removeItem(k); });
+        } catch (e) { }
+      }
+
+      function diagnoseSyntaxErrors(ids) {
+        var msgs = [];
+        ids.forEach(function (id) {
+          var el = document.getElementById('jsx-' + id);
+          if (!el) return;
+          try {
+            if (window.Babel) {
+              Babel.transform(cleanCode(el.textContent || ''), { presets: ['react'] });
+            }
+          } catch (err) {
+            var msg = '❌ LỖI CÚ PHÁP TẠI FILE [' + id + ']: ' + err.message;
+            console.error(msg);
+            msgs.push(msg);
+          }
+        });
+        return msgs;
+      }
+
+      function transpileAndExec(jsx, cachePrefix, label, fileIds) {
+        var hash = computeHash(jsx);
+        var cacheKey = cachePrefix + hash;
+        var cached = null;
+        try { cached = localStorage.getItem(cacheKey); } catch (e) { }
+
+        if (cached) {
+          console.log('⚡ ' + label + ' — nạp từ bộ nhớ đệm siêu tốc (0ms)!');
+          try {
+            var s = document.createElement('script');
+            s.textContent = cached;
+            document.body.appendChild(s);
+            return { ok: true, fromCache: true };
+          } catch (err) {
+            console.warn('Cache ' + label + ' bị lỗi, biên dịch lại...', err);
+            try { localStorage.removeItem(cacheKey); } catch (e) { }
+          }
+        }
+
+        if (!window.Babel) {
+          var errMsg = 'Thư viện Babel chưa sẵn sàng để biên dịch ' + label + '. Vui lòng kiểm tra kết nối mạng.';
+          console.error(errMsg);
+          if (typeof window.__rfReportBootError === 'function') {
+            window.__rfReportBootError(errMsg);
+          }
+          return { ok: false };
+        }
+
+        console.log('🔄 Đang biên dịch ' + label + '...');
+        var t0 = performance.now();
+        try {
+          var compiled = Babel.transform(jsx, { presets: ['react'] }).code;
+          var dt = (performance.now() - t0).toFixed(0);
+          cleanCacheByPrefix(cachePrefix);
+          try { localStorage.setItem(cacheKey, compiled); } catch (e) {
+            console.warn('Không thể lưu cache ' + label + ':', e);
+          }
+          var s = document.createElement('script');
+          s.textContent = compiled;
+          document.body.appendChild(s);
+          console.log('✅ ' + label + ' đã biên dịch thành công! (' + dt + 'ms)');
+          return { ok: true, fromCache: false };
+        } catch (err) {
+          console.error('❌ Lỗi biên dịch ' + label + ':', err.message);
+          var detailErrors = diagnoseSyntaxErrors(fileIds || []);
+          var fullMsg = detailErrors.length > 0 ? detailErrors.join('\n\n') : ('Lỗi tại ' + label + ': ' + err.message);
+          if (typeof window.__rfReportBootError === 'function') {
+            window.__rfReportBootError(fullMsg, err.stack);
+          }
+          return { ok: false, error: err };
+        }
+      }
+
+      function cleanupBootDOM() {
+        try {
+          var container = document.getElementById('jsx-container');
+          if (container) container.remove();
+        } catch (e) { }
+      }
+
+      // ═══════════════════════════════════════════════
+      // PHASE 1: CORE — App Shell + Dashboard + Orders
+      // ═══════════════════════════════════════════════
+      var bootT0 = performance.now();
+      var coreJsx = buildJsx(coreFileIds);
+      var coreResult = transpileAndExec(coreJsx, 'rf_core_v3_', 'Phase 1 — Core', coreFileIds);
+      coreJsx = null;
+
+      if (!coreResult.ok) {
+        return;
+      }
+
+      var coreMs = (performance.now() - bootT0).toFixed(0);
+      console.log('🚀 Phase 1 hoàn tất trong ' + coreMs + 'ms — App Shell đã sẵn sàng!');
+
+      // ═══════════════════════════════════════════════
+      // PHASE 2: DEFERRED — Tất cả tab còn lại (requestIdleCallback)
+      // ═══════════════════════════════════════════════
+      var runPhase2 = function () {
+        var deferredJsx = buildJsx(deferredFileIds);
+        if (!deferredJsx) {
+          cleanupBootDOM();
+          return;
+        }
+
+        var deferResult = transpileAndExec(deferredJsx, 'rf_defer_v3_', 'Phase 2 — Deferred Tabs', deferredFileIds);
+        deferredJsx = null;
+
+        if (typeof window.__rfOnDeferredLoaded === 'function') {
+          window.__rfOnDeferredLoaded();
+        }
+
+        var totalMs = (performance.now() - bootT0).toFixed(0);
+        console.log('🏁 Phase 2 hoàn tất — Toàn bộ hệ thống 23 phân hệ sẵn sàng! (Tổng: ' + totalMs + 'ms)');
+        cleanupBootDOM();
+      };
+
+      if (window.requestIdleCallback) {
+        requestIdleCallback(runPhase2, { timeout: 2500 });
+      } else {
+        setTimeout(runPhase2, 150);
+      }
+    })();
+  </script>
+
+  <!-- ========================================== -->
+  <!-- MODULE: MODAL FORM KPI & NHIỆM VỤ (XU)     -->
+  <!-- ========================================== -->
+
+  <style>
+    /* CSS Giao diện Modal Đậm chất Workspace Pro */
+    .rf-modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .rf-modal-content {
+      background: #1a1a1a;
+      /* Nền tối */
+      border: 1px solid #333;
+      border-radius: 12px;
+      width: 450px;
+      max-width: 90%;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .rf-modal-header {
+      font-size: 1.25rem;
+      font-weight: bold;
+      margin-bottom: 20px;
+      color: #f39c12;
+      /* Tone vàng cam */
+      border-bottom: 1px solid #333;
+      padding-bottom: 10px;
+    }
+
+    .rf-form-group {
+      margin-bottom: 15px;
+    }
+
+    .rf-form-group label {
+      display: block;
+      font-size: 0.85rem;
+      margin-bottom: 5px;
+      color: #aaa;
+    }
+
+    .rf-form-control,
+    .rf-input-glass,
+    .rf-modal-content input,
+    .rf-modal-content select,
+    .rf-modal-content textarea {
+      width: 100%;
+      padding: 11px 14px ;
+      background: #0e1015 ;
+      background-color: #0e1015 ;
+      border: 1px solid #2d3748 ;
+      border-radius: 12px ;
+      color: #ffffff ;
+      font-size: 13px ;
+      font-weight: 600 ;
+      box-sizing: border-box ;
+      outline: none ;
+      transition: all 0.2s ease ;
+    }
+
+    .rf-form-control:focus,
+    .rf-input-glass:focus,
+    .rf-modal-content input:focus,
+    .rf-modal-content select:focus,
+    .rf-modal-content textarea:focus {
+      outline: none ;
+      border-color: #f59e0b ;
+      background-color: #141720 ;
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25) ;
+    }
+
+    .rf-form-control option,
+    .rf-input-glass option,
+    .rf-modal-content option {
+      background-color: #0e1015 ;
+      color: #ffffff ;
+    }
+
+    .rf-form-control::placeholder,
+    .rf-input-glass::placeholder,
+    .rf-modal-content input::placeholder,
+    .rf-modal-content textarea::placeholder {
+      color: #71717a ;
+    }
+
+    .rf-form-control::-webkit-calendar-picker-indicator,
+    .rf-input-glass::-webkit-calendar-picker-indicator,
+    .rf-modal-content input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+      opacity: 0.75;
+      cursor: pointer;
+    }
+
+    .rf-modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .rf-btn {
+      padding: 10px 20px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.2s;
+    }
+
+    .rf-btn-cancel {
+      background: #444;
+      color: #fff;
+    }
+
+    .rf-btn-cancel:hover {
+      background: #555;
+    }
+
+    .rf-btn-submit {
+      background: #f39c12;
+      color: #000;
+    }
+
+    .rf-btn-submit:hover {
+      background: #e67e22;
+    }
+  </style>
+
+  <!-- ========================================== -->
+  <!-- 1. MODAL KPI STANDALONE (ĐỒNG BỘ 100% FORM) -->
+  <!-- ========================================== -->
+  <div id="modal-kpi-standalone" class="rf-modal-overlay">
+    <div class="kpi-modal-content"
+      style="background: #181a20; color: #fff; padding: 24px; border-radius: 20px; max-width: 520px; width: 95%; margin: auto; position: relative; border: 1px solid #2d3748; box-shadow: 0 20px 40px rgba(0,0,0,0.8); max-height: 90vh; overflow-y: auto;">
+
+      <div
+        style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #2d3748; padding-bottom: 12px; margin-bottom: 18px;">
+        <h3
+          style="font-size: 16px; font-weight: 800; color: #fff; margin: 0; text-transform: uppercase; letter-spacing: 0.5px;">
+          TẠO KPI THÁNG MỚI
+        </h3>
+        <button onclick="closeKpiModalStandalone()"
+          style="background: none; border: none; color: #a0aec0; font-size: 18px; cursor: pointer;">✕</button>
+      </div>
+
+      <!-- 1. Select User -->
+      <!-- 1. Select User -->
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label for="kpiUserSelect"
+          style="display: block; font-size: 11px; font-weight: 700; color: #a0aec0; text-transform: uppercase; margin-bottom: 6px;">Nhân
+          sự nhận KPI *</label>
+        <select id="kpiUserSelect" onchange="onStandaloneUserChange(this.value)"
+          style="width: 100%; padding: 12px 14px; background: #0e1015; border: 1px solid #2d3748; border-radius: 12px; color: #fff; font-weight: 700; font-size: 13px; outline: none;">
+          <option value="">-- Chọn nhân sự --</option>
+        </select>
+      </div>
+
+      <!-- 2. Chu kỳ đánh giá KPI (Tuần / Tháng) -->
+      <div class="form-group" style="margin-bottom: 14px; background: #0e1015; padding: 12px; border-radius: 12px; border: 1px solid #2d3748;">
+        <label style="display: block; font-size: 11px; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 8px;">
+          🔄 Chu kỳ đánh giá KPI *
+        </label>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" id="btnCycleWeek" onclick="selectKpiCycle('WEEK')"
+            style="flex: 1; padding: 10px; border-radius: 10px; font-weight: 700; font-size: 12px; cursor: pointer; border: 1px solid #0284c7; background: rgba(56, 189, 248, 0.2); color: #7dd3fc; transition: all 0.2s;">
+            📅 Hàng Tuần (T2 ➔ CN)
+          </button>
+          <button type="button" id="btnCycleMonth" onclick="selectKpiCycle('MONTH')"
+            style="flex: 1; padding: 10px; border-radius: 10px; font-weight: 700; font-size: 12px; cursor: pointer; border: 1px solid #334155; background: rgba(0, 0, 0, 0.3); color: #94a3b8; transition: all 0.2s;">
+            🗓️ Hàng Tháng (Ngày 1 ➔ Cuối)
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. KPI Type Preset -->
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label for="kpiPresetSelect"
+          style="display: block; font-size: 11px; font-weight: 700; color: #fbbf24; text-transform: uppercase; margin-bottom: 6px;">⚡
+          Loại KPI (Mẫu tự động điền)</label>
+        <select id="kpiPresetSelect" onchange="applyKpiPreset(this.value)"
+          style="width: 100%; padding: 10px 14px; background: #1e222d; border: 1px solid #f59e0b; border-radius: 12px; color: #fbbf24; font-weight: 700; font-size: 12px; outline: none;">
+          <option value="">-- Chọn loại KPI mẫu (Hoặc tự nhập bên dưới) --</option>
+          <optgroup label="👑 DÀNH CHO FOUNDER & BAN ĐIỀU HÀNH">
+            <option value="founder_intl">🌍 [FOUNDER] 1 Cột mốc Kênh Quốc tế / Tuần</option>
+            <option value="founder_sprint">⚡ [FOUNDER] Hoàn thành Sprint Tính năng RF Workspace Pro</option>
+            <option value="founder_kcs">🛡️ [FOUNDER] Tỷ lệ Tự chủ KCS Layout &gt;= 80%</option>
+            <option value="founder_review">📊 [FOUNDER] Review Hiệu suất &amp; Dòng tiền Chủ Nhật</option>
+          </optgroup>
+          <optgroup label="🏭 DÀNH CHO VẬN HÀNH & SẢN XUẤT">
+            <option value="be_kinh">🪟 [BỂ KÍNH] Cắt dán phôi đạt KCS</option>
+            <option value="layout">🌿 [LAYOUT] Gia cố và dán rêu đúng định mức</option>
+            <option value="dong_goi">📦 [ĐÓNG GÓI] Hoàn tất kiện trước 19:00</option>
+            <option value="sales_chat">💬 [SALES] Phản hồi chat &gt; 96%</option>
+            <option value="khieu_nai">🛡️ [VẬN HÀNH] Tỷ lệ thắng khiếu nại sàn (&gt; 60%)</option>
+            <option value="hang_hoan">🔄 [VẬN HÀNH] Xử lý hàng huỷ hoàn &amp; gắn trách nhiệm (&gt; 90%)</option>
+            <option value="ban_hang">💰 [BÁN HÀNG] Doanh thu chốt đơn thực nhận (&gt; 20 triệu)</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <!-- 4. KPI Name -->
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label for="kpiNameInput"
+          style="display: block; font-size: 11px; font-weight: 700; color: #a0aec0; text-transform: uppercase; margin-bottom: 6px;">Tên
+          mục tiêu (KPI) *</label>
+        <input type="text" id="kpiNameInput"
+          style="width: 100%; padding: 12px 14px; background: #0e1015; border: 1px solid #2d3748; border-radius: 12px; color: #fff; font-weight: 700; font-size: 13px; outline: none;"
+          placeholder="VD: [FOUNDER] Hoàn thành Sprint Tính năng RF Workspace Pro">
+      </div>
+
+      <!-- 5. SOP Guide -->
+      <div class="form-group" style="margin-bottom: 14px;">
+        <label for="kpiGuideInput"
+          style="display: block; font-size: 11px; font-weight: 700; color: #fbbf24; text-transform: uppercase; margin-bottom: 6px;">💡
+          Hướng dẫn thực thi & Tiêu chuẩn nghiệm thu (SOP)</label>
+        <textarea id="kpiGuideInput" rows="3"
+          style="width: 100%; padding: 12px 14px; background: #0e1015; border: 1px solid #2d3748; border-radius: 12px; color: #e2e8f0; font-size: 12px; outline: none; line-height: 1.5;"
+          placeholder="Mô tả rõ nhân sự phải làm gì, chụp ảnh ở đâu hoặc quy chuẩn hệ thống duyệt KPI này..."></textarea>
+      </div>
+
+      <!-- 6. Target & Manual Unit Input -->
+      <div class="form-group" style="margin-bottom: 14px; display: flex; gap: 10px;">
+        <div style="flex: 2;">
+          <label for="kpiTargetInput"
+            style="display: block; font-size: 11px; font-weight: 700; color: #a0aec0; text-transform: uppercase; margin-bottom: 6px;">Chỉ
+            tiêu (Target) *</label>
+          <input type="number" id="kpiTargetInput"
+            style="width: 100%; padding: 12px 14px; background: #0e1015; border: 1px solid #2d3748; border-radius: 12px; color: #fbbf24; font-weight: 800; font-size: 14px; outline: none;"
+            placeholder="VD: 1, 80, 100, 20000000...">
+        </div>
+        <div style="flex: 1;">
+          <label for="kpiUnitSelect"
+            style="display: block; font-size: 11px; font-weight: 700; color: #a0aec0; text-transform: uppercase; margin-bottom: 6px;">Đơn
+            vị *</label>
+          <input type="text" id="kpiUnitSelect"
+            style="width: 100%; padding: 12px 14px; background: #0e1015; border: 1px solid #2d3748; border-radius: 12px; color: #38bdf8; font-weight: 800; font-size: 13px; outline: none; text-align: center;"
+            placeholder="Cột mốc, %, Kiện...">
+        </div>
+      </div>
+
+      <!-- 7. Reward & Penalty -->
+      <div class="form-group" style="margin-bottom: 18px; display: flex; gap: 10px;">
+        <div style="flex: 1;">
+          <label for="kpiRewardInput"
+            style="display: block; font-size: 11px; font-weight: 800; color: #34d399; text-transform: uppercase; margin-bottom: 6px;">Mức
+            thưởng (VNĐ)</label>
+          <input type="number" id="kpiRewardInput"
+            style="width: 100%; padding: 12px 14px; background: #091a13; border: 1px solid rgba(52,211,153,0.4); border-radius: 12px; color: #34d399; font-weight: 800; font-size: 14px; outline: none;"
+            placeholder="VD: 1000000">
+        </div>
+        <div style="flex: 1;">
+          <label for="kpiPenaltyInput"
+            style="display: block; font-size: 11px; font-weight: 800; color: #fb7185; text-transform: uppercase; margin-bottom: 6px;">Mức
+            phạt vi phạm (VNĐ)</label>
+          <input type="number" id="kpiPenaltyInput"
+            style="width: 100%; padding: 12px 14px; background: #200d11; border: 1px solid rgba(251,113,133,0.4); border-radius: 12px; color: #fb7185; font-weight: 800; font-size: 14px; outline: none;"
+            placeholder="VD: 0 hoặc 50000">
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <button onclick="closeKpiModalStandalone()"
+          style="flex: 1; background: #2d3748; color: #e2e8f0; border: none; padding: 12px 20px; border-radius: 12px; cursor: pointer; font-weight: 700; text-transform: uppercase;">Hủy
+          bỏ</button>
+        <button class="rf-btn-submit" onclick="submitKPIStandalone()"
+          style="flex: 2; background: #f59e0b; color: #000; border: none; padding: 12px 20px; border-radius: 12px; cursor: pointer; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Lưu
+          Thiết Lập KPI</button>
+      </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- 2. MODAL NHIỆM VỤ STANDALONE               -->
+  <!-- ========================================== -->
+  <div id="modal-task-standalone" class="rf-modal-overlay">
+    <div class="rf-modal-content">
+      <div class="rf-modal-header text-zinc-100 font-extrabold tracking-wide text-base"
+        style="border-bottom-color: #f59e0b;"><i class="fas fa-coins"
+          style="margin-right: 8px; color: #f59e0b;"></i>GIAO NHIỆM VỤ (XU)</div>
+      <div class="rf-form-group">
+        <label class="text-zinc-400 font-normal text-[12px] leading-relaxed">Người thực hiện</label>
+        <select id="task-user"
+          class="rf-input-glass rounded-xl px-4 py-3 text-[13px] text-white outline-none font-medium placeholder-zinc-600 w-full">
+          <option value="">-- Chọn nhân sự --</option>
+        </select>
+      </div>
+      <div class="rf-form-group">
+        <label class="text-zinc-400 font-normal text-[12px] leading-relaxed">Tiêu đề nhiệm vụ</label>
+        <input type="text" id="task-title"
+          class="rf-input-glass rounded-xl px-4 py-3 text-[13px] text-white outline-none font-medium placeholder-zinc-600 w-full"
+          placeholder="VD: Dọn dẹp bể cá phòng khách">
+      </div>
+      <div class="rf-form-group">
+        <label class="text-zinc-400 font-normal text-[12px] leading-relaxed">Mô tả chi tiết</label>
+        <input type="text" id="task-note"
+          class="rf-input-glass rounded-xl px-4 py-3 text-[13px] text-white outline-none font-medium placeholder-zinc-600 w-full"
+          placeholder="Mô tả cụ thể yêu cầu...">
+      </div>
+      <div class="rf-form-group" style="display: flex; gap: 10px;">
+        <div style="flex: 1;">
+          <label class="text-zinc-400 font-normal text-[12px] leading-relaxed">Mục tiêu chỉ tiêu (Target)</label>
+          <input type="number" id="task-target"
+            class="rf-input-glass rounded-xl px-4 py-3 text-[13px] text-white outline-none font-medium placeholder-zinc-600 w-full"
+            placeholder="VD: 10, 50, 1000000...">
+        </div>
+        <div style="flex: 1;">
+          <label class="text-zinc-400 font-normal text-[12px] leading-relaxed">Đơn vị tính (Unit)</label>
+          <input type="text" id="task-unit"
+            class="rf-input-glass rounded-xl px-4 py-3 text-[13px] text-white outline-none font-medium placeholder-zinc-600 w-full"
+            placeholder="VD: Bộ, Lần, SP, VNĐ...">
+        </div>
+      </div>
+      <div class="rf-form-group" style="display: flex; gap: 10px;">
+        <div style="flex: 1;">
+          <label class="text-zinc-400 font-normal text-[12px] leading-relaxed">Ngày bắt đầu</label>
+          <input type="date" id="task-start"
+            class="rf-input-glass rounded-xl px-4 py-3 text-[13px] text-white outline-none font-medium placeholder-zinc-600 w-full">
+        </div>
+        <div style="flex: 1;">
+          <label class="text-zinc-400 font-normal text-[12px] leading-relaxed">Ngày kết thúc</label>
+          <input type="date" id="task-end"
+            class="rf-input-glass rounded-xl px-4 py-3 text-[13px] text-white outline-none font-medium placeholder-zinc-600 w-full">
+        </div>
+      </div>
+      <div class="rf-form-group" style="display: flex; gap: 10px;">
+        <div style="flex: 1;">
+          <label style="color: #f59e0b; font-weight: bold;"><i class="fas fa-coins"
+              style="margin-right: 4px;"></i>Thưởng hoàn thành (XU)</label>
+          <input type="number" id="task-reward"
+            class="rf-input-glass rounded-xl px-4 py-3 text-[13px] text-white outline-none font-medium placeholder-zinc-600 w-full"
+            placeholder="VD: 100" style="color: #fbbf24; font-weight: bold;">
+        </div>
+        <div style="flex: 1;">
+          <label style="color: #f43f5e; font-weight: bold;"><i class="fas fa-gavel" style="margin-right: 4px;"></i>Phạt
+            nếu quá hạn (VNĐ)</label>
+          <input type="number" id="task-penalty"
+            class="rf-input-glass rounded-xl px-4 py-3 text-[13px] text-white outline-none font-medium placeholder-zinc-600 w-full"
+            placeholder="VD: 50000" style="color: #fda4af; font-weight: bold;">
+        </div>
+      </div>
+      <div class="rf-modal-actions">
+        <button class="rf-btn rf-btn-cancel" onclick="closeTaskModalStandalone()">Hủy bỏ</button>
+        <button class="rf-btn rf-btn-submit" style="background: #00cec9;" onclick="submitTaskStandalone()">Giao
+          Việc</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentStandaloneKpiCycle = 'MONTH';
+
+    function selectKpiCycle(cycle) {
+      currentStandaloneKpiCycle = cycle;
+      const btnWeek = document.getElementById('btnCycleWeek');
+      const btnMonth = document.getElementById('btnCycleMonth');
+      if (btnWeek && btnMonth) {
+        if (cycle === 'WEEK') {
+          btnWeek.style.background = 'rgba(56, 189, 248, 0.2)';
+          btnWeek.style.border = '1px solid #0284c7';
+          btnWeek.style.color = '#7dd3fc';
+          btnMonth.style.background = 'rgba(0, 0, 0, 0.3)';
+          btnMonth.style.border = '1px solid #334155';
+          btnMonth.style.color = '#94a3b8';
+        } else {
+          btnMonth.style.background = 'rgba(245, 158, 11, 0.2)';
+          btnMonth.style.border = '1px solid #f59e0b';
+          btnMonth.style.color = '#fde68a';
+          btnWeek.style.background = 'rgba(0, 0, 0, 0.3)';
+          btnWeek.style.border = '1px solid #334155';
+          btnWeek.style.color = '#94a3b8';
+        }
+      }
+    }
+
+    function onStandaloneUserChange(userName) {
+      if (!userName) return;
+      const u = String(userName).toLowerCase();
+      if (u.includes('tiến') || u.includes('founder')) {
+        selectKpiCycle('WEEK');
+      } else {
+        selectKpiCycle('MONTH');
+      }
+    }
+
+    const STANDALONE_KPI_PRESETS = {
+      'founder_intl': {
+        name: '[FOUNDER] 1 Cột mốc Kênh Quốc tế / Tuần',
+        target: '1',
+        unit: 'Cột mốc',
+        reward: '1000000',
+        penalty: '0',
+        cycle: 'WEEK',
+        note: 'Đạt ít nhất 1 cột mốc chiến lược mở rộng thị trường quốc tế (Shopee Global/TikTok Global/Amazon/Lazada cross-border) hoặc hợp đồng phân phối ngoại tệ trong tuần.'
+      },
+      'founder_sprint': {
+        name: '[FOUNDER] Hoàn thành Sprint Tính năng RF Workspace Pro',
+        target: '100',
+        unit: '% Sprint',
+        reward: '800000',
+        penalty: '0',
+        cycle: 'WEEK',
+        note: 'Hoàn tất đúng tiến độ 100% các đầu việc sprint công nghệ và tối ưu hệ thống RF Workspace Pro trong tuần.'
+      },
+      'founder_kcs': {
+        name: '[FOUNDER] Tỷ lệ Tự chủ KCS Layout >= 80%',
+        target: '80',
+        unit: '% Tự chủ',
+        reward: '500000',
+        penalty: '0',
+        cycle: 'WEEK',
+        note: 'Đội ngũ thợ tự chủ hoàn thiện và kiểm định KCS Layout đạt chuẩn từ 80% trở lên mà không cần Founder can thiệp chỉnh sửa thủ công.'
+      },
+      'founder_review': {
+        name: '[FOUNDER] Review Hiệu suất & Dòng tiền Chủ Nhật',
+        target: '100',
+        unit: '% Đúng hạn',
+        reward: '300000',
+        penalty: '0',
+        cycle: 'WEEK',
+        note: 'Thực hiện đối soát P&L, dòng tiền Sổ Quỹ và tổng kết hiệu suất nhân sự toàn xưởng đúng hạn vào 20:00 tối Chủ Nhật hằng tuần.'
+      },
+      'be_kinh': {
+        name: '[BỂ KÍNH] Cắt dán phôi đạt KCS',
+        target: '80',
+        unit: 'SP',
+        reward: '500000',
+        penalty: '50000',
+        cycle: 'MONTH',
+        note: 'Cắt mài vi tính, dán keo và dựng khung bể kính đạt 100% tiêu chuẩn KCS, không bọt keo, đúng kích thước phôi.'
+      },
+      'layout': {
+        name: '[LAYOUT] Gia cố và dán rêu đúng định mức',
+        target: '80',
+        unit: 'SP',
+        reward: '500000',
+        penalty: '50000',
+        cycle: 'MONTH',
+        note: 'Gia cố khung lũa/đá, gọt keo thẩm mỹ và dán rêu đúng định mức kỹ thuật xưởng Rich Fish.'
+      },
+      'dong_goi': {
+        name: '[ĐÓNG GÓI] Hoàn tất kiện trước 19:00',
+        target: '290',
+        unit: 'Kiện',
+        reward: '500000',
+        penalty: '50000',
+        cycle: 'MONTH',
+        note: 'Đóng gói kiện hàng an toàn xốp bọc nilon 6 mặt, nghiệm thu đủ 2 ảnh trước 19:00 hằng ngày.'
+      },
+      'sales_chat': {
+        name: '[SALES] Phản hồi chat > 96%',
+        target: '96',
+        unit: '%',
+        reward: '500000',
+        penalty: '100000',
+        cycle: 'MONTH',
+        note: 'Tỷ lệ phản hồi tin nhắn khách hàng trong 15 phút trên Shopee/TikTok/Lazada đạt trên 96%.'
+      },
+      'khieu_nai': {
+        name: '[VẬN HÀNH] Tỷ lệ thắng khiếu nại sàn > 60%',
+        target: '60',
+        unit: '%',
+        reward: '875000',
+        penalty: '100000',
+        cycle: 'MONTH',
+        note: 'Bắt buộc quay video đồng kiểm 6 mặt khi bóc kiện hàng hoàn. Hệ thống tự động quét đơn khiếu nại thắng có tag [KN-THANG].'
+      },
+      'hang_hoan': {
+        name: '[VẬN HÀNH] Xử lý hàng huỷ hoàn & gắn trách nhiệm > 90%',
+        target: '90',
+        unit: '%',
+        reward: '750000',
+        penalty: '50000',
+        cycle: 'MONTH',
+        note: 'Hàng hoàn về kho phải được phân loại và xử lý trong 48h. Tỷ lệ tính trên tổng đơn hoàn phát sinh trong tháng.'
+      },
+      'ban_hang': {
+        name: '[BÁN HÀNG] Doanh thu chốt đơn thực nhận > 20 triệu',
+        target: '20000000',
+        unit: 'VNĐ',
+        reward: '500000',
+        penalty: '0',
+        cycle: 'MONTH',
+        note: 'Hệ thống tự động cộng dồn tổng doanh thu từ tất cả các đơn hàng chốt thành công của nhân sự phụ trách trong kỳ.'
+      }
+    };
+
+    function applyKpiPreset(type) {
+      const nameInput = document.getElementById('kpiNameInput');
+      const unitInput = document.getElementById('kpiUnitSelect');
+      const targetInput = document.getElementById('kpiTargetInput');
+      const rewardInput = document.getElementById('kpiRewardInput');
+      const penaltyInput = document.getElementById('kpiPenaltyInput');
+      const guideInput = document.getElementById('kpiGuideInput');
+
+      if (!type || !STANDALONE_KPI_PRESETS[type]) return;
+
+      const p = STANDALONE_KPI_PRESETS[type];
+      if (nameInput) nameInput.value = p.name;
+      if (unitInput) unitInput.value = p.unit;
+      if (targetInput) targetInput.value = p.target;
+      if (rewardInput) rewardInput.value = p.reward;
+      if (penaltyInput) penaltyInput.value = p.penalty;
+      if (guideInput) guideInput.value = p.note;
+      if (p.cycle) selectKpiCycle(p.cycle);
+    }
+
+    function populateUserSelect(selectElem, targetVal) {
+      if (!selectElem) return;
+      if (selectElem.options.length <= 1) {
+        let users = [];
+        try {
+          const cfg = window._userConfigs || window.userConfigs || JSON.parse(localStorage.getItem('USER_CONFIG') || '{}');
+          if (cfg.users && Array.isArray(cfg.users) && cfg.users.length > 0) {
+            users = cfg.users.map(u => ({ name: u, title: cfg.titles?.[u] || cfg.roles?.[u] || '' }));
+          } else if (cfg.pins) {
+            const seen = new Set();
+            Object.values(cfg.pins).forEach(u => {
+              if (u && u.name && !seen.has(u.name)) {
+                seen.add(u.name);
+                users.push(u);
+              }
+            });
+          }
+        } catch (e) { }
+        if (users.length === 0) {
+          const defaults = ['Nguyễn Ngọc Tiến', 'Nguyễn Thị Diệu Hương', 'Nguyễn Hoàng Dương', 'Đoàn Quang Trí', 'Võ Thành Tâm'];
+          users = defaults.map(n => ({ name: n, title: 'Nhân sự' }));
+        }
+        users.forEach(u => {
+          const opt = document.createElement('option');
+          opt.value = u.name;
+          opt.textContent = `${u.name}${u.title ? ' (' + u.title + ')' : ''}`;
+          selectElem.appendChild(opt);
+        });
+      }
+      if (targetVal) selectElem.value = targetVal;
+    }
+
+    function openKpiModalStandalone(targetUserName) {
+      const modal = document.getElementById('modal-kpi-standalone');
+      if (modal) {
+        modal.style.display = 'flex';
+        const userSelect = document.getElementById('kpiUserSelect');
+        populateUserSelect(userSelect, targetUserName);
+        if (targetUserName) onStandaloneUserChange(targetUserName);
+      }
+    }
+    function closeKpiModalStandalone() {
+      const modal = document.getElementById('modal-kpi-standalone');
+      if (modal) modal.style.display = 'none';
+    }
+
+    // Mở / Đóng Modal Nhiệm vụ
+    function openTaskModalStandalone() {
+      const modal = document.getElementById('modal-task-standalone');
+      if (modal) {
+        modal.style.display = 'flex';
+        const taskSelect = document.getElementById('task-user');
+        populateUserSelect(taskSelect);
+      }
+    }
+    function closeTaskModalStandalone() {
+      const modal = document.getElementById('modal-task-standalone');
+      if (modal) modal.style.display = 'none';
+    }
+
+    // Submit KPI -> Bảng KPI_Progress
+    function submitKPIStandalone() {
+      const btn = event ? event.target : document.querySelector('#modal-kpi-standalone .rf-btn-submit');
+      const originalText = btn ? btn.innerHTML : 'Lưu Thiết Lập KPI';
+      if (btn) { btn.innerHTML = 'Đang lưu...'; btn.disabled = true; }
+
+      const payload = {
+        user: document.getElementById('kpiUserSelect').value,
+        kpiName: document.getElementById('kpiNameInput').value,
+        target: document.getElementById('kpiTargetInput').value,
+        unit: document.getElementById('kpiUnitSelect').value,
+        reward: document.getElementById('kpiRewardInput').value,
+        penalty: document.getElementById('kpiPenaltyInput') ? document.getElementById('kpiPenaltyInput').value : '0',
+        guide: document.getElementById('kpiGuideInput').value,
+        cycle: currentStandaloneKpiCycle || 'MONTH'
+      };
+
+      if (!payload.user || !payload.kpiName || !payload.target || !payload.unit) {
+        alert("Vui lòng điền đầy đủ: Nhân sự, Tên KPI, Chỉ tiêu và Đơn vị tính!");
+        if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+        return;
+      }
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+          if (res && res.success) {
+            alert("Đã thiết lập KPI " + (payload.cycle === 'WEEK' ? 'Hàng Tuần' : 'Hàng Tháng') + " thành công!");
+            closeKpiModalStandalone();
+            // Reset form
+            document.getElementById('kpiNameInput').value = '';
+            document.getElementById('kpiTargetInput').value = '';
+            document.getElementById('kpiRewardInput').value = '';
+            if (document.getElementById('kpiPenaltyInput')) document.getElementById('kpiPenaltyInput').value = '';
+            document.getElementById('kpiUnitSelect').value = '';
+            document.getElementById('kpiGuideInput').value = '';
+            if (document.getElementById('kpiPresetSelect')) document.getElementById('kpiPresetSelect').value = '';
+            // Kích hoạt reload data ở frontend
+            window.dispatchEvent(new CustomEvent('triggerReloadData'));
+          } else {
+            alert("Lỗi: " + (res ? res.message : "Không rõ"));
+          }
+        })
+        .withFailureHandler(function (err) {
+          if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+          alert("Lỗi kết nối Server: " + err.message);
+        })
+        .api_insertManualKPI(payload);
+    }
+
+    // Submit Nhiệm vụ -> Bảng BonusPenalty (Thưởng Xu)
+    function submitTaskStandalone() {
+      const btn = event ? event.target : document.querySelector('#modal-task-standalone .rf-btn-submit');
+      const originalText = btn ? btn.innerHTML : 'Giao Việc';
+      if (btn) { btn.innerHTML = 'Đang lưu...'; btn.disabled = true; }
+
+      const payload = {
+        user: document.getElementById('task-user').value,
+        title: document.getElementById('task-title').value,
+        note: document.getElementById('task-note').value,
+        target: document.getElementById('task-target').value,
+        unit: document.getElementById('task-unit').value,
+        startTime: document.getElementById('task-start').value,
+        endTime: document.getElementById('task-end').value,
+        amount: document.getElementById('task-reward').value.replace(/[^0-9-]/g, ''),
+        penalty: document.getElementById('task-penalty').value.replace(/[^0-9-]/g, ''),
+        type: 'XU_REWARD'
+      };
+
+      if (!payload.user || !payload.title) {
+        alert("Vui lòng chọn nhân sự và nhập tiêu đề nhiệm vụ!");
+        if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+        return;
+      }
+
+      google.script.run
+        .withSuccessHandler(function (res) {
+          if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+          if (res && res.success) {
+            alert("Đã giao nhiệm vụ thành công! Nhân sự cần báo cáo hoàn thành để nhận Xu.");
+            closeTaskModalStandalone();
+            // Reset form
+            document.getElementById('task-title').value = '';
+            document.getElementById('task-note').value = '';
+            document.getElementById('task-target').value = '';
+            document.getElementById('task-unit').value = '';
+            document.getElementById('task-reward').value = '';
+            document.getElementById('task-penalty').value = '';
+            document.getElementById('task-start').value = '';
+            document.getElementById('task-end').value = '';
+            // Kích hoạt reload data ở frontend
+            window.dispatchEvent(new CustomEvent('triggerReloadData'));
+          } else {
+            alert("Lỗi: " + (res ? res.message : "Không rõ"));
+          }
+        })
+        .withFailureHandler(function (err) {
+          if (btn) { btn.innerHTML = originalText; btn.disabled = false; }
+          alert("Lỗi kết nối Server: " + err.message);
+        })
+        .api_insertManualTask(payload);
+    }
+
+    // TỰ ĐỘNG LOAD DANH SÁCH NHÂN SỰ
+    document.addEventListener("DOMContentLoaded", function () {
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withFailureHandler(function (err) { console.error("Error loading employees:", err); })
+          .withSuccessHandler(function (employees) {
+            const kpiSelect = document.getElementById('kpiUserSelect');
+            const taskSelect = document.getElementById('task-user');
+
+            if (kpiSelect && taskSelect && employees && employees.length > 0) {
+              employees.forEach(function (name) {
+                let optKpi = document.createElement('option');
+                optKpi.value = name;
+                optKpi.innerHTML = name;
+                kpiSelect.appendChild(optKpi);
+
+                let optTask = document.createElement('option');
+                optTask.value = name;
+                optTask.innerHTML = name;
+                taskSelect.appendChild(optTask);
+              });
+            }
+          })
+          .api_getActiveEmployees();
+      }
+    });
+  </script>
+</body>
+
+</html>

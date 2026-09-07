@@ -1,0 +1,1813 @@
+<script type="text/babel">
+/* Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 */
+// =========================================================================
+// 🤝 FILE: Tab_Suppliers.html
+// CHỨC NĂNG: Quản lý Nhà Cung Cấp, Công nợ, Lịch sử nhập hàng & Đối soát Bank N:1
+// THIẾT KẾ: Royal Workbench Dark (Hallmark Anti-AI-Slop System)
+// =========================================================================
+
+const SuppliersTab = React.memo(function SuppliersTab({ 
+    data, 
+    pushData, 
+    isAdmin: propIsAdmin, 
+    isBoss: propIsBoss, 
+    userRole: propUserRole, 
+    currentUser: propCurrentUser, 
+    hasPerm: propHasPerm, 
+    triggerToast,
+    documents
+}) {
+    const [searchTerm, setSearchTerm] = React.useState('');
+    const [debtFilter, setDebtFilter] = React.useState('ALL'); // ALL, DEBT, NO_DEBT, ADVANCE
+    const [selectedCategory, setSelectedCategory] = React.useState('ALL');
+    const [showAddModal, setShowAddModal] = React.useState(false);
+    const [expandedIds, setExpandedIds] = React.useState({});
+    const [isSaving, setIsSaving] = React.useState(false);
+    const [historyFilters, setHistoryFilters] = React.useState({}); // supId -> ALL, UNPAID
+
+    const currentRole = propUserRole || localStorage.getItem('rf_role') || '';
+    const currentUser = propCurrentUser || localStorage.getItem('rf_user') || '';
+    const isBossRole = localStorage.getItem('rf_boss') === 'true' || currentRole === 'TỐI CAO' || currentUser.includes('Tiến');
+    const isBoss = propIsBoss !== undefined ? propIsBoss : isBossRole;
+    const isAdmin = propIsAdmin !== undefined ? propIsAdmin : (localStorage.getItem('rf_admin') === 'true' || isBoss);
+
+    const hasPerm = React.useCallback((actionCode) => {
+        if (isBoss || currentRole === 'TỐI CAO') return true;
+        if (typeof propHasPerm === 'function') return propHasPerm(actionCode);
+        if (typeof canUserDo === 'function') return canUserDo(actionCode, currentRole, currentUser);
+        return isAdmin;
+    }, [propHasPerm, currentRole, currentUser, isAdmin, isBoss]);
+
+    const canAddSup = hasPerm('SUP_ADD'); // Tiến, Dương, Trang
+    const canEditSup = hasPerm('SUP_EDIT'); // Tiến, Dương, Trang
+    const canDeleteSup = hasPerm('SUP_DELETE'); // Chỉ Tiến
+    const canManageDebt = hasPerm('SUP_MANAGE_DEBT'); // Tiến, Trang
+
+    const [newSup, setNewSup] = React.useState({ id: null, name: '', phone: '', category: 'HÀNG HOÁ', note: '', totalDebt: 0 });
+    const [payingLog, setPayingLog] = React.useState(null);
+    const [payAccId, setPayAccId] = React.useState('');
+    const [payAmount, setPayAmount] = React.useState('');
+    const [editingLog, setEditingLog] = React.useState(null);
+    const [editNote, setEditNote] = React.useState('');
+    const [editTotal, setEditTotal] = React.useState('');
+
+    // States cho tính năng Đối Soát Bank (N:1)
+    const [reconcileSupplier, setReconcileSupplier] = React.useState(null);
+    const [reconSelectedTxId, setReconSelectedTxId] = React.useState('');
+    const [reconSelectedImportIds, setReconSelectedImportIds] = React.useState([]);
+
+    const CATEGORIES = ['HÀNG HOÁ', 'NGUYÊN LIỆU & VẬT TƯ', 'CÔNG CỤ MÁY MÓC', 'NỘI BỘ', 'KHÁC'];
+    const suppliers = data?.Suppliers || [];
+
+    // Helper format tiền tệ
+    const displayMoney = React.useCallback((val) => {
+        return Math.round(Number(val || 0)).toLocaleString('vi-VN');
+    }, []);
+
+    // 1. TÍNH TOÁN CÁC CHỈ SỐ DASHBOARD TỔNG QUAN
+    const stats = React.useMemo(() => {
+        let totalDebt = 0;
+        let totalAdvance = 0;
+        let unpaidBills = 0;
+        
+        suppliers.forEach(s => {
+            const d = Number(s.totalDebt) || 0;
+            if (d > 0) totalDebt += d;
+            else if (d < 0) totalAdvance += Math.abs(d);
+        });
+
+        (data?.ImportExport || []).forEach(log => {
+            if (log.type === 'Nhập' && !log.isPaid && Number(log.totalAmount) > 0) {
+                unpaidBills++;
+            }
+        });
+
+        const currentMonthStr = new Date().toISOString().slice(0, 7); // YYYY-MM
+        const paidThisMonth = (data?.Transactions || [])
+            .filter(t => t.type === 'Chi' && (t.category === 'Thanh Toán Hoá Đơn' || String(t.title || '').includes('Thanh toán phiếu nhập')) && t.date && t.date.startsWith(currentMonthStr))
+            .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+
+        return {
+            totalDebt,
+            totalAdvance,
+            totalPartners: suppliers.length,
+            unpaidBills,
+            paidThisMonth
+        };
+    }, [suppliers, data?.ImportExport, data?.Transactions]);
+
+    // 2. PHÂN LOẠI & LỌC NHÀ CUNG CẤP
+    const filteredSuppliers = React.useMemo(() => {
+        return suppliers.filter(sup => {
+            // Lọc từ khoá tìm kiếm
+            if (searchTerm) {
+                const sLow = searchTerm.toLowerCase().trim();
+                const matchName = String(sup.name || '').toLowerCase().includes(sLow);
+                const matchPhone = String(sup.phone || '').toLowerCase().includes(sLow);
+                const matchNote = String(sup.note || '').toLowerCase().includes(sLow);
+                if (!matchName && !matchPhone && !matchNote) return false;
+            }
+
+            // Lọc trạng thái nợ
+            const debt = Number(sup.totalDebt || 0);
+            if (debtFilter === 'DEBT' && debt <= 0) return false;
+            if (debtFilter === 'NO_DEBT' && debt !== 0) return false;
+            if (debtFilter === 'ADVANCE' && debt >= 0) return false;
+
+            // Lọc danh mục
+            if (selectedCategory !== 'ALL') {
+                const cat = CATEGORIES.includes(sup.category) ? sup.category : 'KHÁC';
+                if (cat !== selectedCategory) return false;
+            }
+
+            return true;
+        });
+    }, [suppliers, searchTerm, debtFilter, selectedCategory]);
+
+    // Nhóm theo Category
+    const groupedSuppliers = React.useMemo(() => {
+        const groups = {};
+        CATEGORIES.forEach(cat => groups[cat] = []);
+
+        filteredSuppliers.forEach(sup => {
+            const cat = CATEGORIES.includes(sup.category) ? sup.category : 'KHÁC';
+            if (!groups[cat]) groups[cat] = [];
+            groups[cat].push(sup);
+        });
+        return groups;
+    }, [filteredSuppliers]);
+
+    // Lấy lịch sử nhập hàng của từng NCC
+    const getImportHistory = React.useCallback((supName) => {
+        if (!supName) return [];
+        const imports = (data?.ImportExport || []).filter(log => log.type === 'Nhập' && String(log.target || '').trim() === String(supName).trim());
+        return imports.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    }, [data?.ImportExport]);
+
+    const toggleExpand = (id) => setExpandedIds(prev => ({ ...prev, [id]: !prev[id] }));
+    const toggleHistoryFilter = (supId, filterType) => setHistoryFilters(prev => ({ ...prev, [supId]: filterType }));
+
+    // Icon nhận diện nhóm NCC
+    const getSupplierIcon = (category) => {
+        switch(category) {
+            case 'HÀNG HOÁ': 
+                return <i className="fas fa-boxes text-emerald-400"></i>;
+            case 'NGUYÊN LIỆU & VẬT TƯ': 
+                return <i className="fas fa-cubes text-amber-400"></i>;
+            case 'CÔNG CỤ MÁY MÓC': 
+                return <i className="fas fa-cogs text-sky-400"></i>;
+            case 'NỘI BỘ': 
+                return <i className="fas fa-building text-purple-400"></i>;
+            default: 
+                return <i className="fas fa-handshake text-[#d4af37]"></i>;
+        }
+    };
+
+    // 3. XỬ LÝ LƯU / SỬA NHÀ CUNG CẤP
+    const handleSaveSup = async () => {
+        if (!newSup.name.trim()) return triggerToast('Vui lòng nhập Tên Nhà Cung Cấp!', 'fa-exclamation', 'warning');
+        setIsSaving(true);
+        try {
+            const debtInputVal = Number(newSup.totalDebt || 0);
+            if (newSup.id) {
+                const existing = suppliers.find(s => s.id === newSup.id);
+                const payload = { 
+                    Suppliers: [{ 
+                        ...existing, 
+                        name: newSup.name.trim(), 
+                        phone: newSup.phone.trim(), 
+                        category: newSup.category, 
+                        note: newSup.note.trim(), 
+                        totalDebt: debtInputVal 
+                    }] 
+                };
+                
+                // QUÉT & ĐỒNG BỘ KHÓA NGOẠI: Cập nhật lại mục tiêu (target) của ImportExport nếu Nhà cung cấp bị đổi tên
+                if (existing && existing.name !== newSup.name.trim()) {
+                    const relatedLogs = (data?.ImportExport || []).filter(log => log.type === 'Nhập' && log.target === existing.name);
+                    if (relatedLogs.length > 0) {
+                        payload.ImportExport = relatedLogs.map(log => ({ ...log, target: newSup.name.trim() }));
+                    }
+                }
+                
+                await pushData(payload);
+                triggerToast('Cập nhật Nhà Cung Cấp thành công!', 'fa-check', 'success');
+            } else {
+                await pushData({ 
+                    Suppliers: [{ 
+                        id: 'SUP_' + Date.now(), 
+                        name: newSup.name.trim(), 
+                        phone: newSup.phone.trim(), 
+                        category: newSup.category, 
+                        note: newSup.note.trim(), 
+                        totalDebt: debtInputVal 
+                    }] 
+                });
+                triggerToast('Tạo Nhà Cung Cấp thành công!', 'fa-check', 'success');
+            }
+            setShowAddModal(false);
+            setNewSup({ id: null, name: '', phone: '', category: 'HÀNG HOÁ', note: '', totalDebt: 0 });
+        } catch (e) { 
+            triggerToast('Gặp lỗi khi lưu Nhà Cung Cấp: ' + (e.message || e), 'fa-times', 'danger'); 
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // 4. XÓA NHÀ CUNG CẤP (CHỐNG XÓA KHI CÒN NỢ)
+    const handleDeleteSup = async (sup) => {
+        if (Number(sup.totalDebt || 0) > 0) {
+            return triggerToast('Không thể xóa Nhà Cung Cấp đang còn công nợ chưa chi trả!', 'fa-ban', 'danger');
+        }
+        if (!window.confirm(`Bạn có chắc muốn XÓA VĨNH VIỄN Nhà Cung Cấp: [${sup.name}]?`)) return;
+        setIsSaving(true);
+        try {
+            await pushData({ deletes: { Suppliers: [sup.id] } });
+            triggerToast('Xóa Nhà Cung Cấp thành công!', 'fa-check', 'success');
+        } catch (e) { 
+            triggerToast('Gặp lỗi khi xóa Nhà Cung Cấp: ' + (e.message || e), 'fa-times', 'danger'); 
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // 5. THANH TOÁN PHIẾU NHẬP (CHI TRẢ TIỀN MẶT / QUỸ)
+    const openPaymentModal = (log, sup) => {
+        setPayingLog({ log, sup });
+        const totalVal = Number(log.totalAmount || 0);
+        const alreadyPaid = Number(log.paidAmount || 0);
+        const remainingDebt = Math.max(0, totalVal - alreadyPaid);
+        setPayAmount(remainingDebt > 0 ? remainingDebt : totalVal);
+        setPayAccId('');
+    };
+
+    // 🛡️ CẢNH BÁO TRÙNG GIAO DỊCH KHI THANH TOÁN LẺ (TRÁNH TRỪ ĐÚP TIỀN QUỸ)
+    const matchingRecentBankTx = React.useMemo(() => {
+        if (!payingLog || !payingLog.sup || !payingLog.log) return null;
+        const supName = String(payingLog.sup.name || '').toLowerCase().trim();
+        const logId = String(payingLog.log.id || '').toLowerCase().trim();
+        const amountToMatch = Number(payAmount) || Number(payingLog.log.totalAmount) || 0;
+        const now = Date.now();
+        const fortyEightHoursMs = 48 * 60 * 60 * 1000;
+
+        return (data?.Transactions || []).find(t => {
+            if (t.type !== 'Chi') return false;
+            const tDate = new Date(t.date || 0).getTime();
+            if (isNaN(tDate) || (now - tDate > fortyEightHoursMs && now - tDate > 0)) return false;
+            const tAmount = Number(t.amount || 0);
+            const noteLow = String(t.note || '').toLowerCase();
+            const titleLow = String(t.title || '').toLowerCase();
+            
+            // Đã đối soát rồi thì bỏ qua
+            if (noteLow.includes('đã đối soát công nợ')) return false;
+
+            const matchAmount = Math.abs(tAmount - amountToMatch) < 1000;
+            const matchSup = supName && (noteLow.includes(supName) || titleLow.includes(supName));
+            const matchLogId = logId && (noteLow.includes(logId) || titleLow.includes(logId));
+
+            return (matchAmount && (matchSup || matchLogId)) || (matchAmount && matchSup) || (matchLogId);
+        });
+    }, [payingLog, payAmount, data?.Transactions]);
+
+    const isSavingRef = React.useRef(false);
+
+    const handleConfirmPayment = async () => {
+        if (isSavingRef.current) return;
+        const amountToPay = Number(payAmount);
+        if (!payAccId) return triggerToast('Vui lòng chọn quỹ tiền để trừ!', 'fa-exclamation', 'warning');
+        if (amountToPay <= 0) return triggerToast('Số tiền thanh toán phải lớn hơn 0!', 'fa-exclamation', 'warning');
+
+        isSavingRef.current = true;
+        setIsSaving(true);
+        try {
+            const acc = (data?.Accounts || []).find(a => a.id === payAccId);
+            const sup = payingLog.sup;
+            const log = payingLog.log;
+
+            const totalVal = Number(log.totalAmount || 0);
+            const alreadyPaid = Number(log.paidAmount || 0);
+            const newPaidAmount = alreadyPaid + amountToPay;
+            const isFullyPaid = newPaidAmount >= totalVal;
+            const remainingDebt = Math.max(0, totalVal - newPaidAmount);
+            
+            const newTransaction = {
+                id: 'TX_' + Date.now() + Math.floor(Math.random()*1000), 
+                type: 'Chi', 
+                category: 'Thanh Toán Hoá Đơn', 
+                amount: amountToPay,
+                fromAccount: payAccId, 
+                toAccount: '', 
+                title: `Thanh toán phiếu nhập: ${log.id}`,
+                date: new Date().toISOString().slice(0, 16).replace('T', ' '),
+                note: `Chi trả tiền nhập hàng cho nhà cung cấp ${sup.name} (${amountToPay.toLocaleString('vi-VN')} đ)`
+            };
+
+            await pushData({
+                Transactions: [newTransaction],
+                Accounts: [{ ...acc, balance: Number(acc.balance) - amountToPay }],
+                Suppliers: [{ ...sup, totalDebt: Math.max(0, Number(sup.totalDebt || 0) - amountToPay) }],
+                ImportExport: [{ 
+                    ...log, 
+                    isPaid: isFullyPaid, 
+                    paidAmount: newPaidAmount, 
+                    debtAmount: remainingDebt, 
+                    paidAt: isFullyPaid ? new Date().toISOString() : log.paidAt 
+                }]
+            });
+            setPayingLog(null);
+            triggerToast(isFullyPaid ? 'Thanh toán hoàn tất phiếu nhập!' : `Đã thanh toán một phần (${amountToPay.toLocaleString('vi-VN')} đ)!`, 'fa-check', 'success');
+        } catch (e) { 
+            triggerToast('Lỗi thanh toán: ' + (e.message || e), 'fa-times', 'danger'); 
+        } finally {
+            setIsSaving(false);
+            setTimeout(() => { isSavingRef.current = false; }, 500);
+        }
+    };
+
+    // 6. CHỈNH SỬA PHIẾU NHẬP
+    const openEditModal = (log) => {
+        setEditingLog(log);
+        setEditNote(log.note || '');
+        setEditTotal(log.totalAmount || 0);
+    };
+
+    const handleConfirmEdit = async () => {
+        setIsSaving(true);
+        try {
+            const oldAmount = Number(editingLog.totalAmount || 0);
+            const newAmount = Number(editTotal);
+            const diff = newAmount - oldAmount;
+            
+            const payload = { ImportExport: [{ ...editingLog, note: editNote, totalAmount: newAmount }] };
+            
+            if (diff !== 0 && !editingLog.isPaid) {
+                const sup = suppliers.find(s => s.name === editingLog.target);
+                if (sup) {
+                    payload.Suppliers = [{ ...sup, totalDebt: Number(sup.totalDebt || 0) + diff }];
+                }
+            }
+            
+            await pushData(payload);
+            setEditingLog(null);
+            triggerToast('Cập nhật phiếu thành công!', 'fa-check', 'success');
+        } catch (e) { 
+            triggerToast('Lỗi sửa phiếu: ' + (e.message || e), 'fa-times', 'danger'); 
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // 7. XOÁ PHIẾU NHẬP
+    const handleDeleteTicket = async (log, sup) => {
+        const choice = window.prompt(`XOÁ PHIẾU NHẬP: ${log.id}\n\nNhập "1" để: Xoá phiếu NHƯNG GIỮ NGUYÊN tồn kho (Dùng khi hàng vật lý đã vào kho, chỉ xoá rác sổ sách).\nNhập "2" để: Xoá phiếu và TRỪ LẠI số tồn kho đã cộng.\n\nHãy nhập số 1 hoặc 2:`);
+        if (!choice) return;
+        if (choice !== '1' && choice !== '2') return triggerToast('Lựa chọn không hợp lệ', 'fa-times', 'danger');
+
+        setIsSaving(true);
+        try {
+            const payload = { deletes: { ImportExport: [log.id] }, Products: [], Suppliers: [] };
+            
+            if (!log.isPaid && Number(log.totalAmount || 0) > 0) {
+                payload.Suppliers.push({
+                    ...sup, 
+                    totalDebt: Math.max(0, Number(sup.totalDebt || 0) - Number(log.totalAmount))
+                });
+            }
+
+            if (choice === '2') {
+                let parsed = [];
+                try { parsed = JSON.parse(log.itemsData); } catch(e) {}
+                parsed.forEach(item => {
+                    const p = (data?.Products || []).find(x => x.name === item.name);
+                    if (p) {
+                        const diffVal = -Number(item.qty || 0);
+                        payload.Products.push({ ...p, quantity: Number(p.quantity) + diffVal, _diff: diffVal });
+                    }
+                });
+            }
+
+            await pushData(payload);
+            triggerToast('Đã xoá phiếu thành công!', 'fa-trash', 'success');
+        } catch (e) {
+            triggerToast('Lỗi xoá phiếu: ' + (e.message || e), 'fa-times', 'danger');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // 8. ĐỐI SOÁT BANK N:1 (KHỚP PHIẾU CHI VỚI NHIỀU PHIẾU NHẬP)
+    const recentBankTxs = React.useMemo(() => {
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now.setDate(now.getDate() - 30)).toISOString().split('T')[0];
+        return (data?.Transactions || []).filter(t => {
+            if (t.type !== 'Chi') return false;
+            const tDate = (t.date || '').split('T')[0];
+            if (tDate < thirtyDaysAgo) return false;
+            const noteLower = String(t.note || '').toLowerCase();
+            if (noteLower.includes('đối soát công nợ')) return false;
+            return true;
+        }).sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+    }, [data?.Transactions]);
+
+    const handleSaveReconciliation = async () => {
+        if (!reconSelectedTxId) return triggerToast('Vui lòng chọn 1 Phiếu Chi Bank!', 'fa-exclamation', 'warning');
+        if (reconSelectedImportIds.length === 0) return triggerToast('Vui lòng tick chọn ít nhất 1 Phiếu Nhập!', 'fa-exclamation', 'warning');
+
+        const tx = recentBankTxs.find(t => t.id === reconSelectedTxId);
+        if (!tx) return;
+
+        const allImports = getImportHistory(reconcileSupplier.name);
+        const selectedImports = allImports.filter(log => reconSelectedImportIds.includes(log.id));
+        const totalImportAmount = selectedImports.reduce((sum, log) => sum + Number(log.totalAmount || 0), 0);
+        const balanceDiff = Number(tx.amount || 0) - totalImportAmount;
+
+        if (balanceDiff < 0) {
+            return triggerToast('LỖI BẢO MẬT: Phiếu Chi không đủ số dư để thanh toán tổng tiền các phiếu đã chọn!', 'fa-ban', 'danger');
+        }
+
+        setIsSaving(true);
+        try {
+            const updatedTx = {
+                ...tx,
+                note: `[Đã đối soát công nợ: ${reconcileSupplier.name}]. ${tx.note || ''}`
+            };
+
+            const updatedSupplier = {
+                ...reconcileSupplier,
+                totalDebt: Math.max(0, Number(reconcileSupplier.totalDebt || 0) - totalImportAmount)
+            };
+
+            const updatedImports = selectedImports.map(log => ({
+                ...log,
+                isPaid: true,
+                paidAmount: Number(log.totalAmount || 0),
+                debtAmount: 0,
+                paidAt: new Date().toISOString()
+            }));
+
+            await pushData({
+                Transactions: [updatedTx],
+                Suppliers: [updatedSupplier],
+                ImportExport: updatedImports
+            });
+
+            setReconcileSupplier(null);
+            triggerToast('Đã đối soát Bank và cấn trừ công nợ thành công!', 'fa-shield-alt', 'success');
+        } catch (e) {
+            triggerToast('Lỗi đối soát: ' + (e.message || e), 'fa-times', 'danger');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleToggleImport = (id) => {
+        setReconSelectedImportIds(prev => 
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+        );
+    };
+
+    const parseItems = (raw) => {
+        if (!raw) return [];
+        if (Array.isArray(raw)) return raw;
+        try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            return [];
+        }
+    };
+
+    // 9. CÁC HÀM IN BÁO CÁO (A4 DỌC & 58MM POS)
+    const handlePrintAllImportsReport = () => {
+        const printDateStr = new Date().toLocaleString('vi-VN');
+        const allImports = (data?.ImportExport || []).filter(log => log.type === 'Nhập');
+        const sortedImports = [...allImports].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+        let totalAmount = 0;
+        let totalPaid = 0;
+        let totalRemaining = 0;
+
+        let rowsHtml = '';
+        sortedImports.forEach((log, idx) => {
+            const tot = Number(log.totalAmount || 0);
+            const paid = Number(log.paidAmount || (log.isPaid ? tot : 0));
+            const remaining = Math.max(0, tot - paid);
+
+            totalAmount += tot;
+            totalPaid += paid;
+            totalRemaining += remaining;
+
+            const items = parseItems(log.itemsData);
+            let itemsSummary = '';
+            if (items.length > 0) {
+                itemsSummary = items.map(it => {
+                    const matchedP = (data?.Products || []).find(p => (it.sku && String(p.sku || '').toUpperCase() === String(it.sku).toUpperCase()) || (it.name && String(p.name || '').toLowerCase() === String(it.name).toLowerCase()));
+                    const u = (matchedP && matchedP.unit) ? matchedP.unit : (it.unit || '');
+                    return `${it.name || it.sku} (x${it.qty || 1}${u ? ' ' + u : ''})`;
+                }).join(', ');
+            } else {
+                itemsSummary = log.note || 'Không có chi tiết';
+            }
+
+            const statusText = log.isPaid || remaining <= 0 ? 'Hoàn Tất' : (paid > 0 ? 'Trả 1 Phần' : 'Chưa Trả');
+            const statusColor = log.isPaid || remaining <= 0 ? '#047857' : (paid > 0 ? '#b45309' : '#be123c');
+
+            rowsHtml += `
+                <tr>
+                    <td style="border: 1px solid #333; padding: 5px 4px; text-align: center;">${idx + 1}</td>
+                    <td style="border: 1px solid #333; padding: 5px 6px; font-family: monospace; font-weight: bold; text-align: center;">${log.id}</td>
+                    <td style="border: 1px solid #333; padding: 5px 6px; font-size: 9.5px; text-align: center;">${String(log.date || '').slice(0, 16).replace('T', ' ')}</td>
+                    <td style="border: 1px solid #333; padding: 5px 6px; font-weight: bold; text-align: left;">${log.target || 'N/A'}</td>
+                    <td style="border: 1px solid #333; padding: 5px 6px; font-size: 9.5px; text-align: left; max-width: 220px;">${itemsSummary}</td>
+                    <td style="border: 1px solid #333; padding: 5px 6px; text-align: right; font-family: monospace; font-weight: bold;">${displayMoney(tot)}đ</td>
+                    <td style="border: 1px solid #333; padding: 5px 6px; text-align: right; font-family: monospace; color: #047857;">${displayMoney(paid)}đ</td>
+                    <td style="border: 1px solid #333; padding: 5px 6px; text-align: right; font-family: monospace; font-weight: bold; color: ${remaining > 0 ? '#be123c' : '#555'};">${displayMoney(remaining)}đ</td>
+                    <td style="border: 1px solid #333; padding: 5px 4px; text-align: center; font-size: 9px; font-weight: bold; color: ${statusColor};">${statusText}</td>
+                </tr>
+            `;
+        });
+
+        const printHtml = `
+            <div style="font-family: Arial, sans-serif; color: #000; padding: 15px; width: 100%; max-width: 210mm; margin: 0 auto; box-sizing: border-box;">
+                <div style="text-align: center; margin-bottom: 12px; border-bottom: 2px solid #000; padding-bottom: 8px;">
+                    <div style="font-size: 11px; font-weight: bold; text-transform: uppercase; color: #555; letter-spacing: 2px;">RICH FISH AQUARIUM — PHÂN HỆ QUẢN TRỊ ĐỐI TÁC & NHẬP HÀNG</div>
+                    <div style="font-size: 19px; font-weight: 900; text-transform: uppercase; margin-top: 4px;">BÁO CÁO TỔNG HỢP NHẬP HÀNG & CÔNG NỢ NHÀ CUNG CẤP</div>
+                    <div style="font-size: 12px; margin-top: 4px; font-weight: bold;">Ngày xuất báo cáo: ${printDateStr} | Người lập: ${currentUser || 'Kế toán'}</div>
+                </div>
+
+                <div style="margin-top: 10px; margin-bottom: 12px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                        <thead>
+                            <tr style="background-color: #f3f4f6;">
+                                <th style="border: 1px solid #000; padding: 6px; text-align: center; width: 25%;">Tổng Phiếu Nhập</th>
+                                <th style="border: 1px solid #000; padding: 6px; text-align: center; width: 25%;">Tổng Giá Trị Hàng</th>
+                                <th style="border: 1px solid #000; padding: 6px; text-align: center; width: 25%; color: #047857;">Đã Thanh Toán</th>
+                                <th style="border: 1px solid #000; padding: 6px; text-align: center; width: 25%; color: #be123c;">Công Nợ Còn Lại</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="border: 1px solid #000; padding: 6px; text-align: center; font-weight: bold; font-family: monospace; font-size: 13px;">${sortedImports.length} phiếu</td>
+                                <td style="border: 1px solid #000; padding: 6px; text-align: center; font-weight: bold; font-family: monospace; font-size: 13px;">${displayMoney(totalAmount)} đ</td>
+                                <td style="border: 1px solid #000; padding: 6px; text-align: center; font-weight: bold; font-family: monospace; font-size: 13px; color: #047857;">${displayMoney(totalPaid)} đ</td>
+                                <td style="border: 1px solid #000; padding: 6px; text-align: center; font-weight: bold; font-family: monospace; font-size: 13px; color: #be123c;">${displayMoney(totalRemaining)} đ</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <table style="width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 10px;">
+                    <thead>
+                        <tr style="background-color: #e5e7eb; font-weight: 900; text-transform: uppercase;">
+                            <th style="border: 1px solid #000; padding: 5px 3px; text-align: center; width: 4%;">STT</th>
+                            <th style="border: 1px solid #000; padding: 5px 4px; text-align: center; width: 12%;">Mã Phiếu</th>
+                            <th style="border: 1px solid #000; padding: 5px 4px; text-align: center; width: 11%;">Ngày Nhập</th>
+                            <th style="border: 1px solid #000; padding: 5px 6px; text-align: left; width: 18%;">Nhà Cung Cấp</th>
+                            <th style="border: 1px solid #000; padding: 5px 6px; text-align: left; width: 23%;">Chi Tiết Hàng Hóa</th>
+                            <th style="border: 1px solid #000; padding: 5px 5px; text-align: right; width: 11%;">Tổng Tiền</th>
+                            <th style="border: 1px solid #000; padding: 5px 5px; text-align: right; width: 10%;">Đã Trả</th>
+                            <th style="border: 1px solid #000; padding: 5px 5px; text-align: right; width: 11%;">Còn Nợ</th>
+                            <th style="border: 1px solid #000; padding: 5px 3px; text-align: center; width: 8%;">Trạng Thái</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                    </tbody>
+                    <tfoot>
+                        <tr style="background-color: #f3f4f6; font-weight: 900; border-top: 2px solid #000;">
+                            <td colspan="5" style="border: 1px solid #000; padding: 6px; text-align: center; text-transform: uppercase;">TỔNG CỘNG TOÀN HỆ THỐNG</td>
+                            <td style="border: 1px solid #000; padding: 6px; text-align: right; font-family: monospace;">${displayMoney(totalAmount)}đ</td>
+                            <td style="border: 1px solid #000; padding: 6px; text-align: right; font-family: monospace; color: #047857;">${displayMoney(totalPaid)}đ</td>
+                            <td style="border: 1px solid #000; padding: 6px; text-align: right; font-family: monospace; color: #be123c;">${displayMoney(totalRemaining)}đ</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <div style="display: flex; justify-content: space-between; margin-top: 30px; font-size: 12px; font-weight: bold; page-break-inside: avoid;">
+                    <div style="width: 30%; text-align: center;">
+                        <div>Người Lập Báo Cáo</div>
+                        <div style="font-weight: normal; font-size: 10px; color: #666; margin-top: 2px;">(Ký & ghi rõ họ tên)</div>
+                        <div style="margin-top: 45px;">${currentUser || 'Kế toán'}</div>
+                    </div>
+                    <div style="width: 30%; text-align: center;">
+                        <div>Thủ Kho / Đối Soát</div>
+                        <div style="font-weight: normal; font-size: 10px; color: #666; margin-top: 2px;">(Ký & ghi rõ họ tên)</div>
+                        <div style="margin-top: 45px;">...........................</div>
+                    </div>
+                    <div style="width: 30%; text-align: center;">
+                        <div>Giám Đốc Doanh Nghiệp</div>
+                        <div style="font-weight: normal; font-size: 10px; color: #666; margin-top: 2px;">(Phê duyệt)</div>
+                        <div style="margin-top: 45px;">...........................</div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const style = document.createElement('style');
+        style.innerHTML = `
+            @media print {
+                @page { size: A4 portrait; margin: 12mm auto; }
+                body > *:not(#print-section) { display: none !important; }
+                body { background: white !important; margin: 0 !important; padding: 0 !important; color: #000 !important; }
+                #print-section { display: block !important; width: 100% !important; }
+                table { page-break-inside: auto; width: 100% !important; }
+                tr { page-break-inside: avoid; page-break-after: auto; }
+                thead { display: table-header-group; }
+                * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            }
+        `;
+        document.head.appendChild(style);
+        const printDiv = document.createElement('div');
+        printDiv.id = 'print-section';
+        printDiv.innerHTML = printHtml;
+        document.body.appendChild(printDiv);
+        window.print();
+        document.body.removeChild(printDiv);
+        document.head.removeChild(style);
+    };
+
+    const handlePrintSupplierImportReport = (sup, importLogs) => {
+        const printDateStr = new Date().toLocaleString('vi-VN');
+        const logs = importLogs || getImportHistory(sup.name);
+
+        let totalAmount = 0;
+        let totalPaid = 0;
+        let totalRemaining = 0;
+
+        let rowsHtml = '';
+        logs.forEach((log, idx) => {
+            const tot = Number(log.totalAmount || 0);
+            const paid = Number(log.paidAmount || (log.isPaid ? tot : 0));
+            const remaining = Math.max(0, tot - paid);
+
+            totalAmount += tot;
+            totalPaid += paid;
+            totalRemaining += remaining;
+
+            const items = parseItems(log.itemsData);
+            let itemsSummary = '';
+            if (items.length > 0) {
+                itemsSummary = items.map(it => {
+                    const matchedP = (data?.Products || []).find(p => (it.sku && String(p.sku || '').toUpperCase() === String(it.sku).toUpperCase()) || (it.name && String(p.name || '').toLowerCase() === String(it.name).toLowerCase()));
+                    const u = (matchedP && matchedP.unit) ? matchedP.unit : (it.unit || '');
+                    return `${it.name || it.sku} (SL: ${it.qty || 1}${u ? ' ' + u : ''}${it.price ? ' x ' + displayMoney(it.price) + 'đ' : ''})`;
+                }).join('<br>');
+            } else {
+                itemsSummary = log.note || 'Không có chi tiết';
+            }
+
+            const statusText = log.isPaid || remaining <= 0 ? 'Hoàn Tất' : (paid > 0 ? 'Trả 1 Phần' : 'Chưa Trả');
+            const statusColor = log.isPaid || remaining <= 0 ? '#047857' : (paid > 0 ? '#b45309' : '#be123c');
+
+            rowsHtml += `
+                <tr>
+                    <td style="border: 1px solid #333; padding: 5px 4px; text-align: center;">${idx + 1}</td>
+                    <td style="border: 1px solid #333; padding: 5px 6px; font-family: monospace; font-weight: bold; text-align: center;">${log.id}</td>
+                    <td style="border: 1px solid #333; padding: 5px 6px; font-size: 9.5px; text-align: center;">${String(log.date || '').slice(0, 16).replace('T', ' ')}</td>
+                    <td style="border: 1px solid #333; padding: 5px 6px; font-size: 9.5px; text-align: left;">${itemsSummary}</td>
+                    <td style="border: 1px solid #333; padding: 5px 6px; text-align: right; font-family: monospace; font-weight: bold;">${displayMoney(tot)}đ</td>
+                    <td style="border: 1px solid #333; padding: 5px 6px; text-align: right; font-family: monospace; color: #047857;">${displayMoney(paid)}đ</td>
+                    <td style="border: 1px solid #333; padding: 5px 6px; text-align: right; font-family: monospace; font-weight: bold; color: ${remaining > 0 ? '#be123c' : '#555'};">${displayMoney(remaining)}đ</td>
+                    <td style="border: 1px solid #333; padding: 5px 4px; text-align: center; font-size: 9px; font-weight: bold; color: ${statusColor};">${statusText}</td>
+                </tr>
+            `;
+        });
+
+        const printHtml = `
+            <div style="font-family: Arial, sans-serif; color: #000; padding: 15px; width: 100%; max-width: 210mm; margin: 0 auto; box-sizing: border-box;">
+                <div style="text-align: center; margin-bottom: 12px; border-bottom: 2px solid #000; padding-bottom: 8px;">
+                    <div style="font-size: 11px; font-weight: bold; text-transform: uppercase; color: #555; letter-spacing: 2px;">RICH FISH AQUARIUM — ĐỐI SOÁT & CÔNG NỢ NHÀ CUNG CẤP</div>
+                    <div style="font-size: 19px; font-weight: 900; text-transform: uppercase; margin-top: 4px;">BÁO CÁO LỊCH SỬ NHẬP HÀNG & CÔNG NỢ CHI TIẾT</div>
+                    <div style="font-size: 12px; margin-top: 4px; font-weight: bold;">Nhà Cung Cấp: ${sup.name} | SĐT: ${sup.phone || 'Chưa cập nhật'} | Danh mục: ${sup.category}</div>
+                    <div style="font-size: 11px; margin-top: 2px; color: #555;">Ngày xuất báo cáo: ${printDateStr}</div>
+                </div>
+
+                <div style="margin-top: 10px; margin-bottom: 12px;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                        <thead>
+                            <tr style="background-color: #f3f4f6;">
+                                <th style="border: 1px solid #000; padding: 6px; text-align: center; width: 25%;">Tổng Số Phiếu Nhập</th>
+                                <th style="border: 1px solid #000; padding: 6px; text-align: center; width: 25%;">Tổng Tiền Hàng Nhập</th>
+                                <th style="border: 1px solid #000; padding: 6px; text-align: center; width: 25%; color: #047857;">Đã Thanh Toán</th>
+                                <th style="border: 1px solid #000; padding: 6px; text-align: center; width: 25%; color: #be123c;">Công Nợ Hiện Tại</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="border: 1px solid #000; padding: 6px; text-align: center; font-weight: bold; font-family: monospace; font-size: 13px;">${logs.length} phiếu</td>
+                                <td style="border: 1px solid #000; padding: 6px; text-align: center; font-weight: bold; font-family: monospace; font-size: 13px;">${displayMoney(totalAmount)} đ</td>
+                                <td style="border: 1px solid #000; padding: 6px; text-align: center; font-weight: bold; font-family: monospace; font-size: 13px; color: #047857;">${displayMoney(totalPaid)} đ</td>
+                                <td style="border: 1px solid #000; padding: 6px; text-align: center; font-weight: bold; font-family: monospace; font-size: 13px; color: #be123c;">${displayMoney(sup.totalDebt || totalRemaining)} đ</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <table style="width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 10px;">
+                    <thead>
+                        <tr style="background-color: #e5e7eb; font-weight: 900; text-transform: uppercase;">
+                            <th style="border: 1px solid #000; padding: 5px 3px; text-align: center; width: 4%;">STT</th>
+                            <th style="border: 1px solid #000; padding: 5px 4px; text-align: center; width: 14%;">Mã Phiếu</th>
+                            <th style="border: 1px solid #000; padding: 5px 4px; text-align: center; width: 12%;">Ngày Nhập</th>
+                            <th style="border: 1px solid #000; padding: 5px 6px; text-align: left; width: 33%;">Chi Tiết Hàng Hóa Nhập</th>
+                            <th style="border: 1px solid #000; padding: 5px 5px; text-align: right; width: 12%;">Tổng Tiền</th>
+                            <th style="border: 1px solid #000; padding: 5px 5px; text-align: right; width: 11%;">Đã Trả</th>
+                            <th style="border: 1px solid #000; padding: 5px 5px; text-align: right; width: 11%;">Còn Nợ</th>
+                            <th style="border: 1px solid #000; padding: 5px 3px; text-align: center; width: 8%;">Trạng Thái</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                    </tbody>
+                    <tfoot>
+                        <tr style="background-color: #f3f4f6; font-weight: 900; border-top: 2px solid #000;">
+                            <td colspan="4" style="border: 1px solid #000; padding: 6px; text-align: center; text-transform: uppercase;">TỔNG CỘNG</td>
+                            <td style="border: 1px solid #000; padding: 6px; text-align: right; font-family: monospace;">${displayMoney(totalAmount)}đ</td>
+                            <td style="border: 1px solid #000; padding: 6px; text-align: right; font-family: monospace; color: #047857;">${displayMoney(totalPaid)}đ</td>
+                            <td style="border: 1px solid #000; padding: 6px; text-align: right; font-family: monospace; color: #be123c;">${displayMoney(totalRemaining)}đ</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <div style="display: flex; justify-content: space-between; margin-top: 30px; font-size: 12px; font-weight: bold; page-break-inside: avoid;">
+                    <div style="width: 40%; text-align: center;">
+                        <div>Đại Diện Nhà Cung Cấp</div>
+                        <div style="font-weight: normal; font-size: 10px; color: #666; margin-top: 2px;">(Ký & ghi rõ họ tên)</div>
+                        <div style="margin-top: 45px;">${sup.name}</div>
+                    </div>
+                    <div style="width: 40%; text-align: center;">
+                        <div>Đại Diện Rich Fish Aquarium</div>
+                        <div style="font-weight: normal; font-size: 10px; color: #666; margin-top: 2px;">(Phê duyệt & thanh toán)</div>
+                        <div style="margin-top: 45px;">${currentUser || 'Giám đốc'}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const style = document.createElement('style');
+        style.innerHTML = `
+            @media print {
+                @page { size: A4 portrait; margin: 12mm auto; }
+                body > *:not(#print-section) { display: none !important; }
+                body { background: white !important; margin: 0 !important; padding: 0 !important; color: #000 !important; }
+                #print-section { display: block !important; width: 100% !important; }
+                table { page-break-inside: auto; width: 100% !important; }
+                tr { page-break-inside: avoid; page-break-after: auto; }
+                thead { display: table-header-group; }
+                * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            }
+        `;
+        document.head.appendChild(style);
+        const printDiv = document.createElement('div');
+        printDiv.id = 'print-section';
+        printDiv.innerHTML = printHtml;
+        document.body.appendChild(printDiv);
+        window.print();
+        document.body.removeChild(printDiv);
+        document.head.removeChild(style);
+    };
+
+    const handlePrintGoodsReceiptNote = (log, sup) => {
+        const items = parseItems(log.itemsData);
+        let itemsRows = '';
+
+        if (items.length > 0) {
+            items.forEach((it, idx) => {
+                const qty = Number(it.qty || 1);
+                const price = Number(it.price || it.costPrice || 0);
+                const subTotal = qty * price;
+                const matchedP = (data?.Products || []).find(p => (it.sku && String(p.sku || '').toUpperCase() === String(it.sku).toUpperCase()) || (it.name && String(p.name || '').toLowerCase() === String(it.name).toLowerCase()));
+                const u = (matchedP && matchedP.unit) ? matchedP.unit : (it.unit || 'Cái/Bộ');
+
+                itemsRows += `
+                    <tr>
+                        <td style="border: 1px solid #333; padding: 6px 4px; text-align: center;">${idx + 1}</td>
+                        <td style="border: 1px solid #333; padding: 6px 8px; font-weight: bold; text-align: left;">${it.name || it.sku || 'Mặt hàng'}</td>
+                        <td style="border: 1px solid #333; padding: 6px 4px; text-align: center;">${u}</td>
+                        <td style="border: 1px solid #333; padding: 6px 4px; text-align: center; font-family: monospace; font-weight: bold;">${qty}</td>
+                        <td style="border: 1px solid #333; padding: 6px 6px; text-align: right; font-family: monospace;">${price > 0 ? displayMoney(price) + 'đ' : '-'}</td>
+                        <td style="border: 1px solid #333; padding: 6px 6px; text-align: right; font-family: monospace; font-weight: bold;">${subTotal > 0 ? displayMoney(subTotal) + 'đ' : displayMoney(log.totalAmount) + 'đ'}</td>
+                    </tr>
+                `;
+            });
+        } else {
+            itemsRows = `
+                <tr>
+                    <td style="border: 1px solid #333; padding: 8px; text-align: center;">1</td>
+                    <td style="border: 1px solid #333; padding: 8px; font-weight: bold; text-align: left;">${log.note || 'Nhập hàng từ ' + sup.name}</td>
+                    <td style="border: 1px solid #333; padding: 8px; text-align: center;">Lô</td>
+                    <td style="border: 1px solid #333; padding: 8px; text-align: center; font-family: monospace; font-weight: bold;">1</td>
+                    <td style="border: 1px solid #333; padding: 8px; text-align: right; font-family: monospace;">${displayMoney(log.totalAmount)}đ</td>
+                    <td style="border: 1px solid #333; padding: 8px; text-align: right; font-family: monospace; font-weight: bold;">${displayMoney(log.totalAmount)}đ</td>
+                </tr>
+            `;
+        }
+
+        const totalVal = Number(log.totalAmount || 0);
+        const paidVal = Number(log.paidAmount || (log.isPaid ? totalVal : 0));
+        const debtVal = Math.max(0, totalVal - paidVal);
+
+        const printHtml = `
+            <div style="font-family: Arial, sans-serif; color: #000; padding: 15px; width: 100%; max-width: 210mm; margin: 0 auto; box-sizing: border-box;">
+                <div style="text-align: center; margin-bottom: 12px; border-bottom: 2px solid #000; padding-bottom: 8px;">
+                    <div style="font-size: 11px; font-weight: bold; text-transform: uppercase; color: #555; letter-spacing: 2px;">RICH FISH AQUARIUM — HỆ THỐNG QUẢN LÝ KHO & ĐỐI TÁC</div>
+                    <div style="font-size: 20px; font-weight: 900; text-transform: uppercase; margin-top: 4px;">PHIẾU NHẬP KHO HÀNG HÓA</div>
+                    <div style="font-size: 12px; margin-top: 4px; font-weight: bold;">Mã phiếu: ${log.id} | Ngày nhập: ${String(log.date || '').slice(0, 16).replace('T', ' ')}</div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 11.5px; line-height: 1.6;">
+                    <div>
+                        <div><b>Nhà Cung Cấp:</b> ${sup.name}</div>
+                        <div><b>Số điện thoại:</b> ${sup.phone || 'Chưa cập nhật'}</div>
+                        <div><b>Phân loại NCC:</b> ${sup.category || 'HÀNG HOÁ'}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div><b>Ghi chú đơn:</b> ${log.note || 'Không có'}</div>
+                        <div><b>Trạng thái thanh toán:</b> <span style="font-weight: bold; color: ${log.isPaid ? '#047857' : '#be123c'};">${log.isPaid ? 'ĐÃ THANH TOÁN' : (paidVal > 0 ? 'TRẢ 1 PHẦN' : 'CHƯA THANH TOÁN')}</span></div>
+                    </div>
+                </div>
+
+                <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 8px;">
+                    <thead>
+                        <tr style="background-color: #e5e7eb; font-weight: 900; text-transform: uppercase;">
+                            <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; width: 5%;">STT</th>
+                            <th style="border: 1px solid #000; padding: 6px 8px; text-align: left; width: 45%;">Tên Sản Phẩm / Vật Tư</th>
+                            <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; width: 10%;">ĐVT</th>
+                            <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; width: 10%;">Số Lượng</th>
+                            <th style="border: 1px solid #000; padding: 6px 6px; text-align: right; width: 15%;">Đơn Giá</th>
+                            <th style="border: 1px solid #000; padding: 6px 6px; text-align: right; width: 15%;">Thành Tiền</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsRows}
+                    </tbody>
+                    <tfoot>
+                        <tr style="background-color: #f9fafb; font-weight: 900;">
+                            <td colspan="5" style="border: 1px solid #000; padding: 6px 8px; text-align: right; text-transform: uppercase;">TỔNG GIÁ TRỊ PHIẾU NHẬP:</td>
+                            <td style="border: 1px solid #000; padding: 6px 6px; text-align: right; font-family: monospace; font-size: 12px;">${displayMoney(totalVal)}đ</td>
+                        </tr>
+                        <tr style="background-color: #f9fafb;">
+                            <td colspan="5" style="border: 1px solid #000; padding: 5px 8px; text-align: right; color: #047857;">ĐÃ THANH TOÁN:</td>
+                            <td style="border: 1px solid #000; padding: 5px 6px; text-align: right; font-family: monospace; color: #047857;">${displayMoney(paidVal)}đ</td>
+                        </tr>
+                        <tr style="background-color: #f9fafb; font-weight: 900;">
+                            <td colspan="5" style="border: 1px solid #000; padding: 5px 8px; text-align: right; color: ${debtVal > 0 ? '#be123c' : '#555'};">CÔNG NỢ CÒN LẠI:</td>
+                            <td style="border: 1px solid #000; padding: 5px 6px; text-align: right; font-family: monospace; color: ${debtVal > 0 ? '#be123c' : '#555'};">${displayMoney(debtVal)}đ</td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <div style="display: flex; justify-content: space-between; margin-top: 30px; font-size: 12px; font-weight: bold; page-break-inside: avoid;">
+                    <div style="width: 30%; text-align: center;">
+                        <div>Người Giao Hàng</div>
+                        <div style="font-weight: normal; font-size: 10px; color: #666; margin-top: 2px;">(Ký & ghi rõ họ tên)</div>
+                        <div style="margin-top: 45px;">...........................</div>
+                    </div>
+                    <div style="width: 30%; text-align: center;">
+                        <div>Thủ Kho Nhận Hàng</div>
+                        <div style="font-weight: normal; font-size: 10px; color: #666; margin-top: 2px;">(Ký & ghi rõ họ tên)</div>
+                        <div style="margin-top: 45px;">${currentUser || 'Thủ kho'}</div>
+                    </div>
+                    <div style="width: 30%; text-align: center;">
+                        <div>Kế Toán / Duyệt Chi</div>
+                        <div style="font-weight: normal; font-size: 10px; color: #666; margin-top: 2px;">(Ký & ghi rõ họ tên)</div>
+                        <div style="margin-top: 45px;">...........................</div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const style = document.createElement('style');
+        style.innerHTML = `
+            @media print {
+                @page { size: A4 portrait; margin: 12mm auto; }
+                body > *:not(#print-section) { display: none !important; }
+                body { background: white !important; margin: 0 !important; padding: 0 !important; color: #000 !important; }
+                #print-section { display: block !important; width: 100% !important; }
+                table { page-break-inside: auto; width: 100% !important; }
+                tr { page-break-inside: avoid; page-break-after: auto; }
+                thead { display: table-header-group; }
+                * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            }
+        `;
+        document.head.appendChild(style);
+        const printDiv = document.createElement('div');
+        printDiv.id = 'print-section';
+        printDiv.innerHTML = printHtml;
+        document.body.appendChild(printDiv);
+        window.print();
+        document.body.removeChild(printDiv);
+        document.head.removeChild(style);
+    };
+
+    const handlePrintReceipt = (log, sup) => {
+        const printContent = `
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <title>In Phiếu Chi</title>
+                <style>
+                    @page { margin: 0; size: 58mm auto; }
+                    body { font-family: Arial, Helvetica, sans-serif; width: 58mm; margin: 0; padding: 12px 6px; font-size: 12px; font-weight: 500; color: #000; line-height: 1.4; box-sizing: border-box; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
+                    .text-center { text-align: center; }
+                    .text-right { text-align: right; }
+                    .bold { font-weight: 800; font-size: 13px; }
+                    .border-bottom { border-bottom: 1px dashed #000; margin: 8px 0; padding-bottom: 6px; }
+                    .title { font-size: 16px; font-weight: 900; margin-bottom: 4px; text-transform: uppercase; }
+                    .row { display: flex; justify-content: space-between; }
+                </style>
+            </head>
+            <body>
+                <div class="text-center bold title">RF AQUARIUM</div>
+                <div class="text-center" style="font-size: 10px;">Cá Cảnh & Phụ Kiện Thủy Sinh</div>
+                <div class="border-bottom"></div>
+                <div class="text-center bold" style="font-size: 15px; margin: 5px 0;">PHIẾU CHI TIỀN</div>
+                <div class="border-bottom"></div>
+                <div><span class="bold">Số phiếu:</span> ${log.id}</div>
+                <div><span class="bold">Ngày lập:</span> ${new Date().toLocaleString('vi-VN')}</div>
+                <div><span class="bold">Người nhận:</span> ${sup.name}</div>
+                <div class="border-bottom"></div>
+                <div class="bold">Lý do chi:</div>
+                <div style="font-size: 10px;">Thanh toán phiếu nhập hàng [${log.id}]. ${log.note || ''}</div>
+                <div class="border-bottom"></div>
+                <div class="row bold" style="font-size: 13px;">
+                    <span>TỔNG TIỀN:</span>
+                    <span>${Number(log.totalAmount).toLocaleString('vi-VN')}đ</span>
+                </div>
+                <div class="border-bottom"></div>
+                <div class="row" style="margin-top: 15px; font-size: 10px; font-weight: bold;">
+                    <div class="text-center" style="width: 50%;">Người Lập<br><br><br>Ký tên</div>
+                    <div class="text-center" style="width: 50%;">Người Nhận<br><br><br>Ký tên</div>
+                </div>
+                <div style="margin-top: 40px; text-align: center; font-size: 10px; border-top: 1px solid #000; padding-top: 5px;">
+                    Cảm ơn quý khách!
+                </div>
+            </body>
+            </html>
+        `;
+        const win = window.open('', '_blank');
+        win.document.write(printContent);
+        win.document.close();
+        win.focus();
+        setTimeout(() => {
+            win.print();
+            win.close();
+        }, 800);
+    };
+
+    return (
+        <div className="space-y-4 animate-fade-in pb-10 w-full relative">
+            
+            {/* 1. KHUNG THỐNG KÊ DASHBOARD CAO CẤP (ROYAL WORKBENCH DARK) */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5">
+                {/* THẺ 1: CÔNG NỢ CẦN TRẢ */}
+                <div className="bg-[#121215] p-3.5 sm:p-4 rounded-2xl border border-rose-500/20 shadow-sm relative overflow-hidden flex items-center justify-between group hover:border-rose-500/40 transition-all">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-rose-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-rose-500/10 transition-colors"></div>
+                    <div className="min-w-0">
+                        <span className="text-[9.5px] font-black text-rose-400 uppercase tracking-widest block mb-1">CÔNG NỢ CẦN TRẢ</span>
+                        <div className="text-[18px] sm:text-[22px] font-black text-rose-500 font-mono leading-none truncate">
+                            {displayMoney(stats.totalDebt)}<span className="text-[11px] font-sans font-bold text-rose-400/80 ml-0.5">đ</span>
+                        </div>
+                        {stats.totalAdvance > 0 && (
+                            <span className="text-[8.5px] font-bold text-sky-400 mt-1 block">
+                                (Đã ứng/thừa: {displayMoney(stats.totalAdvance)}đ)
+                            </span>
+                        )}
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center justify-center text-[15px] shrink-0 shadow-inner">
+                        <i className="fas fa-hand-holding-usd"></i>
+                    </div>
+                </div>
+
+                {/* THẺ 2: TỔNG NHÀ CUNG CẤP */}
+                <div className="bg-[#121215] p-3.5 sm:p-4 rounded-2xl border border-sky-500/20 shadow-sm relative overflow-hidden flex items-center justify-between group hover:border-sky-500/40 transition-all">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-sky-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-sky-500/10 transition-colors"></div>
+                    <div className="min-w-0">
+                        <span className="text-[9.5px] font-black text-sky-400 uppercase tracking-widest block mb-1">TỔNG ĐỐI TÁC NCC</span>
+                        <div className="text-[18px] sm:text-[22px] font-black text-sky-400 font-mono leading-none truncate">
+                            {stats.totalPartners} <span className="text-[11px] font-sans font-bold text-zinc-500">nhà CC</span>
+                        </div>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20 flex items-center justify-center text-[15px] shrink-0 shadow-inner">
+                        <i className="fas fa-user-tie"></i>
+                    </div>
+                </div>
+
+                {/* THẺ 3: ĐƠN CHƯA CHI TRẢ */}
+                <div className="bg-[#121215] p-3.5 sm:p-4 rounded-2xl border border-amber-500/20 shadow-sm relative overflow-hidden flex items-center justify-between group hover:border-amber-500/40 transition-all">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-amber-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-amber-500/10 transition-colors"></div>
+                    <div className="min-w-0">
+                        <span className="text-[9.5px] font-black text-amber-400 uppercase tracking-widest block mb-1">PHIẾU CHỜ CHI TRẢ</span>
+                        <div className="text-[18px] sm:text-[22px] font-black text-amber-500 font-mono leading-none truncate">
+                            {stats.unpaidBills} <span className="text-[11px] font-sans font-bold text-zinc-500">phiếu nợ</span>
+                        </div>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center text-[15px] shrink-0 shadow-inner">
+                        <i className="fas fa-file-invoice-dollar"></i>
+                    </div>
+                </div>
+
+                {/* THẺ 4: ĐÃ CHI THÁNG NÀY */}
+                <div className="bg-[#121215] p-3.5 sm:p-4 rounded-2xl border border-emerald-500/20 shadow-sm relative overflow-hidden flex items-center justify-between group hover:border-emerald-500/40 transition-all">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 rounded-full blur-xl pointer-events-none group-hover:bg-emerald-500/10 transition-colors"></div>
+                    <div className="min-w-0">
+                        <span className="text-[9.5px] font-black text-emerald-400 uppercase tracking-widest block mb-1">ĐÃ CHI THÁNG NÀY</span>
+                        <div className="text-[18px] sm:text-[22px] font-black text-emerald-400 font-mono leading-none truncate">
+                            {displayMoney(stats.paidThisMonth)}<span className="text-[11px] font-sans font-bold text-emerald-400/80 ml-0.5">đ</span>
+                        </div>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center text-[15px] shrink-0 shadow-inner">
+                        <i className="fas fa-wallet"></i>
+                    </div>
+                </div>
+            </div>
+
+            {/* 2. THANH CÔNG CỤ TÌM KIẾM & BỘ LỌC ĐA TẦNG */}
+            <div className="bg-[#121215] border border-white/[0.08] p-3 sm:p-4 rounded-2xl shadow-sm space-y-3">
+                {/* HÀNG TRÊN: TAB LỌC CÔNG NỢ & NÚT HÀNH ĐỘNG */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    {/* BỘ LỌC CÔNG NỢ */}
+                    <div className="bg-[#09090b] rounded-xl border border-white/[0.08] p-1 flex flex-wrap gap-1">
+                        <button 
+                            onClick={() => setDebtFilter('ALL')} 
+                            className={`px-3.5 py-1.5 text-[10.5px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${debtFilter === 'ALL' ? 'bg-[#d4af37] text-zinc-950 shadow-sm' : 'text-zinc-400 hover:text-zinc-100'}`}
+                        >
+                            TẤT CẢ ({suppliers.length})
+                        </button>
+                        <button 
+                            onClick={() => setDebtFilter('DEBT')} 
+                            className={`px-3.5 py-1.5 text-[10.5px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${debtFilter === 'DEBT' ? 'bg-rose-600 text-white shadow-md shadow-rose-950/40' : 'text-zinc-400 hover:text-rose-400'}`}
+                        >
+                            <i className="fas fa-exclamation-circle text-[9.5px]"></i> CÓ NỢ ({suppliers.filter(s => Number(s.totalDebt || 0) > 0).length})
+                        </button>
+                        <button 
+                            onClick={() => setDebtFilter('NO_DEBT')} 
+                            className={`px-3.5 py-1.5 text-[10.5px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${debtFilter === 'NO_DEBT' ? 'bg-zinc-800 text-zinc-100 border border-white/10' : 'text-zinc-400 hover:text-zinc-100'}`}
+                        >
+                            HẾT NỢ ({suppliers.filter(s => Number(s.totalDebt || 0) === 0).length})
+                        </button>
+                        <button 
+                            onClick={() => setDebtFilter('ADVANCE')} 
+                            className={`px-3.5 py-1.5 text-[10.5px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer ${debtFilter === 'ADVANCE' ? 'bg-sky-500/20 text-sky-400 border border-sky-500/40 shadow-sm' : 'text-zinc-400 hover:text-sky-400'}`}
+                        >
+                            TRẢ THỪA ({suppliers.filter(s => Number(s.totalDebt || 0) < 0).length})
+                        </button>
+                    </div>
+
+                    {/* TÌM KIẾM & NÚT IN / THÊM NCC */}
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                        <div className="relative flex-1 sm:w-64 min-w-[200px]">
+                            <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-[11px]"></i>
+                            <input 
+                                type="text" 
+                                placeholder="Tìm theo tên, SĐT, ghi chú..." 
+                                value={searchTerm} 
+                                onChange={e => setSearchTerm(e.target.value)} 
+                                className="w-full bg-[#09090b] border border-white/[0.08] rounded-xl pl-9 pr-8 py-2 text-[12px] font-semibold text-zinc-100 outline-none focus:border-[#d4af37] shadow-inner transition-colors" 
+                            />
+                            {searchTerm && (
+                                <button onClick={() => setSearchTerm('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 text-xs cursor-pointer">
+                                    <i className="fas fa-times-circle"></i>
+                                </button>
+                            )}
+                        </div>
+
+                        <button 
+                            onClick={handlePrintAllImportsReport} 
+                            className="px-3.5 py-2 bg-emerald-500/15 hover:bg-emerald-500 hover:text-zinc-950 text-emerald-400 border border-emerald-500/30 font-black text-[10.5px] tracking-wider rounded-xl transition-all shadow-sm active:scale-95 whitespace-nowrap uppercase flex items-center gap-1.5 cursor-pointer"
+                            title="In Báo Cáo Tổng Hợp Nhập Hàng & Công Nợ Toàn Hệ Thống (Khổ A4 Dọc)"
+                        >
+                            <i className="fas fa-print"></i> In Báo Cáo
+                        </button>
+
+                        {canAddSup && (
+                            <button 
+                                onClick={() => { 
+                                    setNewSup({ id: null, name: '', phone: '', category: 'HÀNG HOÁ', note: '', totalDebt: 0 }); 
+                                    setShowAddModal(true); 
+                                }} 
+                                className="px-4 py-2 bg-[#d4af37] hover:bg-[#e5c158] text-zinc-950 font-black text-[10.5px] tracking-wider rounded-xl transition-all shadow-[0_0_15px_rgba(212,175,55,0.25)] active:scale-95 whitespace-nowrap uppercase flex items-center gap-1.5 cursor-pointer"
+                            >
+                                <i className="fas fa-plus"></i> Thêm NCC
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {/* HÀNG DƯỚI: PILLS PHÂN LOẠI DANH MỤC NCC */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar text-[11px]">
+                    <button 
+                        onClick={() => setSelectedCategory('ALL')} 
+                        className={`px-3 py-1.5 rounded-lg font-bold transition-all whitespace-nowrap cursor-pointer ${selectedCategory === 'ALL' ? 'bg-white/10 text-zinc-100 border border-white/20' : 'text-zinc-400 hover:text-zinc-200 bg-[#09090b] border border-white/[0.04]'}`}
+                    >
+                        Tất Cả Phân Loại
+                    </button>
+                    {CATEGORIES.map(cat => {
+                        const count = suppliers.filter(s => (CATEGORIES.includes(s.category) ? s.category : 'KHÁC') === cat).length;
+                        return (
+                            <button 
+                                key={cat}
+                                onClick={() => setSelectedCategory(cat)} 
+                                className={`px-3 py-1.5 rounded-lg font-bold transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${selectedCategory === cat ? 'bg-[#d4af37]/20 text-[#d4af37] border border-[#d4af37]/40 shadow-sm' : 'text-zinc-400 hover:text-zinc-200 bg-[#09090b] border border-white/[0.04]'}`}
+                            >
+                                {cat}
+                                <span className="text-[9px] bg-white/[0.06] px-1.5 py-0.2 rounded font-mono">{count}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* 3. DANH SÁCH NHÀ CUNG CẤP (HIỂN THỊ THEO NHÓM) */}
+            {filteredSuppliers.length === 0 ? (
+                <div className="bg-[#121215] border border-white/[0.08] rounded-2xl p-12 text-center text-zinc-500 space-y-3">
+                    <div className="w-14 h-14 mx-auto rounded-full bg-white/[0.02] border border-white/[0.06] flex items-center justify-center text-2xl text-zinc-600">
+                        <i className="fas fa-handshake-slash"></i>
+                    </div>
+                    <div className="font-bold text-[14px] text-zinc-300">Không tìm thấy nhà cung cấp phù hợp</div>
+                    <div className="text-[12px] text-zinc-500 max-w-sm mx-auto">
+                        Vui lòng kiểm tra lại từ khóa tìm kiếm hoặc điều chỉnh bộ lọc công nợ / phân loại.
+                    </div>
+                </div>
+            ) : (
+                <div className="space-y-6">
+                    {CATEGORIES.map(category => {
+                        const groupData = groupedSuppliers[category] || [];
+                        if (groupData.length === 0) return null;
+
+                        return (
+                            <div key={category} className="space-y-2.5 animate-fade-in">
+                                <div className="flex items-center gap-2 pl-1">
+                                    <div className="w-2 h-2 rounded-full bg-[#d4af37] shadow-[0_0_8px_rgba(212,175,55,0.8)]"></div>
+                                    <span className="font-black text-[11px] text-zinc-300 uppercase tracking-widest">{category}</span>
+                                    <span className="text-[9px] text-zinc-500 font-bold bg-[#121215] px-2 py-0.5 rounded-full border border-white/[0.08]">
+                                        {groupData.length} đối tác
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-2.5">
+                                    {groupData.map(sup => {
+                                        const isExpanded = expandedIds[sup.id];
+                                        const importHistory = getImportHistory(sup.name);
+                                        const hasDebt = Number(sup.totalDebt || 0) > 0;
+                                        const isAdvance = Number(sup.totalDebt || 0) < 0;
+
+                                        // Lấy số phiếu chưa thanh toán của nhà cung cấp này
+                                        const pendingBillsCount = importHistory.filter(h => !h.isPaid && Number(h.totalAmount || 0) > 0).length;
+
+                                        // Lọc lịch sử trong card
+                                        const currentHistoryFilter = historyFilters[sup.id] || 'ALL';
+                                        const displayHistory = currentHistoryFilter === 'UNPAID' 
+                                            ? importHistory.filter(log => !log.isPaid && Number(log.totalAmount || 0) > 0)
+                                            : importHistory;
+
+                                        return (
+                                            <div key={sup.id} className="bg-[#121215] rounded-2xl border border-white/[0.08] shadow-sm hover:border-white/[0.18] transition-all overflow-hidden flex flex-col group/card">
+                                                
+                                                {/* CARD HEADER CLICKABLE */}
+                                                <div 
+                                                    onClick={() => toggleExpand(sup.id)} 
+                                                    className="p-3.5 sm:p-4 flex items-center justify-between cursor-pointer select-none group"
+                                                >
+                                                    <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                                                        {/* Avatar Icon */}
+                                                        <div className="w-11 h-11 rounded-xl bg-[#09090b] border border-white/[0.08] flex items-center justify-center text-[16px] shadow-inner transition-transform group-hover:scale-105 shrink-0">
+                                                            {getSupplierIcon(sup.category)}
+                                                        </div>
+
+                                                        {/* Info column */}
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="font-bold text-[14px] text-zinc-100 leading-tight mb-1 truncate group-hover:text-[#d4af37] transition-colors">
+                                                                {sup.name}
+                                                            </div>
+                                                            <div className="text-[10px] text-zinc-500 font-medium flex flex-wrap items-center gap-1.5">
+                                                                {sup.phone ? (
+                                                                    <a 
+                                                                        href={`tel:${sup.phone}`} 
+                                                                        onClick={e => e.stopPropagation()} 
+                                                                        className="text-zinc-400 hover:text-emerald-400 flex items-center gap-1 bg-[#09090b] px-1.5 py-0.5 rounded border border-white/[0.06] transition-colors font-mono"
+                                                                    >
+                                                                        <i className="fas fa-phone-alt text-[8.5px]"></i> {sup.phone}
+                                                                    </a>
+                                                                ) : (
+                                                                    <span className="text-zinc-600 italic">Chưa có SĐT</span>
+                                                                )}
+                                                                
+                                                                {sup.note && (
+                                                                    <span className="text-zinc-400 bg-[#09090b] px-1.5 py-0.5 rounded border border-white/[0.06] line-clamp-1 max-w-[200px]" title={sup.note}>
+                                                                        <i className="fas fa-info-circle text-[8.5px] mr-1 text-zinc-500"></i>{sup.note}
+                                                                    </span>
+                                                                )}
+
+                                                                {pendingBillsCount > 0 && (
+                                                                    <span className="text-[8.5px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded-full">
+                                                                        {pendingBillsCount} phiếu nợ
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {/* Right Side: Debt Value & Actions */}
+                                                    <div className="flex items-center gap-2.5 shrink-0">
+                                                        <div className="text-right">
+                                                            <div className="text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-0.5">CÔNG NỢ</div>
+                                                            {(() => {
+                                                                const debtVal = Number(sup.totalDebt || 0);
+                                                                if (debtVal > 0) {
+                                                                    return (
+                                                                        <div className="text-[15px] font-black leading-none text-rose-400 font-mono" title="Nợ cần chi trả">
+                                                                            {displayMoney(debtVal)}<span className="text-[10px] font-sans ml-0.5">đ</span>
+                                                                        </div>
+                                                                    );
+                                                                } else if (debtVal < 0) {
+                                                                    return (
+                                                                        <div className="flex flex-col items-end">
+                                                                            <div className="text-[14px] font-black leading-none text-sky-400 font-mono" title="Đã trả thừa / ứng trước">
+                                                                                {displayMoney(Math.abs(debtVal))}đ
+                                                                            </div>
+                                                                            <span className="text-[7.5px] font-bold bg-sky-500/15 text-sky-400 border border-sky-500/30 px-1 py-0.2 rounded mt-0.5 uppercase">Đã trả thừa</span>
+                                                                        </div>
+                                                                    );
+                                                                } else {
+                                                                    return (
+                                                                        <div className="text-[14px] font-black leading-none text-zinc-500 font-mono" title="Hết công nợ">
+                                                                            0đ
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                            })()}
+                                                        </div>
+
+                                                        {/* NÚT ĐỐI SOÁT BANK N:1 */}
+                                                        {canManageDebt && hasDebt && (
+                                                            <button 
+                                                                onClick={(e) => { 
+                                                                    e.stopPropagation(); 
+                                                                    setReconcileSupplier(sup); 
+                                                                    setReconSelectedTxId(''); 
+                                                                    setReconSelectedImportIds([]); 
+                                                                }} 
+                                                                className="h-8 px-2.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-zinc-950 transition-all flex items-center justify-center font-bold text-[10px] gap-1.5 active:scale-95 cursor-pointer shadow-sm" 
+                                                                title="Đối soát qua Bank"
+                                                            >
+                                                                <i className="fas fa-link text-[10px]"></i> Đối Soát
+                                                            </button>
+                                                        )}
+
+                                                        {/* NÚT SỬA */}
+                                                        {canEditSup && (
+                                                            <button 
+                                                                onClick={(e) => { 
+                                                                    e.stopPropagation(); 
+                                                                    setNewSup({ 
+                                                                        id: sup.id, 
+                                                                        name: sup.name, 
+                                                                        phone: sup.phone || '', 
+                                                                        category: sup.category || 'HÀNG HOÁ', 
+                                                                        note: sup.note || '', 
+                                                                        totalDebt: Number(sup.totalDebt || 0) 
+                                                                    }); 
+                                                                    setShowAddModal(true); 
+                                                                }} 
+                                                                className="w-8 h-8 rounded-xl bg-[#09090b] border border-white/[0.08] text-zinc-400 hover:text-[#d4af37] hover:border-[#d4af37]/30 transition-all flex items-center justify-center active:scale-95 cursor-pointer" 
+                                                                title="Sửa thông tin nhà cung cấp"
+                                                            >
+                                                                <i className="fas fa-edit text-[11px]"></i>
+                                                            </button>
+                                                        )}
+
+                                                        {/* NÚT XÓA KHI KHÔNG CÒN NỢ */}
+                                                        {canDeleteSup && !hasDebt && (
+                                                            <button 
+                                                                onClick={(e) => { 
+                                                                    e.stopPropagation(); 
+                                                                    handleDeleteSup(sup); 
+                                                                }} 
+                                                                className="w-8 h-8 rounded-xl bg-[#09090b] border border-white/[0.08] text-zinc-500 hover:text-rose-400 hover:border-rose-500/30 transition-all flex items-center justify-center active:scale-95 cursor-pointer" 
+                                                                title="Xoá nhà cung cấp"
+                                                            >
+                                                                <i className="fas fa-trash text-[11px]"></i>
+                                                            </button>
+                                                        )}
+
+                                                        {/* Chevron */}
+                                                        <div className={`w-8 h-8 flex items-center justify-center rounded-xl transition-colors ${isExpanded ? 'bg-[#d4af37] text-zinc-950 font-bold' : 'bg-[#09090b] text-zinc-400 group-hover:text-zinc-200'}`}>
+                                                            <i className={`fas fa-chevron-${isExpanded ? 'up' : 'down'} text-[10px]`}></i>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* KHU VỰC CHI TIẾT KHI MỞ RỘNG CARD */}
+                                                {isExpanded && (
+                                                    <div className="bg-[#09090b] border-t border-white/[0.08] p-3.5 sm:p-4 space-y-3 shadow-inner animate-fade-in">
+                                                        <div className="flex items-center justify-between border-b border-white/[0.06] pb-2.5 mb-1 flex-wrap gap-2">
+                                                            <div className="text-[10px] font-black text-[#d4af37] uppercase tracking-widest flex items-center gap-1.5">
+                                                                <i className="fas fa-history"></i> Lịch Sử Phiếu Nhập Hàng
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2">
+                                                                {importHistory.length > 0 && (
+                                                                    <button
+                                                                        onClick={(e) => { 
+                                                                            e.stopPropagation(); 
+                                                                            handlePrintSupplierImportReport(sup, displayHistory); 
+                                                                        }}
+                                                                        className="px-2.5 py-1 bg-emerald-500/15 hover:bg-emerald-500 hover:text-zinc-950 text-emerald-400 border border-emerald-500/30 rounded-lg text-[8.5px] font-black uppercase transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+                                                                        title={`In Báo Cáo Lịch Sử Nhập Hàng Của ${sup.name} (Khổ A4)`}
+                                                                    >
+                                                                        <i className="fas fa-print text-[8.5px]"></i> In Báo Cáo NCC
+                                                                    </button>
+                                                                )}
+
+                                                                {/* SUB-FILTER LỊCH SỬ KHO */}
+                                                                {importHistory.length > 0 && (
+                                                                    <div className="flex bg-[#121215] rounded-lg border border-white/[0.08] p-0.5">
+                                                                        <button 
+                                                                            onClick={() => toggleHistoryFilter(sup.id, 'ALL')} 
+                                                                            className={`px-2.5 py-1 text-[8px] font-black uppercase tracking-wider rounded transition-all cursor-pointer ${currentHistoryFilter === 'ALL' ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                                                        >
+                                                                            TẤT CẢ ({importHistory.length})
+                                                                        </button>
+                                                                        <button 
+                                                                            onClick={() => toggleHistoryFilter(sup.id, 'UNPAID')} 
+                                                                            className={`px-2.5 py-1 text-[8px] font-black uppercase tracking-wider rounded transition-all cursor-pointer ${currentHistoryFilter === 'UNPAID' ? 'bg-rose-500/20 text-rose-400 font-bold' : 'text-zinc-500 hover:text-rose-400'}`}
+                                                                        >
+                                                                            CHƯA TRẢ ({pendingBillsCount})
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        {displayHistory.length === 0 ? (
+                                                            <div className="text-center py-6 text-zinc-600 italic text-[11px] font-medium bg-[#121215] rounded-xl border border-white/[0.04]">
+                                                                {currentHistoryFilter === 'UNPAID' ? 'Không có đơn nhập nào chưa thanh toán.' : 'Chưa có lịch sử nhập hàng nào.'}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="max-h-[340px] overflow-y-auto custom-scrollbar pr-1 space-y-2">
+                                                                {displayHistory.map(log => {
+                                                                    const totalVal = Number(log.totalAmount || 0);
+                                                                    const paidVal = Number(log.paidAmount || (log.isPaid ? totalVal : 0));
+                                                                    const isPartial = paidVal > 0 && !log.isPaid && paidVal < totalVal;
+                                                                    const isNeedPayment = !log.isPaid && totalVal > 0;
+
+                                                                    return (
+                                                                        <div key={log.id} className="bg-[#121215] p-3 rounded-xl border border-white/[0.06] hover:border-white/[0.14] transition-colors flex flex-col group relative">
+                                                                            <div className="flex justify-between items-start mb-2">
+                                                                                <div>
+                                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                                        <span className="font-bold text-[11px] text-zinc-200 font-mono tracking-wide">{log.id}</span>
+                                                                                        <span className="text-[8.5px] text-zinc-500 bg-[#09090b] border border-white/[0.06] px-1.5 py-0.5 rounded font-mono">
+                                                                                            {String(log.date || '').slice(0, 16).replace('T', ' ')}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <div className="text-[10px] text-zinc-400 font-medium line-clamp-1">{log.note || 'Không có ghi chú'}</div>
+                                                                                </div>
+                                                                                <div className="flex flex-col items-end shrink-0 pl-3">
+                                                                                    <span className="font-mono font-black text-[13px] text-zinc-100 tracking-tight mb-1">
+                                                                                        {displayMoney(log.totalAmount)}<span className="text-[9px] text-zinc-500 ml-0.5">đ</span>
+                                                                                    </span>
+                                                                                    {isPartial ? (
+                                                                                        <div className="flex flex-col items-end">
+                                                                                            <span className="text-[7.5px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 px-1.5 py-0.2 rounded shadow-sm">TRẢ 1 PHẦN</span>
+                                                                                            <span className="text-[8.5px] text-amber-400/80 font-mono mt-0.5">Nợ lại: {displayMoney(totalVal - paidVal)}đ</span>
+                                                                                        </div>
+                                                                                    ) : isNeedPayment ? (
+                                                                                        <span className="text-[7.5px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 px-1.5 py-0.2 rounded shadow-sm">CHƯA TRẢ</span>
+                                                                                    ) : (
+                                                                                        <span className="text-[7.5px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.2 rounded shadow-sm">HOÀN TẤT</span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className="mt-1 pt-2 border-t border-white/[0.04] flex justify-end gap-1.5 flex-wrap">
+                                                                                <button 
+                                                                                    onClick={(e) => { e.stopPropagation(); handlePrintGoodsReceiptNote(log, sup); }} 
+                                                                                    className="px-2.5 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] rounded-lg text-[9px] font-bold transition-all flex items-center gap-1 cursor-pointer" 
+                                                                                    title="In phiếu nhập kho A4"
+                                                                                >
+                                                                                    <i className="fas fa-file-invoice text-[8.5px]"></i> In phiếu nhập
+                                                                                </button>
+                                                                                
+                                                                                {isNeedPayment ? (
+                                                                                    <React.Fragment>
+                                                                                        <button 
+                                                                                            onClick={(e) => { e.stopPropagation(); openEditModal(log); }} 
+                                                                                            className="px-2.5 py-1 bg-[#121215] hover:bg-amber-500/20 text-zinc-400 hover:text-amber-400 border border-white/[0.08] hover:border-amber-500/30 rounded-lg text-[9px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                                                                                        >
+                                                                                            <i className="fas fa-pen text-[8px]"></i> Sửa
+                                                                                        </button>
+                                                                                        
+                                                                                        {isAdmin && (
+                                                                                            <button 
+                                                                                                onClick={(e) => { e.stopPropagation(); handleDeleteTicket(log, sup); }} 
+                                                                                                className="px-2.5 py-1 bg-[#121215] hover:bg-rose-500/20 text-zinc-400 hover:text-rose-400 border border-white/[0.08] hover:border-rose-500/30 rounded-lg text-[9px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                                                                                            >
+                                                                                                <i className="fas fa-trash text-[8px]"></i> Xoá
+                                                                                            </button>
+                                                                                        )}
+
+                                                                                        <button 
+                                                                                            onClick={(e) => { e.stopPropagation(); openPaymentModal(log, sup); }} 
+                                                                                            className="px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500 text-emerald-400 hover:text-zinc-950 border border-emerald-500/40 rounded-lg text-[9px] font-black transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+                                                                                        >
+                                                                                            <i className="fas fa-money-bill-wave text-[8.5px]"></i> Chi trả ngay
+                                                                                        </button>
+                                                                                    </React.Fragment>
+                                                                                ) : (
+                                                                                    <React.Fragment>
+                                                                                        {isAdmin && (
+                                                                                            <button 
+                                                                                                onClick={(e) => { e.stopPropagation(); handleDeleteTicket(log, sup); }} 
+                                                                                                className="px-2.5 py-1 bg-[#121215] hover:bg-rose-500/20 text-zinc-400 hover:text-rose-400 border border-white/[0.08] hover:border-rose-500/30 rounded-lg text-[9px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                                                                                            >
+                                                                                                <i className="fas fa-trash text-[8px]"></i> Xoá
+                                                                                            </button>
+                                                                                        )}
+                                                                                        <button 
+                                                                                            onClick={(e) => { e.stopPropagation(); handlePrintReceipt(log, sup); }} 
+                                                                                            className="px-2.5 py-1 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 border border-sky-500/30 rounded-lg text-[9px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                                                                                        >
+                                                                                            <i className="fas fa-print text-[8.5px]"></i> In phiếu chi
+                                                                                        </button>
+                                                                                    </React.Fragment>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* 4. MODAL THÊM / SỬA NHÀ CUNG CẤP */}
+            {showAddModal && (
+                <div className="fixed inset-0 bg-black/80 z-[300] flex items-center justify-center p-4 backdrop-blur-md animate-fade-in" onClick={() => setShowAddModal(false)}>
+                    <div className="bg-[#121215] w-full max-w-md rounded-2xl p-5 border border-white/[0.12] shadow-2xl flex flex-col relative overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-4 border-b border-white/[0.08] pb-3">
+                            <h3 className="font-black text-[#d4af37] text-[15px] uppercase tracking-wider flex items-center gap-2">
+                                <i className="fas fa-user-tie"></i> {newSup.id ? 'Sửa nhà cung cấp' : 'Thêm nhà cung cấp mới'}
+                            </h3>
+                            <button onClick={() => setShowAddModal(false)} disabled={isSaving} className="w-8 h-8 bg-[#09090b] rounded-full text-zinc-400 hover:text-rose-400 border border-white/[0.08] transition-colors flex items-center justify-center cursor-pointer">
+                                <i className="fas fa-times text-xs"></i>
+                            </button>
+                        </div>
+                        <div className="space-y-3.5">
+                            <div>
+                                <label className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">TÊN NHÀ CUNG CẤP (*)</label>
+                                <input 
+                                    type="text" 
+                                    value={newSup.name} 
+                                    onChange={e => setNewSup({ ...newSup, name: e.target.value })} 
+                                    disabled={isSaving} 
+                                    className="w-full bg-[#09090b] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-[12px] text-zinc-100 font-bold outline-none focus:border-[#d4af37]" 
+                                    placeholder="VD: Cty Kính Việt Nhật, Đại lý Lũa Đá..." 
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">SỐ ĐIỆN THOẠI</label>
+                                <input 
+                                    type="text" 
+                                    value={newSup.phone} 
+                                    onChange={e => setNewSup({ ...newSup, phone: e.target.value })} 
+                                    disabled={isSaving} 
+                                    className="w-full bg-[#09090b] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-[12px] text-zinc-100 font-mono outline-none focus:border-[#d4af37]" 
+                                    placeholder="VD: 0988xxxxxx" 
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">PHÂN LOẠI NHÓM ĐỐI TÁC</label>
+                                <select 
+                                    disabled={isSaving} 
+                                    value={newSup.category} 
+                                    onChange={e => setNewSup({ ...newSup, category: e.target.value })} 
+                                    className="w-full bg-[#09090b] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-[12px] text-[#d4af37] font-bold outline-none focus:border-[#d4af37] cursor-pointer"
+                                >
+                                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">GHI CHÚ / ĐỊA CHỈ</label>
+                                <textarea 
+                                    rows="2" 
+                                    value={newSup.note} 
+                                    onChange={e => setNewSup({ ...newSup, note: e.target.value })} 
+                                    disabled={isSaving} 
+                                    className="w-full bg-[#09090b] border border-white/[0.08] rounded-xl px-3.5 py-2 text-[12px] text-zinc-200 outline-none focus:border-[#d4af37] shadow-inner" 
+                                    placeholder="Ghi chú địa chỉ kho, tài khoản ngân hàng, liên hệ..."
+                                ></textarea>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-zinc-400 uppercase block mb-1 flex items-center justify-between">
+                                    <span>CÔNG NỢ ĐIỀU CHỈNH BAN ĐẦU</span>
+                                    <span className="text-[9px] text-[#d4af37] font-mono font-bold">VNĐ</span>
+                                </label>
+                                <input 
+                                    type="number" 
+                                    value={newSup.totalDebt ?? 0} 
+                                    onChange={e => setNewSup({ ...newSup, totalDebt: e.target.value })} 
+                                    disabled={isSaving} 
+                                    className="w-full bg-[#09090b] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-[13px] text-amber-400 font-mono font-bold outline-none focus:border-[#d4af37]" 
+                                    placeholder="0" 
+                                />
+                                <div className="text-[9px] text-zinc-500 mt-1 italic leading-tight">
+                                    • Số dương (vd: 500000) = Ta nợ nhà cung cấp.<br/>
+                                    • Số âm (vd: -250000) = Ta đã trả thừa/đang ứng trước tiền hàng.
+                                </div>
+                            </div>
+                        </div>
+                        <div className="pt-4 mt-3 border-t border-white/[0.08]">
+                            <button 
+                                onClick={handleSaveSup} 
+                                disabled={isSaving} 
+                                className="w-full py-3 bg-[#d4af37] hover:bg-[#e5c158] text-zinc-950 font-black rounded-xl text-[12px] tracking-wider uppercase transition-all shadow-md flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
+                            >
+                                {isSaving ? <><i className="fas fa-circle-notch fa-spin"></i> Đang lưu...</> : <><i className="fas fa-save"></i> {newSup.id ? 'Cập nhật nhà cung cấp' : 'Tạo nhà cung cấp'}</>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 5. MODAL THANH TOÁN PHIẾU CHI */}
+            {payingLog && (
+                <div className="fixed inset-0 bg-black/80 z-[300] flex items-center justify-center p-4 backdrop-blur-md animate-fade-in" onClick={() => setPayingLog(null)}>
+                    <div className="bg-[#121215] w-full max-w-sm rounded-2xl p-5 border border-white/[0.12] shadow-2xl flex flex-col relative overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-4 border-b border-white/[0.08] pb-3">
+                            <h3 className="font-black text-emerald-400 text-[15px] uppercase tracking-wider flex items-center gap-2">
+                                <i className="fas fa-money-check-alt"></i> Xác nhận thanh toán
+                            </h3>
+                            <button onClick={() => setPayingLog(null)} disabled={isSaving} className="w-8 h-8 bg-[#09090b] rounded-full text-zinc-400 hover:text-rose-400 border border-white/[0.08] transition-colors flex items-center justify-center cursor-pointer">
+                                <i className="fas fa-times text-xs"></i>
+                            </button>
+                        </div>
+                        <div className="space-y-3.5">
+                            <div className="bg-[#09090b] p-3 rounded-xl border border-white/[0.06] text-[11px] space-y-1">
+                                <div className="text-zinc-500 font-bold">Mã phiếu nhập: <span className="text-zinc-300 font-mono">{payingLog.log.id}</span></div>
+                                <div className="text-zinc-500 font-bold">Nhà cung cấp: <span className="text-zinc-200 font-bold">{payingLog.sup.name}</span></div>
+                                <div className="text-zinc-500 font-bold">Tổng tiền phiếu: <span className="text-emerald-400 font-mono font-bold">{displayMoney(payingLog.log.totalAmount)}đ</span></div>
+                            </div>
+
+                            {/* 🛡️ CẢNH BÁO TRÙNG LẶP GIAO DỊCH NGÂN HÀNG */}
+                            {matchingRecentBankTx && (
+                                <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl space-y-2 animate-fade-in shadow-inner">
+                                    <div className="flex items-center gap-1.5 text-amber-300 font-black text-[11px] uppercase">
+                                        <i className="fas fa-exclamation-triangle text-amber-400 text-xs shrink-0"></i>
+                                        <span>CẢNH BÁO: ĐÃ CÓ GIAO DỊCH BANK ({displayMoney(matchingRecentBankTx.amount)}đ)!</span>
+                                    </div>
+                                    <div className="text-[10px] text-amber-200/90 leading-relaxed">
+                                        Trong 48h qua hệ thống đã ghi nhận phiếu chi ngân hàng khớp số tiền: <b>{matchingRecentBankTx.title || matchingRecentBankTx.note || 'Sao kê chuyển khoản'}</b>.
+                                    </div>
+                                    <div className="pt-1 flex items-center justify-between gap-2">
+                                        <span className="text-[9px] text-amber-400/80 italic">Tránh tạo phiếu chi mới gây trừ 2 lần tiền:</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const sup = payingLog.sup;
+                                                const logId = payingLog.log.id;
+                                                setPayingLog(null);
+                                                setReconcileSupplier(sup);
+                                                setReconSelectedTxId(matchingRecentBankTx.id);
+                                                setReconSelectedImportIds([logId]);
+                                            }}
+                                            className="px-2.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-black text-[9.5px] uppercase rounded-lg shadow-sm transition-all cursor-pointer active:scale-95 shrink-0 flex items-center gap-1"
+                                        >
+                                            <i className="fas fa-shield-alt"></i> Sang Đối Soát Bank N:1
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">SỐ TIỀN THANH TOÁN (VNĐ)</label>
+                                <input 
+                                    type="number" 
+                                    value={payAmount} 
+                                    onChange={e => setPayAmount(e.target.value)} 
+                                    disabled={isSaving} 
+                                    className="w-full bg-[#09090b] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-[16px] text-emerald-400 font-mono font-black outline-none focus:border-emerald-500 text-right shadow-inner" 
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">CHỌN QUỸ TIỀN TRỪ</label>
+                                <select 
+                                    disabled={isSaving} 
+                                    value={payAccId} 
+                                    onChange={e => setPayAccId(e.target.value)} 
+                                    className="w-full bg-[#09090b] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-[12px] text-zinc-100 font-bold outline-none focus:border-emerald-500 cursor-pointer shadow-inner"
+                                >
+                                    <option value="">-- Chọn quỹ thanh toán --</option>
+                                    {(data?.Accounts || []).map(a => (
+                                        <option key={a.id} value={a.id}>{a.accountName} (Sẵn có: {displayMoney(a.balance)}đ)</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        <div className="pt-4 mt-3 border-t border-white/[0.08]">
+                            <button 
+                                onClick={handleConfirmPayment} 
+                                disabled={isSaving} 
+                                className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black rounded-xl text-[12px] tracking-wider uppercase transition-all shadow-md flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
+                            >
+                                {isSaving ? <><i className="fas fa-circle-notch fa-spin"></i> Đang chi tiền...</> : <><i className="fas fa-check"></i> Xác nhận chi tiền</>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 6. MODAL SỬA PHIẾU NHẬP */}
+            {editingLog && (
+                <div className="fixed inset-0 bg-black/80 z-[300] flex items-center justify-center p-4 backdrop-blur-md animate-fade-in" onClick={() => setEditingLog(null)}>
+                    <div className="bg-[#121215] w-full max-w-sm rounded-2xl p-5 border border-white/[0.12] shadow-2xl flex flex-col relative overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-4 border-b border-white/[0.08] pb-3">
+                            <h3 className="font-black text-amber-400 text-[15px] uppercase tracking-wider flex items-center gap-2">
+                                <i className="fas fa-pen"></i> Chỉnh sửa phiếu nhập
+                            </h3>
+                            <button onClick={() => setEditingLog(null)} disabled={isSaving} className="w-8 h-8 bg-[#09090b] rounded-full text-zinc-400 hover:text-rose-400 border border-white/[0.08] transition-colors flex items-center justify-center cursor-pointer">
+                                <i className="fas fa-times text-xs"></i>
+                            </button>
+                        </div>
+                        <div className="space-y-3.5">
+                            <div>
+                                <label className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">MÃ PHIẾU NHẬP</label>
+                                <input type="text" value={editingLog.id} disabled className="w-full bg-[#09090b] border border-white/[0.06] rounded-xl px-3.5 py-2 text-[12px] text-zinc-400 font-mono" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">TỔNG TIỀN PHIẾU (VNĐ)</label>
+                                <input 
+                                    type="number" 
+                                    value={editTotal} 
+                                    onChange={e => setEditTotal(e.target.value)} 
+                                    disabled={isSaving} 
+                                    className="w-full bg-[#09090b] border border-white/[0.08] rounded-xl px-3.5 py-2.5 text-[15px] text-amber-400 font-mono font-bold outline-none focus:border-amber-500" 
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-zinc-400 uppercase block mb-1">GHI CHÚ PHIẾU</label>
+                                <textarea 
+                                    rows="3" 
+                                    value={editNote} 
+                                    onChange={e => setEditNote(e.target.value)} 
+                                    disabled={isSaving} 
+                                    className="w-full bg-[#09090b] border border-white/[0.08] rounded-xl px-3.5 py-2 text-[12px] text-zinc-200 outline-none focus:border-amber-500 shadow-inner" 
+                                    placeholder="Nội dung ghi chú..."
+                                ></textarea>
+                            </div>
+                        </div>
+                        <div className="pt-4 mt-3 border-t border-white/[0.08]">
+                            <button 
+                                onClick={handleConfirmEdit} 
+                                disabled={isSaving} 
+                                className="w-full py-3 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black rounded-xl text-[12px] tracking-wider uppercase transition-all shadow-md flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
+                            >
+                                {isSaving ? <><i className="fas fa-circle-notch fa-spin"></i> Đang lưu...</> : <><i className="fas fa-save"></i> Cập nhật phiếu nhập</>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 7. MODAL ĐỐI SOÁT BANK N:1 */}
+            {reconcileSupplier && (
+                <div className="fixed inset-0 bg-black/85 z-[300] flex items-center justify-center p-4 backdrop-blur-md animate-fade-in" onClick={() => setReconcileSupplier(null)}>
+                    <div className="bg-[#121215] w-full max-w-2xl rounded-2xl p-5 border border-emerald-500/30 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden relative animate-slide-up" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-3 border-b border-white/[0.08] pb-3">
+                            <div>
+                                <h3 className="font-black text-emerald-400 text-[16px] uppercase tracking-wider flex items-center gap-2">
+                                    <i className="fas fa-shield-alt"></i> Đối Soát Bank N:1 — {reconcileSupplier.name}
+                                </h3>
+                                <div className="text-[11px] text-zinc-400 mt-0.5">Khớp 1 Phiếu Chi Chuyển Khoản Ngân Hàng với Nhiều Phiếu Nhập Hàng</div>
+                            </div>
+                            <button onClick={() => setReconcileSupplier(null)} disabled={isSaving} className="w-8 h-8 bg-[#09090b] rounded-full text-zinc-400 hover:text-rose-400 border border-white/[0.08] transition-colors flex items-center justify-center cursor-pointer">
+                                <i className="fas fa-times text-xs"></i>
+                            </button>
+                        </div>
+
+                        <div className="space-y-4 overflow-y-auto custom-scrollbar flex-1 pr-1 py-1">
+                            {/* BƯỚC 1: CHỌN PHIẾU CHI BANK */}
+                            <div>
+                                <label className="text-[10.5px] font-bold text-[#d4af37] uppercase block mb-1.5 flex items-center gap-1.5">
+                                    <i className="fas fa-university"></i> 1. CHỌN GIAO DỊCH CHI BANK TRONG 30 NGÀY GẦN NHẤT (*)
+                                </label>
+                                <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar bg-[#09090b] p-2 rounded-xl border border-white/[0.08]">
+                                    {recentBankTxs.length === 0 ? (
+                                        <div className="text-center py-4 text-zinc-500 italic text-[11px]">Không có giao dịch chi Bank nào trong 30 ngày qua.</div>
+                                    ) : (
+                                        recentBankTxs.map(t => (
+                                            <div 
+                                                key={t.id} 
+                                                onClick={() => setReconSelectedTxId(t.id)} 
+                                                className={`p-2.5 rounded-lg border text-[11px] flex items-center justify-between cursor-pointer transition-all ${reconSelectedTxId === t.id ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 font-bold' : 'bg-[#121215] border-white/[0.04] text-zinc-300 hover:border-white/20'}`}
+                                            >
+                                                <div className="min-w-0 flex-1 pr-2">
+                                                    <div className="font-mono text-zinc-400 text-[10px]">{t.id} • {t.date}</div>
+                                                    <div className="truncate text-[11.5px]">{t.note || t.title || 'Chi tiền'}</div>
+                                                </div>
+                                                <div className="font-mono font-black text-[13px] text-rose-400 whitespace-nowrap">
+                                                    -{displayMoney(t.amount)}đ
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* BƯỚC 2: CHỌN CÁC PHIẾU NHẬP CẦN CẤN TRỪ */}
+                            <div>
+                                <label className="text-[10.5px] font-bold text-[#d4af37] uppercase block mb-1.5 flex items-center gap-1.5">
+                                    <i className="fas fa-boxes"></i> 2. CHỌN CÁC PHIẾU NHẬP CẦN CẤN TRỪ NỢ
+                                </label>
+                                <div className="space-y-1.5 max-h-44 overflow-y-auto custom-scrollbar bg-[#09090b] p-2 rounded-xl border border-white/[0.08]">
+                                    {getImportHistory(reconcileSupplier.name).filter(l => !l.isPaid && Number(l.totalAmount || 0) > 0).length === 0 ? (
+                                        <div className="text-center py-4 text-zinc-500 italic text-[11px]">Không có phiếu nhập nào đang chờ thanh toán.</div>
+                                    ) : (
+                                        getImportHistory(reconcileSupplier.name).filter(l => !l.isPaid && Number(l.totalAmount || 0) > 0).map(l => {
+                                            const isSelected = reconSelectedImportIds.includes(l.id);
+                                            return (
+                                                <div 
+                                                    key={l.id} 
+                                                    onClick={() => handleToggleImport(l.id)} 
+                                                    className={`p-2.5 rounded-lg border text-[11px] flex items-center justify-between cursor-pointer transition-all ${isSelected ? 'bg-[#d4af37]/15 border-[#d4af37]/40 text-[#d4af37] font-bold' : 'bg-[#121215] border-white/[0.04] text-zinc-300 hover:border-white/20'}`}
+                                                >
+                                                    <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={isSelected} 
+                                                            onChange={() => {}} 
+                                                            className="w-4 h-4 rounded text-emerald-500 cursor-pointer" 
+                                                        />
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="font-mono text-zinc-400 text-[10px]">{l.id} • {String(l.date || '').slice(0, 16)}</div>
+                                                            <div className="truncate text-[11.5px] text-zinc-200">{l.note || 'Phiếu nhập'}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="font-mono font-black text-[13px] text-zinc-100 whitespace-nowrap">
+                                                        {displayMoney(l.totalAmount)}đ
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* TỔNG HỢP SO SÁNH */}
+                            {(() => {
+                                const tx = recentBankTxs.find(t => t.id === reconSelectedTxId);
+                                const txAmount = Number(tx?.amount || 0);
+                                const selectedImports = getImportHistory(reconcileSupplier.name).filter(l => reconSelectedImportIds.includes(l.id));
+                                const totalImportAmt = selectedImports.reduce((sum, l) => sum + Number(l.totalAmount || 0), 0);
+                                const diff = txAmount - totalImportAmt;
+
+                                return (
+                                    <div className="bg-[#121215] p-3 rounded-xl border border-white/[0.08] text-[11.5px] space-y-1.5">
+                                        <div className="flex justify-between text-zinc-400">
+                                            <span>Số tiền Phiếu Chi Bank:</span>
+                                            <span className="font-mono font-bold text-rose-400">{displayMoney(txAmount)}đ</span>
+                                        </div>
+                                        <div className="flex justify-between text-zinc-400">
+                                            <span>Tổng tiền Phiếu Nhập tick chọn ({selectedImports.length}):</span>
+                                            <span className="font-mono font-bold text-[#d4af37]">{displayMoney(totalImportAmt)}đ</span>
+                                        </div>
+                                        <div className="flex justify-between border-t border-white/[0.06] pt-1.5 font-bold">
+                                            <span>Độ lệch (Số dư thừa):</span>
+                                            <span className={`font-mono ${diff >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
+                                                {displayMoney(diff)}đ {diff < 0 && '(Thiếu tiền!)'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+
+                        <div className="pt-4 mt-2 border-t border-white/[0.08]">
+                            <button 
+                                onClick={handleSaveReconciliation} 
+                                disabled={isSaving} 
+                                className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black rounded-xl text-[12px] tracking-wider uppercase transition-all shadow-md flex items-center justify-center gap-2 active:scale-95 cursor-pointer"
+                            >
+                                {isSaving ? <><i className="fas fa-circle-notch fa-spin"></i> Đang đối soát...</> : <><i className="fas fa-shield-alt"></i> Xác nhận đối soát & Cấn trừ nợ</>}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+        </div>
+    );
+});
+</script>

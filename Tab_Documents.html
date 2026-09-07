@@ -1,0 +1,657 @@
+<script type="text/babel">
+// =========================================================================
+// 📚 FILE: Tab_Documents.txt
+// CHỨC NĂNG: Quản lý tài liệu, SOP, biểu mẫu nội bộ
+// =========================================================================
+
+// -------------------------------------------------------------------------
+// MỤC 1: MODAL TẢI LÊN TÀI LIỆU
+// -------------------------------------------------------------------------
+function DocumentUploadModal({ onClose, pushDeltas, triggerToast }) {
+  const [title, setTitle] = React.useState('');
+  const [description, setDescription] = React.useState('');
+  const [category, setCategory] = React.useState('Hướng Dẫn');
+  const [testLink, setTestLink] = React.useState('');
+  const [files, setFiles] = React.useState([]);
+  const [uploading, setUploading] = React.useState(false);
+  const [progress, setProgress] = React.useState(0);
+
+  const categories = ['Hướng Dẫn', 'Biểu Mẫu', 'Báo Giá', 'Đào Tạo', 'Thông Tin', 'Kế Hoạch', 'Khác'];
+
+  const readFileAsDataURL = (f) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(f);
+  });
+
+  const handleUpload = async () => {
+    if (!title || files.length === 0) {
+      alert('Vui lòng nhập tiêu đề và chọn ít nhất 1 file');
+      return;
+    }
+    setUploading(true);
+    setProgress(0);
+    try {
+      const attachments = [];
+      for (let i = 0; i < files.length; i++) {
+        setProgress(Math.round((i / files.length) * 100));
+        const file = files[i];
+        const base64 = await readFileAsDataURL(file);
+        const link = await runGAS('uploadDocumentToDrive', base64, file.name, file.type);
+        if (link) {
+          attachments.push({
+            link: link,
+            fileName: file.name,
+            fileType: file.type
+          });
+        }
+      }
+      setProgress(100);
+
+      const newDoc = {
+        id: 'DOC_' + Date.now(),
+        title: title.trim(),
+        description: description.trim(),
+        category: category,
+        testLink: testLink.trim(),
+        attachments: attachments,
+        createdAt: new Date().toISOString(),
+        createdBy: localStorage.getItem('rf_user') || 'Unknown'
+      };
+
+      await pushDeltas({ documents: [newDoc] }, 'Đã tải lên tài liệu thành công!', 'fa-check-circle');
+      triggerToast('Tải lên thành công!', 'fa-check', 'success');
+      onClose();
+    } catch (e) {
+      alert('Lỗi khi tải lên: ' + e.message);
+    } finally {
+      setUploading(false);
+      setProgress(0);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[999] p-4 backdrop-blur-sm animate-fade-in">
+      <div className="bg-[#141414] border border-[#333] w-full max-w-md rounded-[24px] p-6 shadow-2xl">
+        <div className="flex justify-between items-center mb-6 border-b border-[#222] pb-3">
+          <div className="font-black text-[15px] text-[#f5f5f5] tracking-wide uppercase"><i className="fas fa-cloud-upload-alt mr-2 text-[#d4af37]"></i>TẢI LÊN TÀI LIỆU</div>
+          <button onClick={onClose} disabled={uploading} className="w-8 h-8 rounded-full bg-[#222] text-gray-400 hover:text-rose-500 flex items-center justify-center transition-colors"><i className="fas fa-times"></i></button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-[10px] font-black text-gray-500 block mb-1.5 uppercase tracking-widest">TIÊU ĐỀ *</label>
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)} disabled={uploading} className="w-full p-3.5 bg-[#0a0a0a] border border-[#333] text-white font-bold rounded-xl outline-none focus:border-[#d4af37] transition-colors shadow-inner" placeholder="Nhập tiêu đề tài liệu" />
+          </div>
+          <div>
+            <label className="text-[10px] font-black text-gray-500 block mb-1.5 uppercase tracking-widest">MÔ TẢ (TÙY CHỌN)</label>
+            <textarea value={description} onChange={e => setDescription(e.target.value)} disabled={uploading} className="w-full p-3.5 bg-[#0a0a0a] border border-[#333] text-white font-medium rounded-xl h-24 outline-none focus:border-[#d4af37] custom-scrollbar transition-colors shadow-inner" placeholder="Mô tả ngắn gọn..."/>
+          </div>
+          <div>
+            <label className="text-[10px] font-black text-gray-500 block mb-1.5 uppercase tracking-widest">DANH MỤC</label>
+            <select value={category} onChange={e => setCategory(e.target.value)} disabled={uploading} className="w-full p-3.5 bg-[#0a0a0a] border border-[#333] text-white font-bold rounded-xl outline-none focus:border-[#d4af37] transition-colors">
+              {categories.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] font-black text-gray-500 block mb-1.5 uppercase tracking-widest">LINK BÀI KIỂM TRA (Tùy chọn)</label>
+            <input type="text" value={testLink} onChange={e => setTestLink(e.target.value)} disabled={uploading} className="w-full p-3.5 bg-[#0a0a0a] border border-[#333] text-[#3b82f6] font-bold rounded-xl outline-none focus:border-[#d4af37] transition-colors shadow-inner" placeholder="Dán link bài kiểm tra/quiz vào đây (VD: Google Form, NotebookLM...)" />
+          </div>
+          <div>
+            <label className="text-[10px] font-black text-gray-500 block mb-1.5 uppercase tracking-widest">CHỌN FILE (Có thể chọn nhiều) *</label>
+            <input type="file" multiple onChange={e => setFiles(Array.from(e.target.files))} disabled={uploading} className="w-full p-2.5 border border-[#333] bg-[#0a0a0a] rounded-xl text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-[10px] file:font-black file:bg-[#d4af37]/20 file:text-[#d4af37] hover:file:bg-[#d4af37]/30 transition-colors cursor-pointer disabled:opacity-50" />
+            {files.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {files.map((f, i) => (
+                  <div key={i} className="text-[10px] text-[#10b981] font-bold flex items-center gap-1 bg-[#10b981]/10 px-2 py-1 rounded border border-[#10b981]/30">
+                    <i className="fas fa-check-circle"></i> {f.name}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {uploading && progress > 0 && (
+            <div className="w-full bg-[#222] rounded-full h-2.5 mt-4 overflow-hidden border border-[#333]">
+              <div className="bg-[#10b981] h-2.5 rounded-full transition-all" style={{ width: `${progress}%` }}></div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 mt-6">
+          <button onClick={onClose} disabled={uploading} className="flex-1 py-3.5 bg-[#222] hover:bg-[#333] text-gray-300 rounded-xl font-black active:scale-95 transition-all disabled:opacity-50 text-[12px]">HỦY</button>
+          <button onClick={handleUpload} disabled={uploading || !title || files.length === 0} className="flex-[2] py-3.5 bg-[#d4af37] text-[#0a0a0a] font-black rounded-xl disabled:bg-[#333] disabled:text-gray-500 flex items-center justify-center gap-2 active:scale-95 shadow-md transition-all text-[12px]">
+            {uploading ? (
+              <><i className="fas fa-spinner fa-spin"></i> ĐANG TẢI... {progress}%</>
+            ) : (
+              <><i className="fas fa-cloud-upload-alt"></i> TẢI LÊN TÀI LIỆU</>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------------------
+// MỤC 2: GIAO DIỆN CHÍNH TAB TÀI LIỆU
+// -------------------------------------------------------------------------
+function DocumentsTab({ documents = [], isAdmin: propIsAdmin, isBoss: propIsBoss, userRole: propUserRole, currentUser: propCurrentUser, hasPerm: propHasPerm, pushDeltas, triggerToast }) {
+  const [search] = React.useState('');
+  const [categoryFilter, setCategoryFilter] = React.useState('Tất cả');
+  const [editingDoc, setEditingDoc] = React.useState(null);
+  const [previewDoc, setPreviewDoc] = React.useState(null);
+  const [readersDoc, setReadersDoc] = React.useState(null);
+  const [editUploading, setEditUploading] = React.useState(false);
+  const [editProgress, setEditProgress] = React.useState(0);
+  
+  const currentRole = propUserRole || localStorage.getItem('rf_role') || '';
+  const currentUser = propCurrentUser || localStorage.getItem('rf_user') || 'Unknown';
+  const isBoss = propIsBoss !== undefined ? propIsBoss : (localStorage.getItem('rf_boss') === 'true' || currentRole === 'TỐI CAO' || currentUser.includes('Tiến'));
+  const isAdmin = propIsAdmin !== undefined ? propIsAdmin : (localStorage.getItem('rf_admin') === 'true' || isBoss);
+
+  const hasPerm = React.useCallback((actionCode) => {
+    if (isBoss || currentRole === 'TỐI CAO') return true;
+    if (typeof propHasPerm === 'function') return propHasPerm(actionCode);
+    if (typeof canUserDo === 'function') return canUserDo(actionCode, currentRole, currentUser);
+    return isAdmin;
+  }, [propHasPerm, currentRole, currentUser, isAdmin, isBoss]);
+
+  const canManageDocs = hasPerm('DOC_MANAGE'); // Chỉ Tiến
+  const canDownloadAttachment = hasPerm('DOC_DOWNLOAD_ATTACHMENT'); // Tiến, Tân, Dương, Tâm, Hương, Trang
+
+  const categories = ['Tất cả', 'Phiếu Lương', 'Hướng Dẫn', 'Biểu Mẫu', 'Báo Giá', 'Đào Tạo', 'Thông Tin', 'Kế Hoạch', 'Khác'];
+
+  const filteredDocs = React.useMemo(() => {
+    return documents
+      .filter(doc => {
+        // ẨN HOÀN TOÀN các bản ghi thông báo hệ thống ngầm
+        if (doc.category === 'THONG_BAO_HE_THONG' || doc.category === 'THÔNG BÁO HỆ THỐNG' || String(doc.id || '').startsWith('SYS_ANNO_')) return false;
+
+        const text = `${doc.title} ${doc.description || ''}`.toLowerCase();
+        const matchSearch = text.includes(search.toLowerCase());
+        const isPayslip = doc.category === 'Phiếu Lương';
+        const matchCategory = 
+             (categoryFilter === 'Tất cả' && !isPayslip) || 
+             (categoryFilter === doc.category) || 
+             (categoryFilter === 'Khác' && !categories.includes(doc.category) && !isPayslip);
+             
+        return matchSearch && matchCategory;
+      })
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  }, [documents, search, categoryFilter]);
+
+  const readFileAsDataURL = (f) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(f);
+  });
+
+  const handleAddFiles = async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length || !editingDoc) return;
+    
+    setEditUploading(true);
+    setEditProgress(0);
+    try {
+      const newAttachments = [];
+      for (let i = 0; i < files.length; i++) {
+        setEditProgress(Math.round((i / files.length) * 100));
+        const file = files[i];
+        const base64 = await readFileAsDataURL(file);
+        const link = await runGAS('uploadDocumentToDrive', base64, file.name, file.type);
+        if (link) {
+          newAttachments.push({
+            link: link,
+            fileName: file.name,
+            fileType: file.type
+          });
+        }
+      }
+      setEditProgress(100);
+      
+      const currentAtts = editingDoc.attachments?.length > 0 ? editingDoc.attachments : (editingDoc.link ? [{link: editingDoc.link, fileName: editingDoc.fileName || editingDoc.title, fileType: editingDoc.fileType}] : []);
+      
+      setEditingDoc({
+        ...editingDoc,
+        attachments: [...currentAtts, ...newAttachments]
+      });
+      triggerToast('Đã thêm file thành công, hãy bấm Lưu', 'fa-check', 'success');
+    } catch (err) {
+      alert('Lỗi khi tải lên: ' + err.message);
+    } finally {
+      setEditUploading(false);
+      setEditProgress(0);
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveAttachment = (index) => {
+    if (!window.confirm('Xoá file đính kèm này?')) return;
+    const currentAtts = editingDoc.attachments?.length > 0 ? editingDoc.attachments : (editingDoc.link ? [{link: editingDoc.link, fileName: editingDoc.fileName || editingDoc.title, fileType: editingDoc.fileType}] : []);
+    const newAtts = currentAtts.filter((_, i) => i !== index);
+    setEditingDoc({
+      ...editingDoc,
+      attachments: newAtts
+    });
+  };
+
+  const openPreview = (doc) => {
+    if (doc.link || doc.description) {
+      setPreviewDoc(doc);
+    } else {
+      triggerToast('Tài liệu không có đường dẫn hoặc nội dung hiển thị', 'fa-exclamation', 'warning');
+    }
+  };
+
+  const closePreview = () => setPreviewDoc(null);
+
+  const handleMarkAsRead = async () => {
+    if (!previewDoc) return;
+    const rootDoc = documents.find(d => d.id === previewDoc.id);
+    if (!rootDoc) return;
+    
+    const currentReadBy = rootDoc.readBy || [];
+    if (currentReadBy.includes(currentUser)) return;
+    
+    try {
+      const newReadBy = [...currentReadBy, currentUser];
+      const updatedRootDoc = { ...rootDoc, readBy: newReadBy };
+      
+      await pushDeltas({ documents: [updatedRootDoc] });
+      triggerToast('Đã ghi nhận Đã Đọc', 'fa-check', 'success');
+      setPreviewDoc({ ...previewDoc, readBy: newReadBy });
+    } catch(e) {
+      triggerToast('Lỗi khi ghi nhận', 'fa-times', 'danger');
+    }
+  };
+
+  const handleDelete = async (doc) => {
+    if (!window.confirm(`Xoá tài liệu "${doc.title}"?`)) return;
+    try {
+      await pushDeltas({ deletes: { documents: [doc.id] } }, `Đã xoá: ${doc.title}`, 'fa-trash');
+      triggerToast('Đã xoá tài liệu', 'fa-check', 'success');
+    } catch (e) {
+      triggerToast('Lỗi khi xoá', 'fa-times', 'danger');
+    }
+  };
+
+  const openEdit = (doc) => setEditingDoc({ ...doc });
+
+  const saveEdit = async () => {
+    if (!editingDoc) return;
+    try {
+      await pushDeltas({ documents: [editingDoc] }, 'Đã cập nhật tài liệu', 'fa-edit');
+      triggerToast('Đã lưu thay đổi', 'fa-check', 'success');
+      setEditingDoc(null);
+    } catch (e) {
+      triggerToast('Lỗi khi lưu', 'fa-times', 'danger');
+    }
+  };
+
+  const getCategoryTheme = (cat) => {
+    switch(cat) {
+      case 'Hướng Dẫn':
+      case 'SOP': // Legacy support
+        return { color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20', hoverBorder: 'group-hover:border-blue-500/40', icon: 'fa-book-open' };
+      case 'Biểu Mẫu':
+        return { color: 'text-green-400', bg: 'bg-green-500/10', border: 'border-green-500/20', hoverBorder: 'group-hover:border-green-500/40', icon: 'fa-clipboard-list' };
+      case 'Báo Giá':
+        return { color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/20', hoverBorder: 'group-hover:border-amber-500/40', icon: 'fa-file-invoice-dollar' };
+      case 'Đào Tạo':
+        return { color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20', hoverBorder: 'group-hover:border-purple-500/40', icon: 'fa-graduation-cap' };
+      case 'Thông Tin':
+        return { color: 'text-teal-400', bg: 'bg-teal-500/10', border: 'border-teal-500/20', hoverBorder: 'group-hover:border-teal-500/40', icon: 'fa-info-circle' };
+      case 'Kế Hoạch':
+        return { color: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/20', hoverBorder: 'group-hover:border-indigo-500/40', icon: 'fa-calendar-alt' };
+      default:
+        return { color: 'text-gray-400', bg: 'bg-gray-500/10', border: 'border-gray-500/20', hoverBorder: 'group-hover:border-gray-500/40', icon: 'fa-file' };
+    }
+  };
+
+  const getFileTypeInfo = (doc) => {
+    let type = doc.fileType || '';
+    let name = (doc.fileName || doc.title || '').toLowerCase();
+    
+    if (type.includes('audio') || name.endsWith('.m4a') || name.endsWith('.mp3') || name.endsWith('.wav')) {
+      return { label: 'NGHE', icon: 'fa-headphones', btnClass: 'text-purple-400 bg-purple-500/10 border-purple-500/30 hover:bg-purple-500 hover:text-white' };
+    }
+    if (type.includes('video') || name.endsWith('.mp4') || name.endsWith('.mov')) {
+      return { label: 'PHÁT VIDEO', icon: 'fa-play', btnClass: 'text-rose-400 bg-rose-500/10 border-rose-500/30 hover:bg-rose-500 hover:text-white' };
+    }
+    if (type.includes('image') || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg')) {
+      return { label: 'XEM ẢNH', icon: 'fa-image', btnClass: 'text-teal-400 bg-teal-500/10 border-teal-500/30 hover:bg-teal-500 hover:text-white' };
+    }
+    if (type.includes('pdf') || name.endsWith('.pdf')) {
+      return { label: 'MỞ PDF', icon: 'fa-file-pdf', btnClass: 'text-amber-400 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500 hover:text-black' };
+    }
+    if (type.includes('word') || name.endsWith('.doc') || name.endsWith('.docx')) {
+      return { label: 'MỞ WORD', icon: 'fa-file-word', btnClass: 'text-blue-400 bg-blue-500/10 border-blue-500/30 hover:bg-blue-500 hover:text-white' };
+    }
+    if (type.includes('excel') || type.includes('spreadsheet') || name.endsWith('.xls') || name.endsWith('.xlsx') || name.endsWith('.csv')) {
+      return { label: 'MỞ EXCEL', icon: 'fa-file-excel', btnClass: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500 hover:text-black' };
+    }
+    if (type.includes('presentation') || name.endsWith('.ppt') || name.endsWith('.pptx')) {
+      return { label: 'XEM SLIDE', icon: 'fa-file-powerpoint', btnClass: 'text-orange-400 bg-orange-500/10 border-orange-500/30 hover:bg-orange-500 hover:text-white' };
+    }
+    if (type.includes('zip') || type.includes('compressed') || name.endsWith('.zip') || name.endsWith('.rar') || name.endsWith('.7z')) {
+      return { label: 'TẢI FILE NÉN', icon: 'fa-file-archive', btnClass: 'text-gray-300 bg-gray-500/10 border-gray-500/30 hover:bg-gray-500 hover:text-white' };
+    }
+    if (type.includes('text') || name.endsWith('.txt')) {
+      return { label: 'ĐỌC VĂN BẢN', icon: 'fa-file-alt', btnClass: 'text-blue-400 bg-blue-500/10 border-blue-500/30 hover:bg-blue-500 hover:text-white' };
+    }
+    return { label: 'MỞ TÀI LIỆU', icon: 'fa-external-link-alt', btnClass: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500 hover:text-black' };
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in pb-12">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="font-black text-2xl text-white tracking-wide">TÀI LIỆU <span className="text-[#d4af37]">NỘI BỘ</span></h2>
+          <p className="text-sm text-gray-400 mt-1">Quản lý và tra cứu biểu mẫu, hướng dẫn, báo giá ({filteredDocs.length} tài liệu)</p>
+        </div>
+        {canManageDocs && (
+          <button 
+            onClick={() => window.dispatchEvent(new CustomEvent('openDocumentUpload'))}
+            className="bg-gradient-to-r from-[#d4af37] to-[#b8972e] text-[#0a0a0a] px-6 py-2.5 rounded-xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg hover:shadow-xl hover:shadow-[#d4af37]/20 whitespace-nowrap cursor-pointer"
+          >
+            <i className="fas fa-cloud-upload-alt text-lg"></i> TẢI LÊN TÀI LIỆU
+          </button>
+        )}
+      </div>
+
+      <div className="bg-[#141414] p-4 rounded-2xl border border-[#333] shadow-md flex flex-col gap-4">
+        <div className="relative">
+          <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg"></i>
+          <input
+            type="text"
+            placeholder="Tìm kiếm tài liệu, biểu mẫu..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-12 pr-4 py-3.5 bg-[#0a0a0a] rounded-xl border border-[#222] font-medium outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] text-white transition-all shadow-inner placeholder:text-gray-600"
+          />
+        </div>
+
+        <div className="flex gap-2.5 overflow-x-auto pb-2 custom-scrollbar">
+          {categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setCategoryFilter(cat)}
+              className={`px-5 py-2 rounded-xl text-[12px] font-black whitespace-nowrap transition-all shadow-sm ${
+                categoryFilter === cat 
+                  ? 'bg-[#d4af37] text-[#0a0a0a] shadow-[#d4af37]/20 border border-[#d4af37]' 
+                  : 'bg-[#1a1a1a] text-gray-400 hover:text-gray-200 hover:bg-[#222] border border-[#333] hover:border-[#444]'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        {filteredDocs.length === 0 ? (
+          <div className="text-center py-16 bg-[#141414] rounded-3xl border-2 border-dashed border-[#333] flex flex-col items-center justify-center">
+            <div className="w-20 h-20 bg-[#1a1a1a] rounded-full flex items-center justify-center mb-4">
+              <i className="fas fa-folder-open text-4xl text-gray-600"></i>
+            </div>
+            <div className="font-black text-gray-300 text-lg tracking-wide">KHÔNG TÌM THẤY TÀI LIỆU</div>
+            <div className="text-gray-500 text-sm mt-1">Thử thay đổi từ khóa hoặc danh mục khác</div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            {filteredDocs.map(doc => {
+              const theme = getCategoryTheme(doc.category);
+              return (
+                <div 
+                  key={doc.id} 
+                  onClick={() => openPreview(doc.attachments?.length > 0 ? { ...doc, link: doc.attachments[0].link, title: doc.attachments[0].fileName || doc.title, fileType: doc.attachments[0].fileType } : doc)}
+                  className={`group bg-[#141414] rounded-2xl border border-[#222] p-5 flex flex-col cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/50 ${theme.hoverBorder} relative overflow-hidden`}
+                >
+                  <div className={`absolute top-0 right-0 w-32 h-32 ${theme.bg} rounded-bl-full -mr-10 -mt-10 opacity-30 transition-opacity group-hover:opacity-50`}></div>
+                  
+                  
+                  <div className="flex items-start justify-between mb-4 relative z-10">
+                    <div className={`w-12 h-12 ${theme.bg} ${theme.color} rounded-2xl flex items-center justify-center border ${theme.border} shadow-sm group-hover:scale-110 transition-transform duration-300`}>
+                      <i className={`fas ${theme.icon} text-xl`}></i>
+                    </div>
+                    
+                    {canManageDocs && (
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => openEdit(doc)} className="w-8 h-8 flex items-center justify-center text-amber-500/70 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-colors cursor-pointer" title="Sửa">
+                          <i className="fas fa-edit text-sm"></i>
+                        </button>
+                        <button onClick={() => handleDelete(doc)} className="w-8 h-8 flex items-center justify-center text-rose-500/70 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer" title="Xoá">
+                          <i className="fas fa-trash text-sm"></i>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0 relative z-10 flex flex-col">
+                    <h3 className="font-black text-[15px] leading-snug text-[#f5f5f5] group-hover:text-white transition-colors line-clamp-2 mb-2">
+                      {doc.title}
+                    </h3>
+                    <p className="text-[12px] font-medium text-gray-500 leading-relaxed line-clamp-3 mb-4 flex-1">
+                      {doc.category === 'Phiếu Lương' || String(doc.description || '').includes('<div') || String(doc.description || '').includes('<table')
+                        ? (String(doc.description || '').replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim() || 'Nội dung chi tiết phiếu lương đã chốt.')
+                        : (doc.description || 'Không có mô tả')}
+                    </p>
+                    
+                    <div className="flex flex-col gap-3 mt-auto pt-4 border-t border-[#222]">
+                      <div className="flex items-center justify-between">
+                          <span className={`text-[9px] ${theme.bg} ${theme.color} border ${theme.border} px-2.5 py-1 rounded font-black uppercase tracking-widest shadow-sm`}>
+                            {doc.category || 'Khác'}
+                          </span>
+                          <button onClick={(e) => { e.stopPropagation(); setReadersDoc(doc); }} className="flex items-center gap-1.5 px-3 py-1 bg-[#222]/90 hover:bg-[#333] border border-[#444] text-gray-300 rounded-full text-[10px] font-black backdrop-blur-sm transition-colors shadow-sm active:scale-95" title="Xem ai đã đọc">
+                            <i className="fas fa-eye text-emerald-500"></i> {doc.readBy?.length || 0}
+                          </button>
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-2">
+                        {(doc.attachments?.length > 0 ? doc.attachments : [{ link: doc.link, fileName: doc.fileName || doc.title, fileType: doc.fileType }]).map((att, idx) => {
+                          const fileInfo = getFileTypeInfo(att);
+                          return (
+                            <button 
+                              key={idx}
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                openPreview({ ...doc, link: att.link, title: att.fileName || doc.title, fileType: att.fileType }); 
+                              }}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-black text-[9px] uppercase transition-colors border shadow-sm ${fileInfo.btnClass}`}
+                            >
+                              <i className={`fas ${fileInfo.icon}`}></i>
+                              {fileInfo.label}
+                            </button>
+                          );
+                        })}
+                        
+                        {doc.testLink && (
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); window.open(doc.testLink, '_blank'); }}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-black text-[9px] uppercase transition-colors border shadow-sm text-pink-400 bg-pink-500/10 border-pink-500/30 hover:bg-pink-500 hover:text-white ml-auto"
+                          >
+                            <i className="fas fa-tasks"></i> KIỂM TRA
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* MODAL XEM TÀI LIỆU FULL MÀN HÌNH */}
+      {previewDoc && (
+        <div className="fixed inset-0 bg-black/95 z-[9999] flex flex-col backdrop-blur-xl animate-fade-in">
+          <div className="flex items-center justify-between px-6 py-4 bg-[#0a0a0a] border-b border-[#222] z-10 shadow-2xl">
+            <div className="font-black text-white text-[15px] pr-4 truncate flex-1 tracking-wide flex items-center gap-3">
+              <div className={`w-8 h-8 ${getCategoryTheme(previewDoc.category).bg} ${getCategoryTheme(previewDoc.category).color} rounded-lg flex items-center justify-center`}>
+                <i className={`fas ${getCategoryTheme(previewDoc.category).icon}`}></i>
+              </div>
+              {previewDoc.title}
+            </div>
+            
+            <div className="flex items-center gap-3">
+              {!(previewDoc.readBy || []).includes(currentUser) ? (
+                <button onClick={handleMarkAsRead} className="px-4 py-2 bg-[#10b981] hover:bg-emerald-400 text-[#0a0a0a] font-black text-[11px] rounded-lg shadow-lg active:scale-95 transition-all whitespace-nowrap">
+                  <i className="fas fa-check-double mr-1"></i> XÁC NHẬN ĐÃ ĐỌC
+                </button>
+              ) : (
+                <div className="px-4 py-2 bg-[#10b981]/10 border border-[#10b981]/30 text-[#10b981] font-black text-[11px] rounded-lg whitespace-nowrap">
+                  <i className="fas fa-check-circle mr-1"></i> BẠN ĐÃ ĐỌC
+                </div>
+              )}
+              
+              <button onClick={closePreview} className="w-10 h-10 flex items-center justify-center text-xl text-gray-400 hover:text-rose-500 hover:bg-[#222] rounded-full transition-colors bg-[#141414]">
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 bg-[#0a0a0a] overflow-hidden flex items-center justify-center p-4 sm:p-8">
+            {previewDoc.link ? (
+              <iframe 
+                src={previewDoc.link} 
+                className="w-full h-full max-w-6xl border border-[#333] rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] bg-white"
+                title={previewDoc.title}
+                allow="fullscreen; accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            ) : previewDoc.description ? (
+              <div className="w-full h-full max-w-4xl bg-white text-black overflow-y-auto rounded-2xl shadow-2xl p-6 sm:p-10 custom-scrollbar relative flex flex-col">
+                <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-200 shrink-0">
+                  <span className="font-black text-sm text-gray-700 uppercase tracking-wider"><i className="fas fa-file-invoice-dollar mr-2 text-emerald-600"></i>NỘI DUNG PHIẾU LƯƠNG CHỐT</span>
+                  <button 
+                    onClick={() => {
+                      const win = window.open('', '_blank');
+                      win.document.write(`<html><head><title>${previewDoc.title}</title><style>@media print { @page { size: A4 portrait; margin: 15mm auto; } body { background: white !important; margin: 0 !important; } * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; } }</style></head><body>${previewDoc.description}</body></html>`);
+                      win.document.close();
+                      win.focus();
+                      setTimeout(() => win.print(), 300);
+                    }} 
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-2"
+                  >
+                    <i className="fas fa-print"></i> IN LẠI PHIẾU LƯƠNG
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto" dangerouslySetInnerHTML={{ __html: previewDoc.description }}></div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-gray-500 text-lg gap-4 bg-[#141414] p-12 rounded-3xl border border-[#333]">
+                <div className="w-24 h-24 bg-[#1a1a1a] rounded-full flex items-center justify-center text-gray-600">
+                  <i className="fas fa-link-slash text-4xl"></i>
+                </div>
+                <div className="text-center">
+                  <div className="font-black text-white text-xl mb-1">KHÔNG TÌM THẤY NỘI DUNG</div>
+                  <div className="text-sm font-medium">Tài liệu này không có đường dẫn hoặc nội dung hiển thị.</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL SỬA TÀI LIỆU NỘI BỘ */}
+      {editingDoc && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#141414] w-full max-w-md rounded-[24px] p-6 border border-[#333] shadow-2xl">
+            <div className="font-black text-[15px] mb-6 text-[#f5f5f5] tracking-wide uppercase border-b border-[#222] pb-3 flex items-center">
+              <i className="fas fa-edit mr-2 text-[#d4af37] text-lg"></i> CẬP NHẬT TÀI LIỆU
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] font-black text-gray-500 block mb-1.5 uppercase tracking-widest">TIÊU ĐỀ</label>
+                <input value={editingDoc.title} onChange={e => setEditingDoc({...editingDoc, title: e.target.value})} className="w-full bg-[#0a0a0a] border border-[#333] rounded-xl px-4 py-3.5 text-white font-bold outline-none focus:border-[#d4af37] transition-colors shadow-inner" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-gray-500 block mb-1.5 uppercase tracking-widest">MÔ TẢ</label>
+                <textarea value={editingDoc.description || ''} onChange={e => setEditingDoc({...editingDoc, description: e.target.value})} rows={3} className="w-full bg-[#0a0a0a] border border-[#333] rounded-xl px-4 py-3.5 text-white font-medium outline-none focus:border-[#d4af37] resize-y custom-scrollbar transition-colors shadow-inner" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-gray-500 block mb-1.5 uppercase tracking-widest">DANH MỤC</label>
+                <select value={editingDoc.category || 'Khác'} onChange={e => setEditingDoc({...editingDoc, category: e.target.value})} className="w-full bg-[#0a0a0a] border border-[#333] rounded-xl px-4 py-3.5 text-white font-bold outline-none focus:border-[#d4af37] transition-colors shadow-inner">
+                  {categories.filter(c => c !== 'Tất cả').map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-gray-500 block mb-1.5 uppercase tracking-widest">LINK BÀI KIỂM TRA</label>
+                <input value={editingDoc.testLink || ''} onChange={e => setEditingDoc({...editingDoc, testLink: e.target.value})} className="w-full bg-[#0a0a0a] border border-[#333] rounded-xl px-4 py-3.5 text-[#3b82f6] font-bold outline-none focus:border-[#d4af37] transition-colors shadow-inner" placeholder="Dán link bài kiểm tra vào đây" />
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-gray-500 block mb-1.5 uppercase tracking-widest">FILE ĐÍNH KÈM</label>
+                <div className="bg-[#0a0a0a] border border-[#333] rounded-xl p-3 shadow-inner">
+                  {(editingDoc.attachments?.length > 0 ? editingDoc.attachments : (editingDoc.link ? [{link: editingDoc.link, fileName: editingDoc.fileName || editingDoc.title, fileType: editingDoc.fileType}] : [])).map((att, idx) => (
+                    <div key={idx} className="flex items-center justify-between gap-3 p-2 border-b border-[#222] last:border-0 hover:bg-[#141414] transition-colors rounded-lg">
+                      <div className="font-bold text-[11px] text-[#f5f5f5] truncate flex-1">
+                        <i className={`fas ${getFileTypeInfo(att).icon} text-[#d4af37] mr-2`}></i> 
+                        {att.fileName || editingDoc.title}
+                      </div>
+                      <button onClick={() => handleRemoveAttachment(idx)} disabled={editUploading} className="text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 w-6 h-6 rounded flex items-center justify-center transition-colors shrink-0">
+                        <i className="fas fa-trash-alt text-[10px]"></i>
+                      </button>
+                    </div>
+                  ))}
+                  
+                  <div className="mt-3 pt-3 border-t border-[#222] relative">
+                    <input type="file" multiple onChange={handleAddFiles} disabled={editUploading} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10" />
+                    <button type="button" disabled={editUploading} className="w-full py-2 bg-[#d4af37]/10 hover:bg-[#d4af37]/20 border border-[#d4af37]/30 text-[#d4af37] font-black text-[10px] rounded-lg transition-colors flex items-center justify-center gap-2">
+                      {editUploading ? <><i className="fas fa-spinner fa-spin"></i> ĐANG TẢI... {editProgress}%</> : <><i className="fas fa-plus"></i> THÊM FILE MỚI</>}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-8">
+              <button onClick={() => setEditingDoc(null)} disabled={editUploading} className="flex-1 py-3.5 bg-[#222] hover:bg-[#333] text-gray-300 font-black rounded-xl text-[12px] transition-colors active:scale-95 shadow-sm">HỦY BỎ</button>
+              <button onClick={saveEdit} disabled={editUploading} className="flex-[2] py-3.5 bg-gradient-to-r from-[#d4af37] to-[#b8972e] hover:brightness-110 text-[#0a0a0a] font-black rounded-xl text-[12px] shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">
+                <i className="fas fa-save"></i> LƯU THAY ĐỔI
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DANH SÁCH NGƯỜI ĐÃ ĐỌC */}
+      {readersDoc && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#141414] w-full max-w-sm rounded-[24px] p-6 border border-[#333] shadow-2xl">
+            <div className="flex justify-between items-center mb-6 border-b border-[#222] pb-3">
+              <div className="font-black text-[15px] text-[#f5f5f5] tracking-wide uppercase flex items-center gap-2">
+                <i className="fas fa-eye text-emerald-500"></i> ĐÃ ĐỌC ({readersDoc.readBy?.length || 0})
+              </div>
+              <button onClick={() => setReadersDoc(null)} className="w-8 h-8 rounded-full bg-[#222] text-gray-400 hover:text-rose-500 flex items-center justify-center transition-colors">
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            
+            <div className="max-h-[60vh] overflow-y-auto custom-scrollbar pr-2 space-y-2">
+              {readersDoc.readBy && readersDoc.readBy.length > 0 ? (
+                readersDoc.readBy.map((user, idx) => (
+                  <div key={idx} className="flex items-center gap-3 bg-[#0a0a0a] p-3 rounded-xl border border-[#222]">
+                    <div className="w-8 h-8 rounded-full bg-[#3b82f6]/20 text-[#3b82f6] flex items-center justify-center font-black border border-[#3b82f6]/30 uppercase">
+                      {user.substring(0, 1)}
+                    </div>
+                    <div className="font-black text-sm text-white">{user}</div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-10 text-gray-500 font-medium text-sm">
+                  Chưa có ai đánh dấu đã đọc.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+</script>

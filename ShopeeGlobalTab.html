@@ -1,0 +1,1397 @@
+<script type="text/babel">
+/**
+ * ==============================================================================
+ * COMPONENT: ShopeeGlobalTab.html
+ * MÔ TẢ: Tab Quản Trị Đơn Hàng, Tiến Độ Sản Xuất Xưởng & Đối Soát Escrow Shopee Global
+ * CƠ SỞ DỮ LIỆU: RF_Workspace_Shopee_Global_DB (1b26SUcjRaGYt0_pzRyvxk6MFX4Kxx9t1O3DchmOwTUg)
+ * KIẾN TRÚC: Pure React Component chuẩn RF Workspace Pro (Babel Transpiled)
+ * DESIGN: Hallmark Obsidian Dark Theme (#09090b, #121215, border-white/10, gold/emerald/purple accents)
+ * DOANH NGHIỆP: Rich Fish Aquarium
+ * ==============================================================================
+ */
+
+function ShopeeGlobalTab({ 
+  currentUser: propCurrentUser, 
+  userRole: propUserRole, 
+  hasPerm: propHasPerm, 
+  triggerToast,
+  orders: propOrders,
+  prodItems: propProdItems,
+  erpProducts: propErpProducts,
+  pushDeltas,
+  isAdmin,
+  isBoss: propIsBoss
+}) {
+  const currentRole = propUserRole || localStorage.getItem('rf_role') || '';
+  const currentUser = propCurrentUser || localStorage.getItem('rf_user') || '';
+  const isBoss = propIsBoss || localStorage.getItem('rf_boss') === 'true' || currentRole === 'TỐI CAO' || currentUser.includes('Tiến');
+
+  const hasPerm = React.useCallback((actionCode) => {
+    if (isBoss || currentRole === 'TỐI CAO') return true;
+    if (typeof propHasPerm === 'function') return propHasPerm(actionCode);
+    if (typeof canUserDo === 'function') return canUserDo(actionCode, currentRole, currentUser);
+    return isBoss;
+  }, [propHasPerm, currentRole, currentUser, isBoss]);
+
+  const canViewGlobal = hasPerm('GLOBAL_VIEW');
+  const canUpdateGlobal = hasPerm('GLOBAL_UPDATE');
+
+  // Main States
+  const [data, setData] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [syncing, setSyncing] = React.useState(false);
+  const [actionLoading, setActionLoading] = React.useState({});
+  
+  // Navigation & Sub-views
+  const [currentSubTab, setCurrentSubTab] = React.useState('ORDERS_VIEW'); // 'ORDERS_VIEW', 'ESCROW_VIEW', 'DISPUTES_VIEW', 'AUDIT_VIEW'
+  const [selectedMarket, setSelectedMarket] = React.useState('ALL');
+  const [statusFilter, setStatusFilter] = React.useState('ALL');
+  const [stockFilter, setStockFilter] = React.useState('ALL');
+  const [prodFilter, setProdFilter] = React.useState('ALL');
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const [expandedOrderSn, setExpandedOrderSn] = React.useState(null);
+
+  // State cho Master Governance AI Agent
+  const [executiveBrief, setExecutiveBrief] = React.useState(null);
+  const [loadingBrief, setLoadingBrief] = React.useState(false);
+  const [aiQuestion, setAiQuestion] = React.useState('');
+  const [aiAnswer, setAiAnswer] = React.useState('');
+  const [askingAI, setAskingAI] = React.useState(false);
+
+  // Danh mục thị trường quốc gia
+  const MARKETS = [
+    { code: 'ALL', name: 'Tất cả', flag: '🌐' },
+    { code: 'MY', name: 'Malaysia', flag: '🇲🇾', currency: 'MYR' },
+    { code: 'PH', name: 'Philippines', flag: '🇵🇭', currency: 'PHP' },
+    { code: 'TH', name: 'Thái Lan', flag: '🇹🇭', currency: 'THB' },
+    { code: 'SG', name: 'Singapore', flag: '🇸🇬', currency: 'SGD' },
+    { code: 'TW', name: 'Đài Loan', flag: '🇹🇼', currency: 'TWD' },
+    { code: 'BR', name: 'Brazil', flag: '🇧🇷', currency: 'BRL' },
+    { code: 'ID', name: 'Indonesia', flag: '🇮🇩', currency: 'IDR' }
+  ];
+
+  // 1. Tải dữ liệu Shopee Global qua Apps Script
+  const loadShopeeGlobalData = React.useCallback((showSkeleton = true) => {
+    if (showSkeleton) setLoading(true);
+
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler((res) => {
+          setLoading(false);
+          if (res && res.success) {
+            setData(res);
+          } else {
+            const errMsg = (res && res.message) ? res.message : 'Không thể nạp dữ liệu Shopee Global';
+            if (triggerToast) triggerToast(errMsg, 'fa-triangle-exclamation', 'danger');
+          }
+        })
+        .withFailureHandler((err) => {
+          setLoading(false);
+          if (triggerToast) triggerToast('Lỗi kết nối CSDL Shopee: ' + (err && err.message ? err.message : err), 'fa-triangle-exclamation', 'danger');
+        })
+        .getShopeeGlobalDashboardData();
+    } else {
+      // Dữ liệu giả lập ngoại tuyến khi preview
+      setTimeout(() => {
+        setLoading(false);
+        setData({
+          success: true,
+          timestamp: new Date().toLocaleTimeString('vi-VN'),
+          spreadsheetId: '1b26SUcjRaGYt0_pzRyvxk6MFX4Kxx9t1O3DchmOwTUg',
+          spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/1b26SUcjRaGYt0_pzRyvxk6MFX4Kxx9t1O3DchmOwTUg/edit',
+          summary: {
+            totalOrders: 32,
+            readyToShip: 8,
+            completed: 22,
+            cancelledCount: 2,
+            disputesCount: 1,
+            totalLossDisputeVnd: 450000,
+            totalRevenueVnd: 38950000,
+            totalPlatformFeeVnd: 5840000,
+            reconciledPayoutVnd: 33110000,
+            pendingDeductionCount: 3,
+            marketBreakdown: {
+              'MY': { count: 12, revenueVnd: 14500000, rts: 3, comp: 8 },
+              'PH': { count: 8, revenueVnd: 9800000, rts: 2, comp: 6 },
+              'TH': { count: 6, revenueVnd: 7650000, rts: 2, comp: 4 },
+              'SG': { count: 3, revenueVnd: 4200000, rts: 1, comp: 2 },
+              'TW': { count: 2, revenueVnd: 1900000, rts: 0, comp: 1 },
+              'BR': { count: 1, revenueVnd: 900000, rts: 0, comp: 1 },
+              'ID': { count: 0, revenueVnd: 0, rts: 0, comp: 0 }
+            }
+          },
+          orders: [
+            {
+              order_sn: '240830SG99X1',
+              market_code: 'TH',
+              order_status: 'READY_TO_SHIP',
+              order_created_time: '2026-08-30 08:15:00',
+              ready_to_ship_time: '2026-08-31 18:00:00',
+              currency_origin: 'THB',
+              total_amount_origin: 3250,
+              exchange_rate: 700,
+              total_amount_vnd: 2275000,
+              buyer_username: 'aquascapethai_01',
+              inventory_deducted: false,
+              productionStatus: 'Chờ Sản Xuất',
+              items: [
+                { sku: 'LO-RUNG-40', product_name: 'Layout Lũa Rừng 40x25x25cm', quantity: 1, unit_price_origin: 3250, current_warehouse_stock: 3, is_in_stock: true }
+              ],
+              escrow: {
+                buyer_total_paid: 3250,
+                fee_commission: 195,
+                fee_service: 97,
+                fee_transaction: 65,
+                fee_seller_voucher: 0,
+                fee_shipping_cross: 150,
+                total_fees_origin: 507,
+                actual_payout_vnd: 1920100
+              }
+            },
+            {
+              order_sn: '240830MY88K2',
+              market_code: 'MY',
+              order_status: 'COMPLETED',
+              order_created_time: '2026-08-28 14:20:00',
+              ready_to_ship_time: '2026-08-29 12:00:00',
+              currency_origin: 'MYR',
+              total_amount_origin: 480,
+              exchange_rate: 5500,
+              total_amount_vnd: 2640000,
+              buyer_username: 'kualalumpur_tank',
+              inventory_deducted: true,
+              productionStatus: 'Xưởng Đã Xong',
+              items: [
+                { sku: 'BK-SIEUTRONG-50', product_name: 'Bể Kính Siêu Trong 50x30x30cm 5mm', quantity: 1, unit_price_origin: 480, current_warehouse_stock: 5, is_in_stock: true }
+              ],
+              escrow: {
+                buyer_total_paid: 480,
+                fee_commission: 28.8,
+                fee_service: 14.4,
+                fee_transaction: 9.6,
+                fee_seller_voucher: 0,
+                fee_shipping_cross: 30,
+                total_fees_origin: 82.8,
+                actual_payout_vnd: 2184600
+              }
+            }
+          ],
+          escrowList: [],
+          disputesList: [],
+          auditLogs: []
+        });
+      }, 400);
+    }
+  }, [triggerToast]);
+
+  // Load ban đầu khi mount
+  React.useEffect(() => {
+    loadShopeeGlobalData(true);
+  }, [loadShopeeGlobalData]);
+
+  // 2. Kích hoạt phân tích thông minh từ Master Governance AI (Virtual COO)
+  const fetchExecutiveBrief = React.useCallback(() => {
+    setLoadingBrief(true);
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler((res) => {
+          setLoadingBrief(false);
+          if (res && res.success) {
+            setExecutiveBrief(res.report);
+          } else {
+            setExecutiveBrief(res ? res.error : 'Chưa thể tạo bản tin điều hành.');
+          }
+        })
+        .withFailureHandler((err) => {
+          setLoadingBrief(false);
+          setExecutiveBrief('Lỗi kết nối Gemini AI: ' + err.message);
+        })
+        .apiGetExecutiveBrief();
+    } else {
+      setTimeout(() => {
+        setLoadingBrief(false);
+        setExecutiveBrief('🎯 **Điểm Nóng Doanh Thu**: Tổng doanh thu quốc tế 38.95M đ qua 32 đơn hàng. Thị trường Malaysia (14.5M) và Philippines (9.8M) dẫn đầu.\n📦 **Tiến Độ Xưởng**: 8 đơn RTS đang chờ xuất xưởng, trong đó 3 đơn chưa trừ tồn kho vật lý.\n🟣 **Dòng Tiền Escrow**: Đã đối soát thực nhận 33.11M đ (bóc tách 5.84M phí sàn và vận chuyển xuyên biên giới).\n💡 **Hành Động Khuyến Nghị**: Bấm "Trừ Kho Hàng Loạt" cho 3 đơn RTS và ưu tiên đóng gói đơn xuất Thái Lan trước 18:00.');
+      }, 600);
+    }
+  }, []);
+
+  // 3. Đặt câu hỏi tự nhiên cho Master AI
+  const handleAskAI = (e) => {
+    if (e) e.preventDefault();
+    if (!aiQuestion.trim() || askingAI) return;
+
+    setAskingAI(true);
+    setAiAnswer('');
+
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler((res) => {
+          setAskingAI(false);
+          setAiAnswer(res ? res.answer : 'AI không phản hồi.');
+        })
+        .withFailureHandler((err) => {
+          setAskingAI(false);
+          setAiAnswer('Lỗi: ' + err.message);
+        })
+        .apiAskMasterAI(aiQuestion);
+    } else {
+      setTimeout(() => {
+        setAskingAI(false);
+        setAiAnswer('Dựa trên CSDL RF_Workspace_Shopee_Global_DB: Tỷ lệ giao hàng đúng hạn quốc tế đạt 96.8%. Doanh thu trung bình mỗi đơn đạt 1.217.000đ. Không có đơn hàng nào bị kẹt quá SLA 24h.');
+      }, 500);
+    }
+  };
+
+  // 4. Kích hoạt đồng bộ API Shopee tức thời
+  const handleTriggerSync = () => {
+    if (syncing) return;
+    setSyncing(true);
+
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler((res) => {
+          setSyncing(false);
+          if (res && res.success) {
+            if (triggerToast) triggerToast(res.message, 'success');
+            loadShopeeGlobalData(false);
+          } else {
+            if (triggerToast) triggerToast(res ? res.message : 'Đồng bộ thất bại', 'error');
+          }
+        })
+        .withFailureHandler((err) => {
+          setSyncing(false);
+          if (triggerToast) triggerToast('Lỗi đồng bộ API Shopee: ' + err.message, 'error');
+        })
+        .api_triggerShopeeSyncNow();
+    } else {
+      setTimeout(() => {
+        setSyncing(false);
+        if (triggerToast) triggerToast('Đã kích hoạt quét API Shopee thành công!', 'success');
+      }, 800);
+    }
+  };
+
+  // 5. Khấu trừ tồn kho cho đơn hàng
+  const handleDeductStock = (orderSn, e) => {
+    if (e) e.stopPropagation();
+    if (actionLoading[orderSn]) return;
+
+    setActionLoading(prev => ({ ...prev, [orderSn]: 'deduct' }));
+
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler((res) => {
+          setActionLoading(prev => ({ ...prev, [orderSn]: null }));
+          if (res && res.success) {
+            if (triggerToast) triggerToast(res.message, 'success');
+            loadShopeeGlobalData(false);
+          } else {
+            if (triggerToast) triggerToast(res ? res.message : 'Lỗi trừ kho', 'error');
+          }
+        })
+        .withFailureHandler((err) => {
+          setActionLoading(prev => ({ ...prev, [orderSn]: null }));
+          if (triggerToast) triggerToast('Lỗi: ' + err.message, 'error');
+        })
+        .api_deductShopeeOrderStock(orderSn);
+    } else {
+      setTimeout(() => {
+        setActionLoading(prev => ({ ...prev, [orderSn]: null }));
+        if (triggerToast) triggerToast('Đã trừ tồn kho xưởng cho đơn ' + orderSn + ' thành công!', 'success');
+        setData(prev => {
+          if (!prev || !prev.orders) return prev;
+          return {
+            ...prev,
+            orders: prev.orders.map(o => o.order_sn === orderSn ? { ...o, inventory_deducted: true } : o)
+          };
+        });
+      }, 600);
+    }
+  };
+
+  // 6. Tạo lệnh sản xuất cho xưởng
+  const handleCreateProdTickets = (orderSn, e) => {
+    if (e) e.stopPropagation();
+    if (actionLoading[orderSn]) return;
+
+    setActionLoading(prev => ({ ...prev, [orderSn]: 'prod' }));
+
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler((res) => {
+          setActionLoading(prev => ({ ...prev, [orderSn]: null }));
+          if (res && res.success) {
+            if (triggerToast) triggerToast(res.message, 'success');
+            loadShopeeGlobalData(false);
+          } else {
+            if (triggerToast) triggerToast(res ? res.message : 'Lỗi tạo lệnh', 'error');
+          }
+        })
+        .withFailureHandler((err) => {
+          setActionLoading(prev => ({ ...prev, [orderSn]: null }));
+          if (triggerToast) triggerToast('Lỗi: ' + err.message, 'error');
+        })
+        .api_createShopeeProductionTickets(orderSn);
+    } else {
+      setTimeout(() => {
+        setActionLoading(prev => ({ ...prev, [orderSn]: null }));
+        if (triggerToast) triggerToast('Đã gửi lệnh sản xuất sang bảng điều phối xưởng!', 'success');
+        setData(prev => {
+          if (!prev || !prev.orders) return prev;
+          return {
+            ...prev,
+            orders: prev.orders.map(o => o.order_sn === orderSn ? { ...o, productionStatus: 'Đang Sản Xuất' } : o)
+          };
+        });
+      }, 600);
+    }
+  };
+
+  // 7. Xuất báo cáo CSV
+  const handleExportCSV = () => {
+    if (!data || !Array.isArray(data.orders) || data.orders.length === 0) {
+      if (triggerToast) triggerToast('Không có dữ liệu để xuất báo cáo', 'warning');
+      return;
+    }
+
+    const headers = ['Mã Đơn', 'Thị Trường', 'Người Mua', 'Trạng Thái', 'Tiến Độ Xưởng', 'Trừ Kho', 'Doanh Thu Gốc', 'Tiền Tệ', 'Tỷ Giá', 'Doanh Thu VNĐ', 'Thực Nhận Escrow VNĐ', 'Ngày Đặt'];
+    const rows = data.orders.map(o => [
+      `"${o.order_sn}"`,
+      `"${o.market_code}"`,
+      `"${o.buyer_username || ''}"`,
+      `"${o.order_status}"`,
+      `"${o.productionStatus || ''}"`,
+      `"${o.inventory_deducted ? 'Đã trừ' : 'Chưa trừ'}"`,
+      o.total_amount_origin || 0,
+      `"${o.currency_origin}"`,
+      o.exchange_rate || 1,
+      o.total_amount_vnd || 0,
+      o.escrow ? (o.escrow.actual_payout_vnd || 0) : 0,
+      `"${o.order_created_time || ''}"`
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Shopee_Global_Report_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    if (triggerToast) triggerToast('Đã xuất báo cáo CSV thành công!', 'success');
+  };
+
+  // 8. Lọc danh sách đơn hàng với memoization
+  const filteredOrders = React.useMemo(() => {
+    if (!data || !Array.isArray(data.orders)) return [];
+
+    return data.orders.filter(order => {
+      if (!order) return false;
+
+      // Lọc theo thị trường
+      if (selectedMarket !== 'ALL') {
+        const m = String(order.market_code || '').toUpperCase().trim();
+        if (m !== selectedMarket) return false;
+      }
+
+      // Lọc theo trạng thái đơn
+      if (statusFilter !== 'ALL') {
+        const s = String(order.order_status || '').toUpperCase().trim();
+        if (s !== statusFilter) return false;
+      }
+
+      // Lọc theo trừ kho
+      if (stockFilter === 'DEDUCTED' && !order.inventory_deducted) return false;
+      if (stockFilter === 'NOT_DEDUCTED' && order.inventory_deducted) return false;
+
+      // Lọc theo tiến độ xưởng
+      if (prodFilter !== 'ALL') {
+        if (order.productionStatus !== prodFilter) return false;
+      }
+
+      // Tìm kiếm từ khóa
+      if (searchQuery) {
+        const q = searchQuery.trim().toLowerCase();
+        const matchSn = String(order.order_sn || '').toLowerCase().includes(q);
+        const matchBuyer = String(order.buyer_username || '').toLowerCase().includes(q);
+        const safeItems = Array.isArray(order.items) ? order.items : [];
+        const matchSku = safeItems.some(i => 
+          String(i.sku || '').toLowerCase().includes(q) || 
+          String(i.product_name || '').toLowerCase().includes(q)
+        );
+        if (!matchSn && !matchBuyer && !matchSku) return false;
+      }
+
+      return true;
+    });
+  }, [data, selectedMarket, statusFilter, stockFilter, prodFilter, searchQuery]);
+
+  // Trích xuất thống kê an toàn
+  const summary = data?.summary || data?.kpi || {};
+  const totalRev = Number(summary.totalRevenueVnd || 0);
+  const rtsCount = Number(summary.readyToShip || summary.readyToShipCount || 0);
+  const compCount = Number(summary.completed || summary.completedCount || 0);
+  const payoutVnd = Number(summary.reconciledPayoutVnd || summary.totalEscrowPayoutVnd || 0);
+  const feeVnd = Number(summary.totalPlatformFeeVnd || 0);
+  const pendingDeduct = Number(summary.pendingDeductionCount || 0);
+  const totalOrdersCount = Number(summary.totalOrders || summary.totalOrdersCount || filteredOrders.length);
+  const marketBreakdown = summary.marketBreakdown || {};
+
+  const sheetUrl = data?.spreadsheetUrl || 'https://docs.google.com/spreadsheets/d/1b26SUcjRaGYt0_pzRyvxk6MFX4Kxx9t1O3DchmOwTUg/edit';
+
+  return (
+    <div className="flex flex-col w-full h-full text-zinc-100 space-y-4 pb-12 animate-fade-in font-sans">
+      
+      {/* ── 1. HEADER & GLOBAL DATABASE BAR ───────────────────────────────── */}
+      <div className="bg-[#121215] border border-white/10 p-4 rounded-2xl shadow-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500/20 via-orange-500/20 to-amber-600/20 border border-amber-500/30 flex items-center justify-center text-2xl shadow-inner shrink-0">
+            🌐
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-base sm:text-lg font-bold text-white tracking-wide">
+                Shopee Global Hub
+              </h1>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>Live DB</span>
+              </span>
+              <a
+                href={sheetUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-white/10 flex items-center gap-1 transition"
+                title="Mở Google Spreadsheet CSDL Shopee Global"
+              >
+                <i className="fas fa-arrow-up-right-from-square text-[9px] text-amber-400"></i>
+                <span>RF_Workspace_Shopee_Global_DB</span>
+              </a>
+            </div>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              Cơ sở dữ liệu độc lập 5 Bảng • Tiến độ sản xuất xưởng & Đối soát doanh thu quốc tế đa tiền tệ
+            </p>
+          </div>
+        </div>
+
+        {/* Nút hành động thanh công cụ */}
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+          <button
+            onClick={() => loadShopeeGlobalData(false)}
+            disabled={loading}
+            className="px-3.5 py-2 bg-zinc-800/90 hover:bg-zinc-700 text-zinc-200 border border-white/10 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition active:scale-95 disabled:opacity-50 cursor-pointer"
+          >
+            <i className={`fas fa-sync-alt ${loading ? 'animate-spin' : ''}`}></i>
+            <span>Làm Mới</span>
+          </button>
+          
+          <button
+            onClick={handleExportCSV}
+            className="px-3.5 py-2 bg-zinc-800/90 hover:bg-zinc-700 text-zinc-200 border border-white/10 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition active:scale-95 cursor-pointer"
+          >
+            <i className="fas fa-file-excel text-emerald-400"></i>
+            <span>Xuất CSV</span>
+          </button>
+
+          {canUpdateGlobal && (
+            <button
+              onClick={handleTriggerSync}
+              disabled={syncing}
+              className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-zinc-950 rounded-xl text-xs font-black shadow-lg shadow-orange-500/20 flex items-center gap-1.5 transition active:scale-95 disabled:opacity-50 cursor-pointer"
+            >
+              <i className={`fas fa-bolt ${syncing ? 'animate-bounce' : ''}`}></i>
+              <span>{syncing ? 'Đang Quét API...' : 'Đồng Bộ API Ngay'}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── 2. MASTER GOVERNANCE AI (VIRTUAL COO DECK) ────────────────────── */}
+      <div className="w-full bg-gradient-to-r from-[#0f172a] via-[#1e1b4b]/80 to-[#0f172a] border border-indigo-500/30 rounded-2xl p-4 sm:p-5 shadow-2xl relative">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-indigo-500/20 pb-3 mb-3">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span className="text-xs font-extrabold uppercase tracking-wider text-indigo-200">
+              Master Governance AI
+            </span>
+            <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px] font-bold border border-indigo-500/30">
+              Virtual COO
+            </span>
+          </div>
+
+          <button
+            onClick={fetchExecutiveBrief}
+            disabled={loadingBrief}
+            className="text-xs bg-indigo-600/40 hover:bg-indigo-600 text-indigo-200 hover:text-white border border-indigo-500/40 px-3.5 py-1.5 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-indigo-600/20 active:scale-95 disabled:opacity-50 cursor-pointer"
+          >
+            <i className={`fas fa-wand-magic-sparkles ${loadingBrief ? 'animate-spin text-amber-400' : 'text-amber-400'}`}></i>
+            <span>{loadingBrief ? 'Đang Phân Tích...' : '✨ Phân Tích Thông Minh'}</span>
+          </button>
+        </div>
+
+        {/* Khung báo cáo điều hành */}
+        <div className="text-xs text-zinc-200 leading-relaxed bg-black/40 p-3.5 rounded-xl border border-indigo-500/20 whitespace-pre-line min-h-[48px]">
+          {loadingBrief ? (
+            <div className="flex items-center gap-2 text-indigo-300 animate-pulse">
+              <i className="fas fa-spinner animate-spin"></i>
+              <span>Bộ não Gemini AI đang quét dữ liệu 5 bảng Shopee Global để tổng hợp bản tin điều hành...</span>
+            </div>
+          ) : executiveBrief ? (
+            executiveBrief
+          ) : (
+            'Hệ thống AI đã sẵn sàng. Bấm "Phân Tích Thông Minh" để tổng hợp tình hình dòng tiền và đơn hàng thời gian thực.'
+          )}
+        </div>
+
+        {/* Khung hỏi đáp tự nhiên */}
+        <form onSubmit={handleAskAI} className="mt-3 flex flex-col sm:flex-row gap-2">
+          <div className="relative flex-1">
+            <i className="fas fa-robot absolute left-3.5 top-1/2 -translate-y-1/2 text-indigo-400 text-xs"></i>
+            <input
+              type="text"
+              value={aiQuestion}
+              onChange={(e) => setAiQuestion(e.target.value)}
+              placeholder="Hỏi AI: 'Hôm nay thị trường nào bán tốt nhất?', 'Có bao nhiêu đơn chưa trừ kho?'..."
+              className="w-full bg-black/50 border border-indigo-500/30 rounded-xl pl-9 pr-3.5 py-2.5 text-xs text-white placeholder-indigo-300/40 focus:border-indigo-400 outline-none transition"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={askingAI || !aiQuestion.trim()}
+            className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-2 transition active:scale-95 disabled:opacity-40 shrink-0 shadow-lg shadow-indigo-600/30 cursor-pointer"
+          >
+            <i className={`fas fa-paper-plane ${askingAI ? 'animate-bounce' : ''}`}></i>
+            <span>{askingAI ? 'Đang Tra Cứu...' : 'Hỏi Virtual COO'}</span>
+          </button>
+        </form>
+
+        {/* Phản hồi từ AI */}
+        {aiAnswer && (
+          <div className="mt-3 p-3.5 rounded-xl bg-indigo-950/80 border border-indigo-500/40 text-xs text-indigo-100 leading-relaxed animate-fade-in whitespace-pre-line">
+            <div className="font-bold text-amber-400 flex items-center gap-1.5 mb-1">
+              <i className="fas fa-comment-dots"></i>
+              <span>Phản hồi từ Virtual COO:</span>
+            </div>
+            {aiAnswer}
+          </div>
+        )}
+      </div>
+
+      {/* ── 3. HERO FLOW & 4 THẺ CHỈ SỐ KPI TỔNG QUAN ──────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        
+        {/* KPI 1: Doanh thu quy đổi */}
+        <div className="bg-[#121215] border border-white/10 rounded-2xl p-4 flex flex-col justify-between shadow-lg hover:border-amber-500/30 transition">
+          <div className="flex justify-between items-start">
+            <div>
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">1. Doanh Thu Quy Đổi (GMV)</span>
+              <span className="text-[11px] text-zinc-500">Tổng giá trị đơn hàng quốc tế</span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400 text-xs">
+              <i className="fas fa-coins"></i>
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-xl sm:text-2xl font-black text-amber-400 font-mono">
+              {loading ? '...' : totalRev.toLocaleString('vi-VN')} <span className="text-xs font-sans font-bold">đ</span>
+            </div>
+            <div className="text-[11px] text-zinc-400 mt-1 flex items-center justify-between">
+              <span>Đơn hợp lệ: <strong className="text-zinc-200 font-mono">{totalOrdersCount}</strong></span>
+              <span>Đơn huỷ: <strong className="text-rose-400 font-mono">{summary.cancelledCount || 0}</strong></span>
+            </div>
+          </div>
+        </div>
+
+        {/* KPI 2: Đơn Chờ Giao RTS & Tiến độ kho */}
+        <div className="bg-[#121215] border border-white/10 rounded-2xl p-4 flex flex-col justify-between shadow-lg hover:border-sky-500/30 transition">
+          <div className="flex justify-between items-start">
+            <div>
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">2. Chờ Giao & Tiến Độ Xưởng</span>
+              <span className="text-[11px] text-zinc-500">Đơn Ready To Ship (RTS)</span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/25 flex items-center justify-center text-sky-400 text-xs">
+              <i className="fas fa-box-open"></i>
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-xl sm:text-2xl font-black text-sky-400 font-mono">
+              {loading ? '...' : rtsCount} <span className="text-xs font-sans font-bold">đơn</span>
+            </div>
+            <div className="text-[11px] mt-1 flex items-center justify-between">
+              {pendingDeduct > 0 ? (
+                <span className="text-amber-400 font-semibold flex items-center gap-1">
+                  <i className="fas fa-triangle-exclamation"></i>
+                  <span>{pendingDeduct} đơn chưa trừ kho</span>
+                </span>
+              ) : (
+                <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                  <i className="fas fa-check-circle"></i>
+                  <span>Kho xưởng đã trừ 100%</span>
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* KPI 3: Phí Sàn & Thuế Xuyên Biên Giới */}
+        <div className="bg-[#121215] border border-white/10 rounded-2xl p-4 flex flex-col justify-between shadow-lg hover:border-rose-500/30 transition">
+          <div className="flex justify-between items-start">
+            <div>
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">3. Phí Sàn & Cross-Border</span>
+              <span className="text-[11px] text-zinc-500">Hoa hồng, DV, Vận chuyển QT</span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/25 flex items-center justify-center text-rose-400 text-xs">
+              <i className="fas fa-percent"></i>
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-xl sm:text-2xl font-black text-rose-400 font-mono">
+              {loading ? '...' : feeVnd.toLocaleString('vi-VN')} <span className="text-xs font-sans font-bold">đ</span>
+            </div>
+            <div className="text-[11px] text-zinc-400 mt-1">
+              Tỷ lệ phí sàn: <span className="font-bold text-zinc-200">{totalRev > 0 ? ((feeVnd / totalRev) * 100).toFixed(1) : 0}%</span>
+            </div>
+          </div>
+        </div>
+
+        {/* KPI 4: Thực Nhận Ví Escrow */}
+        <div className="bg-[#121215] border border-white/10 rounded-2xl p-4 flex flex-col justify-between shadow-lg hover:border-purple-500/30 transition">
+          <div className="flex justify-between items-start">
+            <div>
+              <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block">4. Thực Nhận Ví Escrow</span>
+              <span className="text-[11px] text-zinc-500">Tiền đã giải ngân về ví Shopee</span>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/25 flex items-center justify-center text-purple-400 text-xs">
+              <i className="fas fa-wallet"></i>
+            </div>
+          </div>
+          <div className="mt-3">
+            <div className="text-xl sm:text-2xl font-black text-purple-400 font-mono">
+              {loading ? '...' : payoutVnd.toLocaleString('vi-VN')} <span className="text-xs font-sans font-bold">đ</span>
+            </div>
+            <div className="text-[11px] text-purple-300/80 mt-1">
+              Đơn hoàn tất: <strong className="text-white font-mono">{compCount}</strong> đơn
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* ── 4. THANH BỘ LỌC THỊ TRƯỜNG DẠNG PILLS CUỘN NGANG NHANH ────────── */}
+      <div className="bg-[#121215] border border-white/10 p-3.5 rounded-2xl space-y-3 shadow-xl">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+            <i className="fas fa-globe"></i>
+            <span>Thị Trường Quốc Tế</span>
+          </span>
+          <span className="text-[11px] text-zinc-400">
+            Bấm chọn để lọc nhanh theo từng quốc gia
+          </span>
+        </div>
+
+        {/* Dải Tab cuộn ngang */}
+        <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar pb-1">
+          {MARKETS.map(item => {
+            const isSelected = selectedMarket === item.code;
+            const mStats = marketBreakdown[item.code] || { count: 0, revenueVnd: 0 };
+            const count = item.code === 'ALL' ? totalOrdersCount : mStats.count;
+            const rev = item.code === 'ALL' ? totalRev : mStats.revenueVnd;
+
+            return (
+              <button
+                key={item.code}
+                onClick={() => setSelectedMarket(item.code)}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap flex items-center gap-2 transition active:scale-95 cursor-pointer shrink-0 ${
+                  isSelected
+                    ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20 font-black'
+                    : 'bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 border border-white/5'
+                }`}
+              >
+                <span className="text-sm">{item.flag}</span>
+                <span>{item.name}</span>
+                <span className={`px-1.5 py-0.2 text-[10px] rounded-full font-mono font-black ${
+                  isSelected ? 'bg-zinc-950 text-amber-400' : 'bg-zinc-900 text-zinc-400'
+                }`}>
+                  {count}
+                </span>
+                {rev > 0 && (
+                  <span className={`text-[10px] font-mono hidden md:inline ${
+                    isSelected ? 'text-zinc-900 font-bold' : 'text-amber-400/90'
+                  }`}>
+                    {(rev / 1000000).toFixed(1)}M
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Thanh chuyển đổi Sub-tabs & Bộ lọc chi tiết */}
+        <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3 pt-2 border-t border-white/5">
+          
+          {/* Sub-tabs chuyển đổi chế độ xem */}
+          <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar">
+            <button
+              onClick={() => setCurrentSubTab('ORDERS_VIEW')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
+                currentSubTab === 'ORDERS_VIEW'
+                  ? 'bg-zinc-100 text-zinc-950 font-black'
+                  : 'bg-zinc-800/60 hover:bg-zinc-800 text-zinc-400'
+              }`}
+            >
+              <i className="fas fa-boxes-stacked"></i>
+              <span>Đơn Hàng & Xưởng ({filteredOrders.length})</span>
+            </button>
+
+            <button
+              onClick={() => setCurrentSubTab('ESCROW_VIEW')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
+                currentSubTab === 'ESCROW_VIEW'
+                  ? 'bg-purple-500 text-white font-black shadow-lg shadow-purple-500/20'
+                  : 'bg-zinc-800/60 hover:bg-zinc-800 text-zinc-400'
+              }`}
+            >
+              <i className="fas fa-receipt"></i>
+              <span>Sổ Đối Soát Escrow ({(data?.escrowList || []).length})</span>
+            </button>
+
+            <button
+              onClick={() => setCurrentSubTab('DISPUTES_VIEW')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
+                currentSubTab === 'DISPUTES_VIEW'
+                  ? 'bg-rose-500 text-white font-black shadow-lg shadow-rose-500/20'
+                  : 'bg-zinc-800/60 hover:bg-zinc-800 text-zinc-400'
+              }`}
+            >
+              <i className="fas fa-scale-balanced"></i>
+              <span>Khiếu Nại & Hoàn ({(data?.disputesList || []).length})</span>
+            </button>
+
+            <button
+              onClick={() => setCurrentSubTab('AUDIT_VIEW')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
+                currentSubTab === 'AUDIT_VIEW'
+                  ? 'bg-indigo-500 text-white font-black shadow-lg shadow-indigo-500/20'
+                  : 'bg-zinc-800/60 hover:bg-zinc-800 text-zinc-400'
+              }`}
+            >
+              <i className="fas fa-clipboard-list"></i>
+              <span>Audit Logs ({(data?.auditLogs || []).length})</span>
+            </button>
+          </div>
+
+          {/* Search box & Filters */}
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+            <div className="relative flex-1 sm:w-60">
+              <i className="fas fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-xs"></i>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Tìm mã đơn, SKU, khách..."
+                className="w-full bg-[#09090b] border border-white/10 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:border-amber-500 outline-none transition"
+              />
+            </div>
+
+            {currentSubTab === 'ORDERS_VIEW' && (
+              <>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="bg-[#09090b] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-zinc-300 focus:border-amber-500 outline-none transition"
+                >
+                  <option value="ALL">Tất cả trạng thái</option>
+                  <option value="READY_TO_SHIP">Chờ giao (RTS)</option>
+                  <option value="PROCESSED">Đang xử lý</option>
+                  <option value="SHIPPED">Đang giao</option>
+                  <option value="COMPLETED">Đã hoàn thành</option>
+                  <option value="CANCELLED">Đã hủy</option>
+                </select>
+
+                <select
+                  value={stockFilter}
+                  onChange={(e) => setStockFilter(e.target.value)}
+                  className="bg-[#09090b] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-zinc-300 focus:border-amber-500 outline-none transition"
+                >
+                  <option value="ALL">Tồn kho xưởng</option>
+                  <option value="DEDUCTED">Đã trừ kho</option>
+                  <option value="NOT_DEDUCTED">Chưa trừ kho</option>
+                </select>
+              </>
+            )}
+          </div>
+
+        </div>
+      </div>
+
+      {/* ── 5. MAIN CONTENT AREA (4 SUB-VIEWS) ────────────────────────────── */}
+
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {/* SUB-VIEW 1: DANH SÁCH ĐƠN HÀNG & TIẾN ĐỘ SẢN XUẤT                   */}
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {currentSubTab === 'ORDERS_VIEW' && (
+        <div className="bg-[#121215] border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
+          <div className="p-3.5 bg-zinc-900/40 border-b border-white/10 flex justify-between items-center">
+            <div className="text-xs font-bold text-amber-400 uppercase tracking-wide flex items-center gap-1.5">
+              <i className="fas fa-table-list"></i>
+              <span>DANH SÁCH ĐƠN HÀNG QUỐC TẾ ({filteredOrders.length})</span>
+            </div>
+            <div className="text-[11px] text-zinc-400 font-mono">
+              DB: <span className="text-zinc-200 font-bold">RF_Workspace_Shopee_Global_DB</span>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-[#18181b] text-zinc-400 font-bold uppercase text-[10px] tracking-wider border-b border-white/10">
+                <tr>
+                  <th className="p-3">Mã Đơn / Thị Trường</th>
+                  <th className="p-3">Người Mua</th>
+                  <th className="p-3">SKU & Chi Tiết Sản Phẩm</th>
+                  <th className="p-3">Trạng Thái Đơn</th>
+                  <th className="p-3">Tiến Độ Xưởng</th>
+                  <th className="p-3">Khấu Trừ Kho</th>
+                  <th className="p-3 text-right">Doanh Thu Gốc</th>
+                  <th className="p-3 text-right">Quy Đổi VNĐ</th>
+                  <th className="p-3 text-center">Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 text-zinc-300">
+                {loading ? (
+                  <tr>
+                    <td colSpan="9" className="p-10 text-center text-zinc-500">
+                      <i className="fas fa-spinner animate-spin text-2xl mb-2 text-amber-400"></i>
+                      <p className="text-xs font-medium">Đang tải dữ liệu từ CSDL Shopee Global...</p>
+                    </td>
+                  </tr>
+                ) : filteredOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan="9" className="p-10 text-center text-zinc-500">
+                      <i className="fas fa-inbox text-3xl mb-2 text-zinc-600"></i>
+                      <p className="text-xs font-medium">Không tìm thấy đơn hàng nào phù hợp với bộ lọc.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredOrders.map((order) => {
+                    const isExpanded = expandedOrderSn === order.order_sn;
+                    const safeItems = Array.isArray(order.items) ? order.items : [];
+                    const isDeducting = actionLoading[order.order_sn] === 'deduct';
+                    const isProdding = actionLoading[order.order_sn] === 'prod';
+
+                    return (
+                      <React.Fragment key={order.order_sn}>
+                        <tr 
+                          className={`hover:bg-zinc-800/40 transition cursor-pointer ${isExpanded ? 'bg-zinc-800/50' : ''}`}
+                          onClick={() => setExpandedOrderSn(isExpanded ? null : order.order_sn)}
+                        >
+                          {/* Cột 1: Mã đơn & Market */}
+                          <td className="p-3">
+                            <div className="font-mono font-bold text-zinc-100 hover:text-amber-400 transition flex items-center gap-1.5">
+                              <span>{order.order_sn}</span>
+                              <i className={`fas fa-chevron-${isExpanded ? 'up' : 'down'} text-[10px] text-zinc-500`}></i>
+                            </div>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-black bg-zinc-800 text-indigo-300 border border-indigo-500/20">
+                                {order.market_code}
+                              </span>
+                              <span className="text-[10px] text-zinc-500 font-mono truncate max-w-[100px]">
+                                {order.order_created_time ? order.order_created_time.substring(0, 10) : ''}
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Cột 2: Người mua */}
+                          <td className="p-3 text-zinc-300">
+                            <div className="font-medium">{order.buyer_username || 'Khách Quốc Tế'}</div>
+                            {order.ready_to_ship_time && (
+                              <div className="text-[10px] text-zinc-500 font-mono">
+                                Hạn RTS: {order.ready_to_ship_time.substring(0, 16)}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Cột 3: SKU items */}
+                          <td className="p-3">
+                            {safeItems.length > 0 ? (
+                              <div className="space-y-0.5">
+                                {safeItems.slice(0, 2).map((item, idx) => (
+                                  <div key={idx} className="text-[11px] flex items-center gap-1.5">
+                                    <span className="font-bold text-amber-400 font-mono">{item.sku}</span>
+                                    <span className="text-zinc-400">x{item.quantity}</span>
+                                    {item.current_warehouse_stock !== undefined && (
+                                      <span className={`text-[9px] px-1 py-0.2 rounded font-mono ${
+                                        item.is_in_stock ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                                      }`}>
+                                        Tồn:{item.current_warehouse_stock}
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                                {safeItems.length > 2 && (
+                                  <div className="text-[10px] text-zinc-500">+{safeItems.length - 2} SKU khác...</div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-zinc-500 italic text-[11px]">Chưa bóc tách SKU</span>
+                            )}
+                          </td>
+
+                          {/* Cột 4: Trạng thái đơn */}
+                          <td className="p-3">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              order.order_status === 'READY_TO_SHIP'
+                                ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+                                : order.order_status === 'COMPLETED'
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : order.order_status === 'CANCELLED'
+                                ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                                : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                            }`}>
+                              {order.order_status}
+                            </span>
+                          </td>
+
+                          {/* Cột 5: Tiến độ xưởng */}
+                          <td className="p-3">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 w-fit ${
+                              order.productionStatus === 'Xưởng Đã Xong'
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : order.productionStatus === 'Đang Sản Xuất'
+                                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 animate-pulse'
+                                : order.productionStatus === 'Chờ Sản Xuất'
+                                ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+                                : 'bg-zinc-800 text-zinc-400 border border-white/5'
+                            }`}>
+                              <i className={`fas ${
+                                order.productionStatus === 'Xưởng Đã Xong' ? 'fa-check' :
+                                order.productionStatus === 'Đang Sản Xuất' ? 'fa-gear fa-spin' :
+                                order.productionStatus === 'Chờ Sản Xuất' ? 'fa-hourglass-start' : 'fa-minus'
+                              }`}></i>
+                              <span>{order.productionStatus || 'Chưa Có Lệnh'}</span>
+                            </span>
+                          </td>
+
+                          {/* Cột 6: Trừ tồn kho */}
+                          <td className="p-3">
+                            {order.inventory_deducted ? (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1 w-fit">
+                                <i className="fas fa-check"></i> Đã trừ
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center gap-1 w-fit">
+                                <i className="fas fa-clock"></i> Chưa trừ
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Cột 7: Doanh thu gốc */}
+                          <td className="p-3 text-right font-mono text-zinc-300">
+                            {Number(order.total_amount_origin || 0).toLocaleString()} <span className="text-[10px] text-zinc-400">{order.currency_origin}</span>
+                          </td>
+
+                          {/* Cột 8: Quy đổi VNĐ */}
+                          <td className="p-3 text-right font-mono font-bold text-amber-400">
+                            {Number(order.total_amount_vnd || 0).toLocaleString('vi-VN')} ₫
+                          </td>
+
+                          {/* Cột 9: Nút Thao tác nhanh */}
+                          <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              {!order.inventory_deducted && canUpdateGlobal && (
+                                <button
+                                  onClick={(e) => handleDeductStock(order.order_sn, e)}
+                                  disabled={isDeducting}
+                                  className="px-2 py-1 bg-amber-500/20 hover:bg-amber-500 text-amber-300 hover:text-zinc-950 border border-amber-500/30 rounded-lg text-[10px] font-bold transition active:scale-95 disabled:opacity-50 cursor-pointer"
+                                  title="Khấu trừ tồn kho xưởng"
+                                >
+                                  <i className={`fas fa-boxes-packing ${isDeducting ? 'animate-spin' : ''}`}></i>
+                                  <span className="ml-1 hidden xl:inline">Trừ Kho</span>
+                                </button>
+                              )}
+
+                              {order.productionStatus === 'Chưa Có Lệnh' && canUpdateGlobal && (
+                                <button
+                                  onClick={(e) => handleCreateProdTickets(order.order_sn, e)}
+                                  disabled={isProdding}
+                                  className="px-2 py-1 bg-sky-500/20 hover:bg-sky-500 text-sky-300 hover:text-zinc-950 border border-sky-500/30 rounded-lg text-[10px] font-bold transition active:scale-95 disabled:opacity-50 cursor-pointer"
+                                  title="Tạo lệnh sản xuất xưởng"
+                                >
+                                  <i className={`fas fa-hammer ${isProdding ? 'animate-spin' : ''}`}></i>
+                                  <span className="ml-1 hidden xl:inline">Lệnh Xưởng</span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* KHU VỰC CHI TIẾT EXPAND (SKU, ESCROW, PRODUCTION) */}
+                        {isExpanded && (
+                          <tr className="bg-[#0b0c10]/95 border-b border-white/10">
+                            <td colSpan="9" className="p-4 sm:p-5">
+                              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                                
+                                {/* CARD 1: Danh sách toàn bộ SKU */}
+                                <div className="bg-[#121215] border border-white/10 rounded-xl p-3.5 space-y-2.5">
+                                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                                    <span className="text-xs font-bold text-zinc-200 uppercase flex items-center gap-1.5">
+                                      <i className="fas fa-boxes-stacked text-amber-400"></i>
+                                      Chi Tiết SKU ({safeItems.length})
+                                    </span>
+                                    <span className="text-[10px] text-zinc-400">Bảng DB_ORDER_ITEMS</span>
+                                  </div>
+
+                                  {safeItems.length === 0 ? (
+                                    <div className="text-xs text-zinc-500 py-3 text-center">Chưa có chi tiết SKU nào.</div>
+                                  ) : (
+                                    <div className="space-y-1.5">
+                                      {safeItems.map((item, idx) => (
+                                        <div key={idx} className="flex items-center justify-between bg-zinc-900/70 rounded-lg p-2 text-xs border border-white/5">
+                                          <div>
+                                            <span className="font-mono font-bold text-amber-400">{item.sku}</span>
+                                            <div className="text-zinc-300 text-[11px] truncate max-w-[180px] sm:max-w-[240px]">
+                                              {item.product_name}
+                                            </div>
+                                          </div>
+                                          <div className="text-right font-mono">
+                                            <div className="font-bold text-white">SL: {item.quantity}</div>
+                                            <div className="text-[10px] text-zinc-400">
+                                              {Number(item.unit_price_origin || 0).toLocaleString()} {order.currency_origin}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* CARD 2: Báo cáo đối soát Escrow ví Shopee */}
+                                <div className="bg-[#121215] border border-white/10 rounded-xl p-3.5 space-y-2.5">
+                                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                                    <span className="text-xs font-bold text-zinc-200 uppercase flex items-center gap-1.5">
+                                      <i className="fas fa-receipt text-purple-400"></i>
+                                      Đối Soát Escrow & Phí Sàn
+                                    </span>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                                      order.escrow ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-800 text-zinc-400'
+                                    }`}>
+                                      {order.escrow ? 'Đã Đối Soát' : 'Chờ Khớp Lệnh'}
+                                    </span>
+                                  </div>
+
+                                  {order.escrow ? (
+                                    <div className="space-y-1.5 text-xs">
+                                      <div className="flex justify-between text-zinc-400">
+                                        <span>Khách thanh toán:</span>
+                                        <span className="font-mono font-bold text-zinc-200">{(order.escrow.buyer_total_paid || 0).toLocaleString()} {order.currency_origin}</span>
+                                      </div>
+                                      <div className="flex justify-between text-zinc-400">
+                                        <span>Phí hoa hồng sàn:</span>
+                                        <span className="font-mono text-rose-400">-{(order.escrow.fee_commission || 0).toLocaleString()}</span>
+                                      </div>
+                                      <div className="flex justify-between text-zinc-400">
+                                        <span>Phí dịch vụ & thanh toán:</span>
+                                        <span className="font-mono text-rose-400">-{(order.escrow.fee_service + order.escrow.fee_transaction || 0).toLocaleString()}</span>
+                                      </div>
+                                      <div className="flex justify-between text-zinc-400">
+                                        <span>Vận chuyển xuyên biên giới:</span>
+                                        <span className="font-mono text-rose-400">-{(order.escrow.fee_shipping_cross || 0).toLocaleString()}</span>
+                                      </div>
+                                      <div className="pt-2 border-t border-white/10 flex justify-between items-center">
+                                        <span className="font-bold text-white">Thực nhận về ví (VNĐ):</span>
+                                        <span className="font-mono font-black text-sm text-emerald-400">
+                                          {(order.escrow.actual_payout_vnd || 0).toLocaleString('vi-VN')} đ
+                                        </span>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="text-xs text-zinc-500 py-4 text-center">
+                                      Đơn hàng đang trong tiến trình xử lý. Dữ liệu Escrow sẽ tự động cập nhật khi đơn hoàn tất.
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* CARD 3: Tiến độ xưởng & Lệnh sản xuất */}
+                                <div className="bg-[#121215] border border-white/10 rounded-xl p-3.5 space-y-2.5">
+                                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                                    <span className="text-xs font-bold text-zinc-200 uppercase flex items-center gap-1.5">
+                                      <i className="fas fa-industry text-sky-400"></i>
+                                      Liên Kết Xưởng Sản Xuất
+                                    </span>
+                                    <span className="text-[10px] text-zinc-400">Bảng Production</span>
+                                  </div>
+
+                                  {order.productionTickets && order.productionTickets.length > 0 ? (
+                                    <div className="space-y-1.5">
+                                      {order.productionTickets.map((ticket, tIdx) => (
+                                        <div key={tIdx} className="bg-zinc-900/70 rounded-lg p-2 text-xs border border-white/5 space-y-1">
+                                          <div className="flex justify-between items-center">
+                                            <span className="font-mono font-bold text-zinc-200">{ticket.id}</span>
+                                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                              ticket.status === 'Done' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-sky-500/10 text-sky-400'
+                                            }`}>
+                                              {ticket.status}
+                                            </span>
+                                          </div>
+                                          <div className="text-zinc-400 text-[11px] truncate">{ticket.name}</div>
+                                          <div className="flex justify-between text-[10px] text-zinc-500 pt-0.5">
+                                            <span>K1: {ticket.p1_status || 'Pending'} ({ticket.p1_user || 'Trống'})</span>
+                                            <span>QC: {ticket.qc_status || 'Pending'}</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div className="text-center py-4 space-y-2">
+                                      <p className="text-xs text-zinc-500">Chưa có lệnh sản xuất nào cho đơn này.</p>
+                                      {canUpdateGlobal && (
+                                        <button
+                                          onClick={(e) => handleCreateProdTickets(order.order_sn, e)}
+                                          className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-bold transition active:scale-95 cursor-pointer"
+                                        >
+                                          <i className="fas fa-plus mr-1"></i> Tạo Lệnh Xưởng Ngay
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {/* SUB-VIEW 2: SỔ ĐỐI SOÁT ESCROW & PHÍ SÀN QUỐC TẾ                    */}
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {currentSubTab === 'ESCROW_VIEW' && (
+        <div className="bg-[#121215] border border-white/10 rounded-2xl overflow-hidden shadow-2xl space-y-4 p-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-white/10 pb-3">
+            <div>
+              <h2 className="text-sm font-bold text-purple-400 uppercase tracking-wide flex items-center gap-2">
+                <i className="fas fa-receipt"></i>
+                <span>Sổ Đối Soát Doanh Thu Escrow (Bảng DB_ESCROW_RECON)</span>
+              </h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Bóc tách chi tiết 5 tầng phí sàn (Hoa hồng, Dịch vụ, Thanh toán, Voucher, Vận chuyển QT)
+              </p>
+            </div>
+            <div className="text-right">
+              <span className="text-xs text-zinc-400">Tổng Thực Nhận Escrow:</span>
+              <div className="text-lg font-black text-emerald-400 font-mono">{payoutVnd.toLocaleString('vi-VN')} đ</div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-[#18181b] text-zinc-400 font-bold uppercase text-[10px] tracking-wider border-b border-white/10">
+                <tr>
+                  <th className="p-3">Mã Đối Soát / Đơn</th>
+                  <th className="p-3">Ngày Giải Ngân</th>
+                  <th className="p-3 text-right">Khách Trả (Gốc)</th>
+                  <th className="p-3 text-right">Hoa Hồng Sàn</th>
+                  <th className="p-3 text-right">Phí Dịch Vụ</th>
+                  <th className="p-3 text-right">Phí Thanh Toán</th>
+                  <th className="p-3 text-right">Ship Xuyên Biên Giới</th>
+                  <th className="p-3 text-right font-black text-emerald-400">Thực Nhận (VNĐ)</th>
+                  <th className="p-3 text-center">Trạng Thái</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 text-zinc-300 font-mono">
+                {(!data?.escrowList || data.escrowList.length === 0) ? (
+                  <tr>
+                    <td colSpan="9" className="p-10 text-center text-zinc-500 font-sans">
+                      <i className="fas fa-inbox text-3xl mb-2 text-zinc-600"></i>
+                      <p className="text-xs font-medium">Chưa có dữ liệu đối soát Escrow nào trong bảng DB_ESCROW_RECON.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  data.escrowList.map((rec, idx) => (
+                    <tr key={idx} className="hover:bg-zinc-800/40 transition">
+                      <td className="p-3">
+                        <div className="font-bold text-zinc-100">{rec.recon_id || ('REC_' + idx)}</div>
+                        <div className="text-[10px] text-zinc-500">{rec.order_sn}</div>
+                      </td>
+                      <td className="p-3 text-zinc-400">{rec.payout_date || 'N/A'}</td>
+                      <td className="p-3 text-right text-zinc-200">
+                        {Number(rec.buyer_total_paid || 0).toLocaleString()} {rec.currency_origin}
+                      </td>
+                      <td className="p-3 text-right text-rose-400">
+                        -{Number(rec.fee_commission || 0).toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right text-rose-400">
+                        -{Number(rec.fee_service || 0).toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right text-rose-400">
+                        -{Number(rec.fee_transaction || 0).toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right text-rose-400">
+                        -{Number(rec.fee_shipping_cross || 0).toLocaleString()}
+                      </td>
+                      <td className="p-3 text-right font-black text-emerald-400 text-sm">
+                        {Number(rec.actual_payout_vnd || 0).toLocaleString('vi-VN')} đ
+                      </td>
+                      <td className="p-3 text-center font-sans">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          {rec.recon_status || 'Hoàn Tất'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {/* SUB-VIEW 3: KHIẾU NẠI & HÀNG HOÀN QUỐC TẾ                           */}
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {currentSubTab === 'DISPUTES_VIEW' && (
+        <div className="bg-[#121215] border border-white/10 rounded-2xl overflow-hidden shadow-2xl space-y-4 p-4">
+          <div className="flex justify-between items-center border-b border-white/10 pb-3">
+            <div>
+              <h2 className="text-sm font-bold text-rose-400 uppercase tracking-wide flex items-center gap-2">
+                <i className="fas fa-scale-balanced"></i>
+                <span>Theo Dõi Khiếu Nại & Hàng Hoàn (Bảng DB_RETURNS_DISPUTES)</span>
+              </h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Kiểm soát tỷ lệ hàng hoàn và tiến độ khiếu nại đền bù từ sàn Shopee Cross-Border
+              </p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-[#18181b] text-zinc-400 font-bold uppercase text-[10px] tracking-wider border-b border-white/10">
+                <tr>
+                  <th className="p-3">Mã Khiếu Nại / Đơn</th>
+                  <th className="p-3">SKU Liên Quan</th>
+                  <th className="p-3">Lý Do Hoàn / Khiếu Nại</th>
+                  <th className="p-3">Quyết Định Xử Lý</th>
+                  <th className="p-3 text-right">Tổn Thất (VNĐ)</th>
+                  <th className="p-3 text-right">Đền Bù Từ Sàn</th>
+                  <th className="p-3 text-center">Trạng Thái Sàn</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 text-zinc-300">
+                {(!data?.disputesList || data.disputesList.length === 0) ? (
+                  <tr>
+                    <td colSpan="7" className="p-10 text-center text-zinc-500 font-sans">
+                      <i className="fas fa-shield-halved text-3xl mb-2 text-emerald-500"></i>
+                      <p className="text-xs font-medium">Không có tranh chấp hoặc khiếu nại nào đang diễn ra.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  data.disputesList.map((disp, dIdx) => (
+                    <tr key={dIdx} className="hover:bg-zinc-800/40 transition">
+                      <td className="p-3">
+                        <div className="font-mono font-bold text-zinc-100">{disp.dispute_id || ('DISP_' + dIdx)}</div>
+                        <div className="text-[10px] text-zinc-500 font-mono">{disp.order_sn}</div>
+                      </td>
+                      <td className="p-3 font-mono font-bold text-amber-400">{disp.sku}</td>
+                      <td className="p-3 text-zinc-300">{disp.return_reason || 'N/A'}</td>
+                      <td className="p-3 text-zinc-300">{disp.handling_decision || 'Đang xác minh'}</td>
+                      <td className="p-3 text-right font-mono font-bold text-rose-400">
+                        {Number(disp.loss_amount_vnd || 0).toLocaleString('vi-VN')} đ
+                      </td>
+                      <td className="p-3 text-right font-mono font-bold text-emerald-400">
+                        {Number(disp.compensation_vnd || 0).toLocaleString('vi-VN')} đ
+                      </td>
+                      <td className="p-3 text-center">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          disp.shopee_claim_status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
+                        }`}>
+                          {disp.shopee_claim_status || 'PENDING'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {/* SUB-VIEW 4: AUDIT LOGS & NHẬT KÝ TỰ ĐỘNG                             */}
+      {/* ──────────────────────────────────────────────────────────────────── */}
+      {currentSubTab === 'AUDIT_VIEW' && (
+        <div className="bg-[#121215] border border-white/10 rounded-2xl overflow-hidden shadow-2xl space-y-4 p-4">
+          <div className="flex justify-between items-center border-b border-white/10 pb-3">
+            <div>
+              <h2 className="text-sm font-bold text-indigo-400 uppercase tracking-wide flex items-center gap-2">
+                <i className="fas fa-clipboard-list"></i>
+                <span>Nhật Ký Tự Động & Audit Logs (Bảng DB_AGENT_AUDIT_LOGS)</span>
+              </h2>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Lưu vết toàn bộ hoạt động quét API, khấu trừ kho và điều phối xưởng
+              </p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-[#18181b] text-zinc-400 font-bold uppercase text-[10px] tracking-wider border-b border-white/10">
+                <tr>
+                  <th className="p-3">Mã Log / Thời Gian</th>
+                  <th className="p-3">Agent / Module</th>
+                  <th className="p-3">Sự Kiện</th>
+                  <th className="p-3">Mã Đơn Tham Chiếu</th>
+                  <th className="p-3">Tóm Tắt Hành Động</th>
+                  <th className="p-3 text-center">Trạng Thái</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 text-zinc-300 font-mono">
+                {(!data?.auditLogs || data.auditLogs.length === 0) ? (
+                  <tr>
+                    <td colSpan="6" className="p-10 text-center text-zinc-500 font-sans">
+                      <i className="fas fa-inbox text-3xl mb-2 text-zinc-600"></i>
+                      <p className="text-xs font-medium">Chưa có nhật ký audit nào.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  data.auditLogs.map((log, lIdx) => (
+                    <tr key={lIdx} className="hover:bg-zinc-800/40 transition">
+                      <td className="p-3">
+                        <div className="font-bold text-zinc-200">{log.log_id || ('LOG_' + lIdx)}</div>
+                        <div className="text-[10px] text-zinc-500 font-sans">{log.timestamp ? String(log.timestamp).substring(0, 19).replace('T', ' ') : ''}</div>
+                      </td>
+                      <td className="p-3 text-indigo-300 font-bold">{log.agent_name || 'System'}</td>
+                      <td className="p-3 text-zinc-300 font-bold">{log.trigger_event || 'API_SYNC'}</td>
+                      <td className="p-3 text-amber-400 font-bold">{log.target_ref || 'N/A'}</td>
+                      <td className="p-3 font-sans text-zinc-300 max-w-md">{log.action_summary}</td>
+                      <td className="p-3 text-center font-sans">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          log.status === 'SUCCESS' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
+                        }`}>
+                          {log.status || 'SUCCESS'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+
+// Gán Component vào window để tích hợp hoàn hảo với hệ thống tải động 2-Phase Boot
+window.ShopeeGlobalTab = ShopeeGlobalTab;
+</script>
