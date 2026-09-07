@@ -3891,96 +3891,191 @@
             document.head.removeChild(style);
         };
 
+        const calcCurrentWorkTime = (timeInStr) => {
+            if (!timeInStr) return '0h 00m';
+            try {
+                const [inH, inM] = String(timeInStr).split(':').map(Number);
+                const now = new Date();
+                let curMins = now.getHours() * 60 + now.getMinutes();
+                let inMins = (inH || 0) * 60 + (inM || 0);
+                let diff = curMins - inMins;
+                if (diff < 0) diff += 24 * 60;
+                const h = Math.floor(diff / 60);
+                const m = diff % 60;
+                return `${h}h ${String(m).padStart(2, '0')}m`;
+            } catch (e) {
+                return 'Đang làm';
+            }
+        };
+
+        const handleExportPayrollExcel = () => {
+            try {
+                const pList = payroll.filter(p => !hideResigned || !isStaffResignedOrInactive(p.user) || p.totalGateHours > 0 || p.conCanTra > 0);
+                const headers = ["Nhân Sự", "Chức Danh", "Giờ Làm (h)", "Số Ngày Làm", "Số Ngày Nghỉ", "Lương Thời Gian", "Phụ Cấp", "KPI Sản Xuất", "KPI Đóng Gói", "KPI Bán Hàng", "Thưởng Khác", "Lương Lũy Kế Thực Tế", "Phí Công Đoàn", "Khấu Trừ & Phạt", "Tạm Ứng", "Thực Cần Chi Trả"];
+                const rows = pList.map(p => [
+                    `"${p.user}"`,
+                    `"${p.role || ''}"`,
+                    p.totalGateHours || 0,
+                    p.daysWorked || 0,
+                    p.soNgayNghi || 0,
+                    cleanNumber(p.luongChinh),
+                    cleanNumber(p.tongPhuCap),
+                    cleanNumber(p.hoaHongSanXuat),
+                    cleanNumber(p.kpiDongGoiDetails?.reduce((s, d) => s + d.amount, 0) || 0),
+                    cleanNumber(p.hoaHongBanHang),
+                    cleanNumber(p.tongThuong),
+                    cleanNumber(p.tongThuNhap),
+                    cleanNumber(p.phiCongDoan),
+                    cleanNumber(p.phatQuyDinh + (p.giamTruKhac || 0)),
+                    cleanNumber(p.tamUng),
+                    cleanNumber(p.conCanTra)
+                ]);
+                const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `Bang_Luong_RichFish_${filterMonth || 'KyNay'}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                triggerToast('Đã xuất bảng lương Excel thành công!', 'fa-file-excel', 'success');
+            } catch (e) {
+                console.error('Export Excel error:', e);
+                triggerToast('Lỗi khi xuất bảng lương!', 'fa-times', 'danger');
+            }
+        };
+
         return (
             <div className={"w-full space-y-4 pb-6 md:pb-6 animate-fade-in relative"}>
 
-                {/* 3 TAB NHANH TRÊN CÙNG (COLOR ACCENT THEO CHUẨN DRIBBLE) */}
-                <div className="flex gap-2 w-full max-w-lg mx-auto mb-5 bg-[#121214] p-1.5 rounded-2xl border border-white/[0.08] shadow-lg">
-                    <button
-                        type="button"
-                        onClick={() => setSubTab('ATTENDANCE')}
-                        className={`flex-1 py-2.5 rounded-xl text-[12px] font-black uppercase transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer ${
-                            subTab === 'ATTENDANCE'
-                                ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/25 scale-[1.02]'
-                                : 'bg-transparent text-zinc-400 hover:text-white hover:bg-white/[0.04]'
-                        }`}
-                    >
-                        <i className={`fas fa-calendar-check text-[13px] ${subTab === 'ATTENDANCE' ? 'text-white' : 'text-sky-400'}`}></i>
-                        <span>CHẤM CÔNG</span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setSubTab('KPI')}
-                        className={`flex-1 py-2.5 rounded-xl text-[12px] font-black uppercase transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer ${
-                            subTab === 'KPI'
-                                ? 'bg-gradient-to-r from-amber-400 to-yellow-500 text-zinc-950 shadow-lg shadow-amber-500/25 scale-[1.02]'
-                                : 'bg-transparent text-zinc-400 hover:text-white hover:bg-white/[0.04]'
-                        }`}
-                    >
-                        <i className={`fas fa-tasks text-[13px] ${subTab === 'KPI' ? 'text-zinc-950' : 'text-amber-400'}`}></i>
-                        <span>NHIỆM VỤ</span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setSubTab('PAYROLL')}
-                        className={`flex-1 py-2.5 rounded-xl text-[12px] font-black uppercase transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer ${
-                            subTab === 'PAYROLL'
-                                ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-zinc-950 shadow-lg shadow-emerald-500/25 scale-[1.02]'
-                                : 'bg-transparent text-zinc-400 hover:text-white hover:bg-white/[0.04]'
-                        }`}
-                    >
-                        <i className={`fas fa-file-invoice-dollar text-[13px] ${subTab === 'PAYROLL' ? 'text-zinc-950' : 'text-emerald-400'}`}></i>
-                        <span>BẢNG LƯƠNG</span>
-                    </button>
+                {/* 1. SEGMENTED CONTROL PHẲNG MỜ (HALLMARK ROYAL WORKBENCH & LINEAR UX) */}
+                <div className="flex justify-center mb-3">
+                    <div className="inline-flex bg-[#121214] p-1 rounded-xl border border-white/[0.08] shadow-sm">
+                        <button
+                            type="button"
+                            onClick={() => setSubTab('ATTENDANCE')}
+                            className={`px-4 py-2 rounded-lg text-[12px] font-black uppercase transition-all duration-200 flex items-center gap-2 cursor-pointer ${
+                                subTab === 'ATTENDANCE'
+                                    ? 'bg-white/[0.08] text-sky-400 border border-white/10 shadow-sm'
+                                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.03]'
+                            }`}
+                        >
+                            <i className="fas fa-clock text-[12px]"></i>
+                            <span>Chấm Công</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setSubTab('KPI')}
+                            className={`px-4 py-2 rounded-lg text-[12px] font-black uppercase transition-all duration-200 flex items-center gap-2 cursor-pointer ${
+                                subTab === 'KPI'
+                                    ? 'bg-white/[0.08] text-amber-400 border border-white/10 shadow-sm'
+                                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.03]'
+                            }`}
+                        >
+                            <i className="fas fa-bullseye text-[12px]"></i>
+                            <span>Nhiệm Vụ</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setSubTab('PAYROLL')}
+                            className={`px-4 py-2 rounded-lg text-[12px] font-black uppercase transition-all duration-200 flex items-center gap-2 cursor-pointer ${
+                                subTab === 'PAYROLL'
+                                    ? 'bg-white/[0.08] text-emerald-400 border border-white/10 shadow-sm'
+                                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.03]'
+                            }`}
+                        >
+                            <i className="fas fa-file-invoice-dollar text-[12px]"></i>
+                            <span>Bảng Lương</span>
+                        </button>
+                    </div>
                 </div>
 
-                {/* KHUNG KỲ BÁO CÁO & CÁC NÚT ICON HÀNH ĐỘNG GỌN GÀNG */}
-                <div className="flex gap-2 w-full shrink-0 items-center mb-4 bg-[#121214] p-2 rounded-2xl border border-white/[0.08] shadow-sm">
-                    <div className="flex items-center gap-2 pl-2 border-r border-white/[0.08] pr-3 shrink-0">
-                        <i className="fas fa-calendar-alt text-[#00a8e8]"></i>
-                        <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest hidden sm:inline">KỲ BÁO CÁO</span>
+                {/* 2. HÀNG PHẲNG NGANG DUY NHẤT: BỘ LỌC KỲ & CÁC NÚT HÀNH ĐỘNG */}
+                <div className="flex flex-wrap items-center justify-between gap-2.5 bg-[#121214] px-3 py-2 rounded-xl border border-white/[0.08] shadow-sm mb-4">
+                    {/* BỘ LỌC KỲ */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 text-[11px] font-black text-zinc-400 uppercase tracking-wider pl-1">
+                            <i className="fas fa-calendar-alt text-[#00a8e8]"></i>
+                            <span className="hidden sm:inline">Kỳ Báo Cáo:</span>
+                        </div>
+                        <select
+                            value={filter}
+                            onChange={e => { setFilter(e.target.value); if (e.target.value !== 'Chọn Tháng') setCustomMonth(''); }}
+                            className="h-9 px-3 bg-[#0a0a0a] rounded-lg border border-white/[0.08] text-[11px] font-black uppercase tracking-wider outline-none text-white focus:border-[#00a8e8] transition-colors cursor-pointer"
+                        >
+                            <option value="Tháng Này">Tháng Này</option>
+                            <option value="Tháng Trước">Tháng Trước</option>
+                            <option value="Chọn Tháng">Chọn Tháng</option>
+                        </select>
+                        {filter === 'Chọn Tháng' && (
+                            <input
+                                type="month"
+                                value={customMonth}
+                                onChange={e => setCustomMonth(e.target.value)}
+                                className="h-9 px-2.5 bg-[#0a0a0a] rounded-lg border border-white/[0.08] text-[11px] font-black uppercase outline-none text-[#00a8e8] focus:border-[#00a8e8] transition-colors"
+                            />
+                        )}
+                        <span className="text-[10px] font-black text-amber-400/90 bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/20 font-mono">
+                            {periodLabel}
+                        </span>
                     </div>
-                    <select
-                        value={filter}
-                        onChange={e => { setFilter(e.target.value); if (e.target.value !== 'Chọn Tháng') setCustomMonth(''); }}
-                        className="h-[42px] px-3 bg-[#0a0a0a] rounded-xl border border-white/[0.08] text-[11px] font-black uppercase tracking-wider outline-none text-white shadow-sm focus:border-[#00a8e8] transition-colors cursor-pointer shrink-0"
-                    >
-                        <option value="Tháng Này">Tháng Này</option>
-                        <option value="Tháng Trước">Tháng Trước</option>
-                        <option value="Chọn Tháng">Chọn Tháng</option>
-                    </select>
-                    {filter === 'Chọn Tháng' && (
-                        <input
-                            type="month"
-                            value={customMonth}
-                            onChange={e => setCustomMonth(e.target.value)}
-                            className="h-[42px] px-3 bg-[#0a0a0a] rounded-xl border border-white/[0.08] text-[12px] font-black uppercase outline-none text-[#00a8e8] shadow-sm focus:border-[#00a8e8] transition-colors shrink-0"
-                        />
-                    )}
-                    <div className="flex-1"></div>
-                    <div className="flex gap-1.5 shrink-0 items-center">
+
+                    {/* CÁC NÚT HÀNH ĐỘNG PHẲNG */}
+                    <div className="flex items-center gap-2 flex-wrap">
                         {subTab === 'ATTENDANCE' && (
                             <button
                                 type="button"
                                 onClick={handlePrintAttendanceMatrix}
-                                className="w-[42px] h-[42px] rounded-xl bg-[#00a8e8]/10 hover:bg-[#00a8e8]/20 text-[#00a8e8] border border-[#00a8e8]/30 flex items-center justify-center transition-all duration-200 active:scale-95 shadow-sm cursor-pointer"
+                                className="h-9 px-3 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 text-[11px] font-black uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
                                 title="In Bảng Chấm Công Ma Trận Lịch Tháng (A4 Ngang)"
                             >
-                                <i className="fas fa-print text-[#00a8e8] text-sm"></i>
+                                <i className="fas fa-print text-xs"></i>
+                                <span className="hidden md:inline">In Ma Trận</span>
                             </button>
                         )}
                         {subTab === 'KPI' && (
                             <button
                                 type="button"
                                 onClick={handlePrintKpiTaskReport}
-                                className="w-[42px] h-[42px] rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center transition-all duration-200 active:scale-95 shadow-sm cursor-pointer"
+                                className="h-9 px-3 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[11px] font-black uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
                                 title="In Báo Cáo Nhiệm Vụ & Tiến Độ KPI Toàn Xưởng (A4 Dọc)"
                             >
-                                <i className="fas fa-print text-amber-400 text-sm"></i>
+                                <i className="fas fa-print text-xs"></i>
+                                <span className="hidden md:inline">In Báo Cáo</span>
                             </button>
                         )}
+                        {subTab === 'PAYROLL' && (
+                            <button
+                                type="button"
+                                onClick={handleExportPayrollExcel}
+                                className="h-9 px-3 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px] font-black uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+                                title="Xuất bảng lương ra Excel (.csv)"
+                            >
+                                <i className="fas fa-file-excel text-xs"></i>
+                                <span className="hidden md:inline">Xuất Excel</span>
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => setShowLeaveModal(true)}
+                            className="h-9 px-3 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[11px] font-black uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+                            title="Báo Nghỉ Phép"
+                        >
+                            <i className="fas fa-calendar-minus text-xs"></i>
+                            <span>+ Báo Nghỉ</span>
+                        </button>
                         {isBoss && (
                             <>
+                                <button
+                                    type="button"
+                                    onClick={() => typeof openTaskModalStandalone === 'function' ? openTaskModalStandalone() : (window.openTaskModalStandalone && window.openTaskModalStandalone())}
+                                    className="h-9 px-3 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px] font-black uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+                                    title="Giao Việc Mới"
+                                >
+                                    <i className="fas fa-plus text-xs"></i>
+                                    <span>+ Giao Việc</span>
+                                </button>
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -4003,36 +4098,21 @@
                                         setKpiCycle('MONTH');
                                         setShowKPIModal(true);
                                     }}
-                                    className="w-[42px] h-[42px] rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center transition-all duration-200 active:scale-95 shadow-sm cursor-pointer"
+                                    className="h-9 px-3 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[11px] font-black uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
                                     title="Tạo KPI Mới"
                                 >
-                                    <i className="fas fa-fire text-amber-400 text-sm"></i>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => typeof openTaskModalStandalone === 'function' ? openTaskModalStandalone() : (window.openTaskModalStandalone && window.openTaskModalStandalone())}
-                                    className="w-[42px] h-[42px] rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center transition-all duration-200 active:scale-95 shadow-sm cursor-pointer"
-                                    title="Giao Việc Mới"
-                                >
-                                    <i className="fas fa-tasks text-emerald-400 text-sm"></i>
+                                    <i className="fas fa-fire text-xs"></i>
+                                    <span>+ Tạo KPI</span>
                                 </button>
                             </>
                         )}
                         <button
                             type="button"
-                            onClick={() => setShowLeaveModal(true)}
-                            className="w-[42px] h-[42px] rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center transition-all duration-200 active:scale-95 shadow-sm cursor-pointer"
-                            title="Báo Nghỉ Phép"
-                        >
-                            <i className="fas fa-calendar-minus text-rose-400 text-sm"></i>
-                        </button>
-                        <button
-                            type="button"
                             onClick={() => setShowQuickNotes(prev => !prev)}
-                            className={`w-[42px] h-[42px] rounded-xl flex items-center justify-center transition-all duration-200 active:scale-95 shadow-sm cursor-pointer border ${showQuickNotes ? 'bg-amber-500/20 text-amber-300 border-amber-500/50' : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border-amber-500/30'}`}
+                            className={`h-9 px-2.5 rounded-lg flex items-center justify-center transition-all active:scale-95 cursor-pointer border ${showQuickNotes ? 'bg-amber-500/20 text-amber-300 border-amber-500/50' : 'bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white border-white/[0.08]'}`}
                             title="Ghi chú & nhắc việc nhân sự"
                         >
-                            <i className="fas fa-sticky-note text-amber-400 text-sm"></i>
+                            <i className="fas fa-sticky-note text-xs"></i>
                         </button>
                     </div>
                 </div>
@@ -4242,349 +4322,367 @@
                                     </div>
                                 </div>
                             ) : (
-                                /* CHẾ ĐỘ 2: DANH SÁCH THẺ (CARDS VIEW) */
-                                <div className={"grid grid-cols-1 xl:grid-cols-2 gap-5 animate-fade-in"}>
-                                    {/* CỘT TRÁI: Top Chuyên Cần & Widget Chấm Công */}
-                                    <div className={"space-y-4"}>
-                                        {/* TOP CHUYÊN CẦN ĐƯỢC ĐƯA LÊN TRÊN CÙNG */}
-                                        {top3Att.length > 0 && (
-                                            <div className={"bg-[#141414] pt-8 pb-4 px-4 rounded-2xl border border-[#2a2a2a] relative mt-3 mb-4 shadow-sm"}>
-                                                <h3 className={"absolute -top-3 left-1/2 -translate-x-1/2 bg-[#0a0a0a] px-4 py-1.5 border border-[#333] rounded-full font-black text-[#3b82f6] text-[11px] uppercase tracking-widest flex items-center gap-2 whitespace-nowrap shadow-md"}><i className={"fas fa-fire text-[10px]"}></i> TOP CHUYÊN CẦN</h3>
-                                                <div className={"flex justify-center items-end gap-2 h-[130px]"}>
-                                                    {top3Att[1] && <div className={"flex-1 flex flex-col items-center justify-end h-[85%] bg-gradient-to-t from-[#94a3b8]/20 to-transparent rounded-t-xl border-b-2 border-[#94a3b8] pb-2"}>{renderSafeAvatar(top3Att[1].name, "w-10 h-10 border-[#94a3b8] mb-1.5")}<div className={"text-[10px] font-black text-[#f5f5f5] uppercase truncate w-full text-center px-1"}>{top3Att[1].name.split(' ').pop()}</div><div className={"text-[9px] font-bold text-[#94a3b8] mt-0.5 bg-[#0a0a0a] px-1.5 py-0.5 rounded-full border border-[#94a3b8]/30"}>{top3Att[1].label}</div></div>}
-                                                    {top3Att[0] && <div className={"flex-1 flex flex-col items-center justify-end h-full bg-gradient-to-t from-[#3b82f6]/30 to-transparent rounded-t-xl border-b-4 border-[#3b82f6] pb-2 relative z-10 scale-105"}><div className={"absolute -top-7 text-[#3b82f6] text-3xl drop-shadow-md"}><i className={"fas fa-medal"}></i></div>{renderSafeAvatar(top3Att[0].name, "w-12 h-12 border-[#3b82f6] mb-1.5")}<div className={"text-[11px] font-black text-[#3b82f6] uppercase truncate w-full text-center px-1"}>{top3Att[0].name.split(' ').pop()}</div><div className={"text-[10px] font-black text-[#0a0a0a] mt-1 bg-[#3b82f6] px-2 py-0.5 rounded-full"}>{top3Att[0].label}</div></div>}
-                                                    {top3Att[2] && <div className={"flex-1 flex flex-col items-center justify-end h-[75%] bg-gradient-to-t from-[#b45309]/20 to-transparent rounded-t-xl border-b-2 border-[#b45309] pb-2"}>{renderSafeAvatar(top3Att[2].name, "w-10 h-10 border-[#b45309] mb-1.5")}<div className={"text-[10px] font-black text-[#f5f5f5] uppercase truncate w-full text-center px-1"}>{top3Att[2].name.split(' ').pop()}</div><div className={"text-[9px] font-bold text-[#b45309] mt-0.5 bg-[#0a0a0a] px-1.5 py-0.5 rounded-full border border-[#b45309]/30"}>{top3Att[2].label}</div></div>}
-                                                </div>
+                                /* CHẾ ĐỘ 2: DANH SÁCH THẺ (CARDS VIEW) - THEO CHUẨN HALLMARK ROYAL WORKBENCH & LINEAR UX */
+                                <div className="space-y-4 animate-fade-in">
+                                    {/* 1. BĂNG VINH DANH DANH DỰ 1 DÒNG PHẲNG */}
+                                    {top3Att.length > 0 && (
+                                        <div className="bg-[#121214] px-4 py-2.5 rounded-xl border border-white/[0.08] flex items-center justify-between gap-3 overflow-x-auto text-[11px] shadow-sm">
+                                            <div className="flex items-center gap-2 text-amber-400 font-black uppercase tracking-wider shrink-0">
+                                                <i className="fas fa-medal text-amber-400 text-sm"></i>
+                                                <span>Top Chuyên Cần Thực Tế:</span>
                                             </div>
-                                        )}
-
-                                        {/* ATTENDANCE CARD WIDGET */}
-                                        <RFCard className="w-full relative group">
-                                            <div className="absolute top-0 left-0 w-1.5 bg-gradient-to-b from-[#00a8e8] to-[#3b82f6] h-full z-10"></div>
-                                            <div className="absolute -right-10 -top-10 w-40 h-40 bg-[#00a8e8]/5 rounded-full blur-3xl group-hover:bg-[#00a8e8]/10 transition-all"></div>
-
-                                            {/* Shift selector grid */}
-                                            <div className="grid grid-cols-3 gap-3 mb-4 relative z-10">
-                                                <div
-                                                    className={`p-3 rounded-2xl border flex flex-col items-center justify-center cursor-default transition-all ${selectedShiftTab === 'Sáng'
-                                                        ? 'bg-[#2563eb]/10 border-[#2563eb] text-[#60a5fa] ring-1 ring-[#2563eb]'
-                                                        : 'bg-[#0a0a0a] border-[#333] text-zinc-400 opacity-70'
-                                                        }`}
-                                                >
-                                                    <div className="flex items-center gap-1 text-[11px] font-black uppercase tracking-wider mb-1"><i className="fas fa-cloud-sun text-amber-400"></i> Ca Sáng</div>
-                                                    <div className="text-[9px] font-bold opacity-80">06:00 - 13:00</div>
-                                                </div>
-                                                <div
-                                                    className={`p-3 rounded-2xl border flex flex-col items-center justify-center cursor-default transition-all ${selectedShiftTab === 'Chiều'
-                                                        ? 'bg-[#2563eb]/10 border-[#2563eb] text-[#60a5fa] ring-1 ring-[#2563eb]'
-                                                        : 'bg-[#0a0a0a] border-[#333] text-zinc-400 opacity-70'
-                                                        }`}
-                                                >
-                                                    <div className="flex items-center gap-1 text-[11px] font-black uppercase tracking-wider mb-1"><i className="fas fa-sun text-yellow-400"></i> Ca Chiều</div>
-                                                    <div className="text-[9px] font-bold opacity-80">13:00 - 19:00</div>
-                                                </div>
-                                                <div
-                                                    className={`p-3 rounded-2xl border flex flex-col items-center justify-center cursor-default transition-all ${selectedShiftTab === 'Tối'
-                                                        ? 'bg-[#2563eb]/10 border-[#2563eb] text-[#60a5fa] ring-1 ring-[#2563eb]'
-                                                        : 'bg-[#0a0a0a] border-[#333] text-zinc-400 opacity-70'
-                                                        }`}
-                                                >
-                                                    <div className="flex items-center gap-1 text-[11px] font-black uppercase tracking-wider mb-1"><i className="fas fa-moon text-yellow-300"></i> Ca Tối</div>
-                                                    <div className="text-[9px] font-bold opacity-80">19:00 - 06:00</div>
-                                                </div>
-                                            </div>
-
-                                            {/* Action buttons */}
-                                            <div className="grid grid-cols-2 gap-3 mb-4 relative z-10">
-                                                <button
-                                                    onClick={() => handleCheckInOut('IN', selectedShiftTab)}
-                                                    disabled={Boolean(currentSelectedRecord?.timeIn)}
-                                                    className={`py-3.5 px-4 rounded-2xl font-black text-[13px] uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all duration-200 ${currentSelectedRecord?.timeIn
-                                                        ? 'bg-[#121214] border border-zinc-800 text-zinc-600 cursor-not-allowed opacity-40'
-                                                        : 'bg-gradient-to-r from-emerald-500 via-green-500 to-teal-600 hover:from-emerald-400 hover:via-green-400 hover:to-teal-500 text-white border border-emerald-300/40 shadow-[0_0_20px_rgba(16,185,129,0.45)] hover:shadow-[0_0_28px_rgba(16,185,129,0.7)] active:scale-95 cursor-pointer'
-                                                        }`}
-                                                >
-                                                    <i className="fas fa-sign-in-alt text-[14px]"></i> VÀO LÀM
-                                                </button>
-                                                <button
-                                                    onClick={() => handleCheckInOut('OUT', selectedShiftTab)}
-                                                    disabled={!currentSelectedRecord?.timeIn || Boolean(currentSelectedRecord?.timeOut)}
-                                                    className={`py-3.5 px-4 rounded-2xl font-black text-[13px] uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all duration-200 ${(!currentSelectedRecord?.timeIn || currentSelectedRecord?.timeOut)
-                                                        ? 'bg-[#121214] border border-zinc-800 text-zinc-600 cursor-not-allowed opacity-40'
-                                                        : 'bg-gradient-to-r from-rose-500 to-red-600 hover:from-rose-400 hover:to-red-500 text-white border border-rose-400/40 active:scale-95 shadow-[0_0_20px_rgba(244,63,94,0.45)] hover:shadow-[0_0_28px_rgba(244,63,94,0.7)] cursor-pointer'
-                                                        }`}
-                                                >
-                                                    <i className="fas fa-sign-out-alt text-[14px]"></i> RA VỀ
-                                                </button>
-                                            </div>
-
-                                            {/* GIỜ LÀM THỰC TẾ HÔM NAY */}
-                                            <div className="bg-[#0b0b0c]/80 border border-zinc-800/80 rounded-2xl p-4 space-y-3">
-                                                <div className="flex items-center gap-2 text-[10px] font-black text-zinc-400 uppercase tracking-widest border-b border-zinc-900 pb-2.5">
-                                                    <i className="fas fa-history text-blue-400"></i> GIỜ LÀM THỰC TẾ HÔM NAY
-                                                </div>
-
-                                                <div className="space-y-2">
-                                                    {/* Row Sáng */}
-                                                    <div className="flex justify-between items-center bg-[#0d0d0e] border border-zinc-900 rounded-xl px-3 py-2.5">
-                                                        <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-300">
-                                                            <span className={`w-1.5 h-1.5 rounded-full ${morningRecord && !morningRecord.timeOut ? 'bg-blue-500 animate-pulse' : 'bg-zinc-700'}`}></span>
-                                                            Ca Sáng
-                                                        </div>
-                                                        <div className="text-[11px] font-black text-zinc-400 font-mono">
-                                                            {morningRecord ? (
-                                                                morningRecord.timeOut ? (
-                                                                    `${morningRecord.timeIn} ➔ ${morningRecord.timeOut}`
-                                                                ) : (
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span>{morningRecord.timeIn}</span> ➔ <span className="text-amber-505 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded text-[9px] font-black text-amber-500">Đang làm</span>
-                                                                    </div>
-                                                                )
-                                                            ) : (
-                                                                '--:-- ➔ --:--'
-                                                            )}
-                                                        </div>
+                                            <div className="flex items-center gap-2.5 shrink-0">
+                                                {top3Att[0] && (
+                                                    <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 px-3 py-1 rounded-lg">
+                                                        <span className="text-amber-300 font-black">🥇 #1</span>
+                                                        {renderSafeAvatar(top3Att[0].name, "w-5 h-5 rounded-full")}
+                                                        <span className="font-bold text-white">{top3Att[0].name.split(' ').pop()}</span>
+                                                        <span className="text-amber-400 font-mono font-bold text-[10px]">({top3Att[0].label})</span>
                                                     </div>
-
-                                                    {/* Row Chiều */}
-                                                    <div className="flex justify-between items-center bg-[#0d0d0e] border border-zinc-900 rounded-xl px-3 py-2.5">
-                                                        <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-300">
-                                                            <span className={`w-1.5 h-1.5 rounded-full ${afternoonRecord && !afternoonRecord.timeOut ? 'bg-blue-500 animate-pulse' : 'bg-zinc-700'}`}></span>
-                                                            Ca Chiều
-                                                        </div>
-                                                        <div className="text-[11px] font-black text-zinc-400 font-mono">
-                                                            {afternoonRecord ? (
-                                                                afternoonRecord.timeOut ? (
-                                                                    `${afternoonRecord.timeIn} ➔ ${afternoonRecord.timeOut}`
-                                                                ) : (
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span>{afternoonRecord.timeIn}</span> ➔ <span className="text-amber-550 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded text-[9px] font-black text-amber-500">Đang làm</span>
-                                                                    </div>
-                                                                )
-                                                            ) : (
-                                                                '--:-- ➔ --:--'
-                                                            )}
-                                                        </div>
+                                                )}
+                                                {top3Att[1] && (
+                                                    <div className="flex items-center gap-2 bg-zinc-800/60 border border-zinc-700 px-3 py-1 rounded-lg">
+                                                        <span className="text-zinc-300 font-black">🥈 #2</span>
+                                                        {renderSafeAvatar(top3Att[1].name, "w-5 h-5 rounded-full")}
+                                                        <span className="font-bold text-white">{top3Att[1].name.split(' ').pop()}</span>
+                                                        <span className="text-zinc-400 font-mono font-bold text-[10px]">({top3Att[1].label})</span>
                                                     </div>
+                                                )}
+                                                {top3Att[2] && (
+                                                    <div className="flex items-center gap-2 bg-orange-950/30 border border-orange-800/40 px-3 py-1 rounded-lg">
+                                                        <span className="text-orange-400 font-black">🥉 #3</span>
+                                                        {renderSafeAvatar(top3Att[2].name, "w-5 h-5 rounded-full")}
+                                                        <span className="font-bold text-white">{top3Att[2].name.split(' ').pop()}</span>
+                                                        <span className="text-orange-400/80 font-mono font-bold text-[10px]">({top3Att[2].label})</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
 
-                                                    {/* Row Tối */}
-                                                    <div className="flex justify-between items-center bg-[#0d0d0e] border border-zinc-900 rounded-xl px-3 py-2.5">
-                                                        <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-300">
-                                                            <span className={`w-1.5 h-1.5 rounded-full ${eveningRecord && !eveningRecord.timeOut ? 'bg-blue-500 animate-pulse' : 'bg-zinc-700'}`}></span>
-                                                            Ca Tối
-                                                        </div>
-                                                        <div className="text-[11px] font-black text-zinc-400 font-mono">
-                                                            {eveningRecord ? (
-                                                                eveningRecord.timeOut ? (
-                                                                    `${eveningRecord.timeIn} ➔ ${eveningRecord.timeOut}`
-                                                                ) : (
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span>{eveningRecord.timeIn}</span> ➔ <span className="text-amber-550 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded text-[9px] font-black text-amber-500">Đang làm</span>
-                                                                    </div>
-                                                                )
-                                                            ) : (
-                                                                '--:-- ➔ --:--'
-                                                            )}
-                                                        </div>
+                                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+                                        {/* CỘT TRÁI: THẺ CHẤM CÔNG NGỮ CẢNH TỰ NHẬN DIỆN */}
+                                        <div className="xl:col-span-5 space-y-4">
+                                            <div className="bg-[#121214] border border-white/[0.08] rounded-2xl p-4 shadow-sm space-y-4">
+                                                <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-pulse"></span>
+                                                        <span className="text-[12px] font-black uppercase text-white tracking-wider">Chấm Công Vào / Ra Ca</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 text-[11px] font-mono">
+                                                        <span className="text-zinc-400">Ca:</span>
+                                                        <span className="px-2 py-0.5 rounded-md bg-sky-500/15 border border-sky-500/30 text-sky-400 font-bold uppercase">
+                                                            Ca {activeShift} ({activeShift === 'Sáng' ? '06:00-13:00' : activeShift === 'Chiều' ? '13:00-19:00' : '19:00-06:00'})
+                                                        </span>
                                                     </div>
                                                 </div>
-                                            </div>
-                                        </RFCard>
-                                    </div>
 
-                                    {/* CỘT PHẢI: Danh sách nhân sự */}
-                                    <div className={"space-y-4"}>
-                                        <RFCard className="shadow-sm">
-                                            <div className="text-[12px] font-black text-gray-300 uppercase mb-3 border-b border-white/[0.08] pb-2 flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <i className="fas fa-id-card-alt text-[#00a8e8]"></i>
-                                                    <span>Hồ Sơ Chấm Công Nhân Sự</span>
-                                                </div>
-                                                <span className="text-[10px] text-zinc-400 font-bold">{payroll.filter(p => !hideResigned || !isStaffResignedOrInactive(p.user) || (p.atts && p.atts.length > 0)).length} nhân sự</span>
-                                            </div>
-                                            <div className={"space-y-2.5"}>
-                                                {payroll.filter(p => !hideResigned || !isStaffResignedOrInactive(p.user) || (p.atts && p.atts.length > 0)).map(p => {
-                                                    const attsInPeriod = p.atts;
-                                                    const safeTodayStr = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0];
-                                                    const todayAtts = attsInPeriod.filter(a => String(a.date).startsWith(safeTodayStr));
-                                                    let todayStatus = 'Chưa điểm danh';
-                                                    let isWorking = false;
-                                                    if (todayAtts.length > 0) {
-                                                        const last = todayAtts[todayAtts.length - 1];
-                                                        todayStatus = String(last.status || '');
-                                                        if (todayStatus.includes('Đang làm') || (last.timeIn && !last.timeOut)) isWorking = true;
-                                                    } else if (attsInPeriod.length > 0) {
-                                                        const lastAtt = attsInPeriod[attsInPeriod.length - 1];
-                                                        if (lastAtt.shift === 'Nghỉ Phép') todayStatus = `Đã báo nghỉ (${lastAtt.date})`;
-                                                        else todayStatus = `Cuối: ${lastAtt.date}`;
+                                                {/* NÚT NGỮ CẢNH TỰ NHẬN DIỆN (LINEAR UX) */}
+                                                {(() => {
+                                                    const curShift = activeShift || 'Sáng';
+                                                    const curRec = (curShift === 'Sáng' ? morningRecord : (curShift === 'Chiều' ? afternoonRecord : eveningRecord));
+                                                    const hasCheckedIn = Boolean(curRec?.timeIn);
+                                                    const hasCheckedOut = Boolean(curRec?.timeOut);
+                                                    const isWorkingNow = hasCheckedIn && !hasCheckedOut;
+
+                                                    if (!hasCheckedIn) {
+                                                        return (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleCheckInOut('IN', curShift)}
+                                                                className="w-full py-4 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[13px] uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] shadow-lg shadow-emerald-950/40 cursor-pointer"
+                                                            >
+                                                                <i className="fas fa-sign-in-alt text-base"></i>
+                                                                <span>👉 VÀO CA {curShift.toUpperCase()}</span>
+                                                            </button>
+                                                        );
                                                     }
-                                                    const hasWarning = todayAtts.some(a => Number(a.penalty) > 0 || (a.note && (a.note.toLowerCase().includes('muộn') || a.note.toLowerCase().includes('sớm'))));
-                                                    
-                                                    const bpPenalties = bpData.filter(b => b.user === p.user && isDateInRange(b.date) && (Number(b.amount) < 0 || b.type === 'Phạt')).map(b => ({
-                                                        id: b.id,
-                                                        isAttendance: false,
-                                                        date: b.date,
-                                                        note: b.note || b.type || 'Phạt trực tiếp',
-                                                        type: b.type,
-                                                        amount: Number(b.amount) < 0 ? Number(b.amount) : -Number(b.amount),
-                                                        record: b
-                                                    }));
-                                                    const attPenalties = p.atts.filter(a => Number(a.penalty) > 0).map(a => {
-                                                        const shiftText = a.shift && a.shift !== 'Nghỉ Phép' ? ` (${a.shift.includes('Ca') ? a.shift : 'Ca ' + a.shift})` : '';
-                                                        const noteText = a.note ? ` [Lý do: ${a.note}]` : '';
-                                                        return {
-                                                            id: a.id,
-                                                            isAttendance: true,
-                                                            date: a.date,
-                                                            note: `${a.status || 'Vi phạm chấm công'}${shiftText}${noteText}`,
-                                                            amount: -Number(a.penalty),
-                                                            record: a
-                                                        };
-                                                    });
-                                                    const userPenalties = [...bpPenalties, ...attPenalties].sort((a, b) => new Date(b.date) - new Date(a.date));
-                                                    const isPenaltyExpanded = openSection[`${p.user}_penalty`];
-                                                    const userLeaves = attsInPeriod.filter(a => String(a.status || '').includes('Nghỉ') || a.shift === 'Nghỉ Phép' || a.leaveType);
+
+                                                    if (isWorkingNow) {
+                                                        return (
+                                                            <div className="space-y-3">
+                                                                <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-xl p-3 flex items-center justify-between">
+                                                                    <div className="flex items-center gap-2.5">
+                                                                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                                                        <div>
+                                                                            <div className="text-[12px] font-black text-emerald-400 uppercase">Đang Trong Ca {curShift}</div>
+                                                                            <div className="text-[11px] text-zinc-400 font-mono mt-0.5">Giờ vào: <b className="text-white">{curRec.timeIn}</b></div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <div className="text-[10px] text-zinc-400 font-semibold uppercase">Đã làm</div>
+                                                                        <div className="text-[13px] font-black text-white font-mono">{calcCurrentWorkTime(curRec.timeIn)}</div>
+                                                                    </div>
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleCheckInOut('OUT', curShift)}
+                                                                    className="w-full py-4 px-6 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-black text-[13px] uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] shadow-lg shadow-rose-950/40 cursor-pointer"
+                                                                >
+                                                                    <i className="fas fa-sign-out-alt text-base"></i>
+                                                                    <span>🔴 KẾT THÚC CA</span>
+                                                                </button>
+                                                            </div>
+                                                        );
+                                                    }
 
                                                     return (
-                                                        <div
-                                                            key={p.user}
-                                                            className={`bg-[#121214] border transition-all duration-200 rounded-2xl p-3.5 group cursor-pointer shadow-sm ${
-                                                                isPenaltyExpanded
-                                                                    ? 'border-[#00a8e8]/50 shadow-[0_0_20px_rgba(0,168,232,0.12)] bg-[#14151b]'
-                                                                    : 'border-white/[0.08] hover:border-white/[0.18]'
-                                                            }`}
-                                                            onClick={() => toggleSection(p.user, 'penalty')}
-                                                        >
-                                                            <div className="flex justify-between items-start gap-2">
-                                                                <div className="flex items-center gap-3 min-w-0 flex-1" onClick={(e) => { e.stopPropagation(); setShowHistoryUser(p.user); }}>
-                                                                    <div className="relative shrink-0">
-                                                                        {renderSafeAvatar(p.user, "w-11 h-11 border border-white/10 rounded-full group-hover:border-[#00a8e8] transition-colors shrink-0 shadow-sm")}
-                                                                        <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[#121214] ${isWorking ? 'bg-emerald-500 animate-pulse' : (todayStatus.includes('nghỉ') ? 'bg-rose-500' : 'bg-zinc-600')}`}></span>
-                                                                    </div>
-                                                                    <div className="min-w-0 flex-1">
-                                                                        <div className="font-black text-white text-[13.5px] group-hover:text-[#00a8e8] transition-colors flex items-center gap-1.5 flex-wrap">
-                                                                            <span className="truncate">{p.user}</span>
-                                                                            {p.role && (
-                                                                                <span className="text-[9px] text-[#d4af37] bg-[#d4af37]/10 border border-[#d4af37]/20 px-1.5 py-0.5 rounded font-black">
-                                                                                    {p.role}
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                        <div className="text-[10.5px] font-bold mt-0.5 flex items-center gap-1">
-                                                                            {isWorking ? (
-                                                                                <span className="text-emerald-400 font-bold flex items-center gap-1">
-                                                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                                                                    Đang làm việc
-                                                                                </span>
-                                                                            ) : todayStatus.includes('nghỉ') ? (
-                                                                                <span className="text-rose-400 font-bold flex items-center gap-1">
-                                                                                    <i className="fas fa-calendar-times text-[10px]"></i>
-                                                                                    {todayStatus}
-                                                                                </span>
-                                                                            ) : hasWarning ? (
-                                                                                <span className="text-rose-400 font-bold flex items-center gap-1">
-                                                                                    <i className="fas fa-exclamation-circle text-[10px]"></i>
-                                                                                    {todayStatus} (Đi muộn)
-                                                                                </span>
-                                                                            ) : todayStatus.includes('Hoàn thành') || todayStatus.includes('Cuối') ? (
-                                                                                <span className="text-sky-400 font-bold flex items-center gap-1">
-                                                                                    <i className="fas fa-check-circle text-[10px]"></i>
-                                                                                    {todayStatus}
-                                                                                </span>
-                                                                            ) : (
-                                                                                <span className="text-zinc-500 font-medium">
-                                                                                    {todayStatus}
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="flex gap-3 items-center shrink-0">
-                                                                    <div className="text-right text-[10.5px]" onClick={(e) => { e.stopPropagation(); setShowHistoryUser(p.user); }}>
-                                                                        <div className="font-bold text-gray-400 mb-1">
-                                                                            Ngày nghỉ: <span className={`font-black px-1.5 py-0.5 rounded-md text-[10px] ${p.soNgayNghi > (p.allowedLeaveDays || 2) ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse' : (p.soNgayNghi > 0 ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30')}`}>{p.soNgayNghi}/{p.allowedLeaveDays || 2} ngày</span>
-                                                                        </div>
-                                                                        <div className="text-zinc-400 mb-0.5 text-[10px]">
-                                                                            Giờ chấm công: <span className="font-mono font-black text-white">{Math.floor(Number(p.totalGateHours))}h</span>
-                                                                        </div>
-                                                                        <div className="text-zinc-400 text-[10px]">
-                                                                            Đi muộn/Phạt: <span className={`font-mono font-black ${p.soLanDiMuon + p.soLanPhat > 0 ? 'text-rose-400' : 'text-zinc-300'}`}>{p.soLanDiMuon + p.soLanPhat}</span> lần
-                                                                        </div>
-                                                                    </div>
-
-                                                                    <div className={`w-7 h-7 rounded-xl border border-white/10 bg-white/[0.03] flex items-center justify-center transition-all duration-300 ${isPenaltyExpanded ? 'rotate-180 text-[#00a8e8] border-[#00a8e8]/40 bg-[#00a8e8]/10' : 'text-zinc-400 group-hover:text-white'}`}>
-                                                                        <i className="fas fa-chevron-down text-[10px]"></i>
-                                                                    </div>
-                                                                </div>
+                                                        <div className="p-3 bg-zinc-900/60 border border-zinc-800 rounded-xl flex items-center justify-between text-[11px]">
+                                                            <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                                                                <i className="fas fa-check-circle"></i>
+                                                                <span>Đã hoàn thành Ca {curShift} ({curRec.timeIn} ➔ {curRec.timeOut})</span>
                                                             </div>
+                                                            <span className="font-mono font-black text-white bg-white/[0.05] px-2 py-0.5 rounded border border-white/10">{curRec.totalHours}h</span>
+                                                        </div>
+                                                    );
+                                                })()}
 
-                                                            {/* DANH SÁCH HUY HIỆU & LÝ DO NGHỈ TRONG THÁNG */}
-                                                            {userLeaves.length > 0 && (
-                                                                <div className="space-y-1.5 mt-3 pt-2.5 border-t border-white/[0.06]">
-                                                                    {userLeaves.map((lv, lIdx) => {
-                                                                        const isKP = String(lv.status).includes('không phép');
-                                                                        const dStr = lv.date ? lv.date.slice(5, 10).replace('-', '/') : '';
-                                                                        const shiftLabel = lv.shift && lv.shift !== 'Nghỉ Phép' ? (lv.shift.includes('Ca') ? lv.shift : `Ca ${lv.shift}`) : (lv.leaveShift || 'Cả Ngày');
-                                                                        return (
-                                                                            <div
-                                                                                key={lIdx}
-                                                                                onClick={(e) => { e.stopPropagation(); setEditingLeave({ user: p.user, date: lv.date, attRecord: lv }); }}
-                                                                                className={`p-2.5 rounded-xl text-[10.5px] flex flex-col gap-1 cursor-pointer transition-all hover:scale-[1.005] ${isKP ? 'bg-rose-950/30 text-rose-300 border border-rose-500/40 hover:bg-rose-900/40' : 'bg-cyan-950/30 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-900/40'}`}
-                                                                                title="Click để duyệt hoặc điều chỉnh mức phạt/trạng thái"
-                                                                            >
-                                                                                <div className="flex items-center justify-between font-black uppercase text-[9.5px]">
-                                                                                    <span className="flex items-center gap-1.5">
-                                                                                        <i className={`fas ${isKP ? 'fa-times-circle text-rose-400' : 'fa-check-circle text-cyan-400'}`}></i>
-                                                                                        <span className="font-mono text-white">{dStr}</span> • <span>{shiftLabel}</span>: <span className={isKP ? 'text-rose-400' : 'text-cyan-400'}>{isKP ? 'Không phép' + (Number(lv.penalty) > 0 ? ` (-${formatMoney(lv.penalty)}đ)` : '') : 'Có phép'}</span>
-                                                                                    </span>
-                                                                                    <span className="text-[8.5px] px-2 py-0.5 rounded bg-black/40 text-gray-300 border border-white/10 hover:text-white font-bold">Duyệt/Sửa ✎</span>
-                                                                                </div>
-                                                                                {lv.note && (
-                                                                                    <div className="text-[10px] text-gray-300 italic font-medium pl-3 border-l-2 border-amber-500/50 mt-0.5 whitespace-pre-wrap">
-                                                                                        💬 Lý do: "{lv.note}"
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        );
-                                                                    })}
+                                                {/* BẢNG GIỜ LÀM THỰC TẾ HÔM NAY */}
+                                                <div className="bg-[#0b0b0c] border border-white/[0.06] rounded-xl p-3 space-y-2">
+                                                    <div className="flex items-center gap-2 text-[10px] font-black text-zinc-400 uppercase tracking-wider border-b border-white/[0.06] pb-2">
+                                                        <i className="fas fa-history text-sky-400"></i>
+                                                        <span>Giờ Làm Thực Tế Hôm Nay ({currentUser})</span>
+                                                    </div>
+                                                    <div className="space-y-1.5 text-[11px]">
+                                                        {[
+                                                            { name: 'Ca Sáng', time: '06:00 - 13:00', rec: morningRecord, shiftKey: 'Sáng' },
+                                                            { name: 'Ca Chiều', time: '13:00 - 19:00', rec: afternoonRecord, shiftKey: 'Chiều' },
+                                                            { name: 'Ca Tối', time: '19:00 - 06:00', rec: eveningRecord, shiftKey: 'Tối' }
+                                                        ].map(s => (
+                                                            <div key={s.name} className="flex justify-between items-center bg-[#121214] border border-white/[0.04] rounded-lg px-3 py-2">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className={`w-1.5 h-1.5 rounded-full ${s.rec && !s.rec.timeOut ? 'bg-emerald-400 animate-pulse' : (s.rec?.timeOut ? 'bg-sky-400' : 'bg-zinc-700')}`}></span>
+                                                                    <span className="font-bold text-zinc-300">{s.name}</span>
+                                                                    <span className="text-[9px] text-zinc-500 font-mono hidden sm:inline">({s.time})</span>
                                                                 </div>
-                                                            )}
-
-                                                            {/* ACCORDION CHI TIẾT PHẠT */}
-                                                            <div className={`w-full overflow-hidden transition-all duration-300 ${isPenaltyExpanded ? 'max-h-[350px] mt-3 opacity-100' : 'max-h-0 mt-0 opacity-0'}`}>
-                                                                <div className="pt-3 border-t border-white/[0.08] space-y-1.5 overflow-y-auto max-h-[260px] custom-scrollbar pr-1">
-                                                                    <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center justify-between">
-                                                                        <span className="flex items-center gap-1"><i className="fas fa-clipboard-list text-[#00a8e8]"></i> Chi tiết phạt tháng này</span>
-                                                                        {userPenalties.length > 0 && <span className="text-rose-400 font-mono font-bold">{userPenalties.length} khoản phạt</span>}
-                                                                    </div>
-                                                                    {userPenalties.length > 0 ? userPenalties.map((pen, i) => (
-                                                                        <div key={i} className="flex justify-between items-center text-[11px] text-gray-300 bg-[#0c0c0e] p-2.5 rounded-xl border border-white/[0.06] hover:border-white/10 transition-colors">
-                                                                            <span className="truncate mr-2"><i className="far fa-calendar-alt text-zinc-500 mr-1.5"></i> <b className="text-white">{pen.date ? pen.date.slice(5, 10).replace('-', '/') : ''}</b> - {pen.note || pen.type}</span>
-                                                                            <div className="flex items-center gap-2 shrink-0">
-                                                                                <span className="text-rose-400 font-bold font-mono">{formatMoney(pen.amount)}đ</span>
-                                                                                {(canPenalize || isAdmin || isBoss) && (
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        onClick={(e) => { e.stopPropagation(); handleDeletePenalty(pen, p.user); }}
-                                                                                        className="w-6 h-6 rounded-lg bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer shrink-0"
-                                                                                        title="Xoá / Miễn trừ khoản phạt này"
-                                                                                    >
-                                                                                        <i className="fas fa-trash-alt text-[9px]"></i>
-                                                                                    </button>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    )) : (
-                                                                        <div className="text-[11px] text-gray-500 italic text-center py-2.5 bg-[#0c0c0e] rounded-xl border border-white/[0.06]">Không có vi phạm nào trong tháng</div>
+                                                                <div className="font-mono text-[11px]">
+                                                                    {s.rec ? (
+                                                                        s.rec.timeOut ? (
+                                                                            <span className="text-zinc-300 font-bold">{s.rec.timeIn} ➔ {s.rec.timeOut} <span className="text-emerald-400">({s.rec.totalHours}h)</span></span>
+                                                                        ) : (
+                                                                            <span className="text-emerald-400 font-bold">{s.rec.timeIn} ➔ <span className="bg-emerald-500/15 text-emerald-400 px-1.5 py-0.5 rounded text-[10px]">Đang làm</span></span>
+                                                                        )
+                                                                    ) : (
+                                                                        <span className="text-zinc-600">--:-- ➔ --:--</span>
                                                                     )}
                                                                 </div>
                                                             </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                                        ))}
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </RFCard>
+                                        </div>
+
+                                        {/* CỘT PHẢI: HỒ SƠ CHẤM CÔNG NHÂN SỰ PHẲNG GỌN GÀNG (LINEAR UX) */}
+                                        <div className="xl:col-span-7 space-y-3">
+                                            <div className="bg-[#121214] border border-white/[0.08] rounded-2xl p-4 shadow-sm">
+                                                <div className="text-[12px] font-black text-gray-300 uppercase mb-3 border-b border-white/[0.08] pb-2.5 flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <i className="fas fa-id-card-alt text-[#00a8e8]"></i>
+                                                        <span>Hồ Sơ Chấm Công Nhân Sự</span>
+                                                    </div>
+                                                    <span className="text-[10px] text-zinc-400 font-bold bg-white/[0.04] px-2 py-0.5 rounded border border-white/5">
+                                                        {payroll.filter(p => !hideResigned || !isStaffResignedOrInactive(p.user) || (p.atts && p.atts.length > 0)).length} nhân sự
+                                                    </span>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    {payroll.filter(p => !hideResigned || !isStaffResignedOrInactive(p.user) || (p.atts && p.atts.length > 0)).map(p => {
+                                                        const attsInPeriod = p.atts;
+                                                        const safeTodayStr = new Date(new Date().getTime() - new Date().getTimezoneOffset() * 60000).toISOString().split('T')[0];
+                                                        const todayAtts = attsInPeriod.filter(a => String(a.date).startsWith(safeTodayStr));
+                                                        let todayStatus = 'Chưa điểm danh';
+                                                        let isWorking = false;
+                                                        if (todayAtts.length > 0) {
+                                                            const last = todayAtts[todayAtts.length - 1];
+                                                            todayStatus = String(last.status || '');
+                                                            if (todayStatus.includes('Đang làm') || (last.timeIn && !last.timeOut)) isWorking = true;
+                                                        } else if (attsInPeriod.length > 0) {
+                                                            const lastAtt = attsInPeriod[attsInPeriod.length - 1];
+                                                            if (lastAtt.shift === 'Nghỉ Phép') todayStatus = `Đã báo nghỉ (${lastAtt.date})`;
+                                                            else todayStatus = `Cuối: ${lastAtt.date}`;
+                                                        }
+                                                        
+                                                        const bpPenalties = bpData.filter(b => b.user === p.user && isDateInRange(b.date) && (Number(b.amount) < 0 || b.type === 'Phạt')).map(b => ({
+                                                            id: b.id,
+                                                            isAttendance: false,
+                                                            date: b.date,
+                                                            note: b.note || b.type || 'Phạt trực tiếp',
+                                                            type: b.type,
+                                                            amount: Number(b.amount) < 0 ? Number(b.amount) : -Number(b.amount),
+                                                            record: b
+                                                        }));
+                                                        const attPenalties = p.atts.filter(a => Number(a.penalty) > 0).map(a => {
+                                                            const shiftText = a.shift && a.shift !== 'Nghỉ Phép' ? ` (${a.shift.includes('Ca') ? a.shift : 'Ca ' + a.shift})` : '';
+                                                            const noteText = a.note ? ` [Lý do: ${a.note}]` : '';
+                                                            return {
+                                                                id: a.id,
+                                                                isAttendance: true,
+                                                                date: a.date,
+                                                                note: `${a.status || 'Vi phạm chấm công'}${shiftText}${noteText}`,
+                                                                amount: -Number(a.penalty),
+                                                                record: a
+                                                            };
+                                                        });
+                                                        const userPenalties = [...bpPenalties, ...attPenalties].sort((a, b) => new Date(b.date) - new Date(a.date));
+                                                        const isPenaltyExpanded = openSection[`${p.user}_penalty`];
+                                                        const userLeaves = attsInPeriod.filter(a => String(a.status || '').includes('Nghỉ') || a.shift === 'Nghỉ Phép' || a.leaveType);
+
+                                                        return (
+                                                            <div
+                                                                key={p.user}
+                                                                className={`bg-[#0a0a0a] border rounded-xl p-3 transition-all duration-200 ${
+                                                                    isPenaltyExpanded
+                                                                        ? 'border-[#00a8e8]/50 shadow-[0_0_15px_rgba(0,168,232,0.1)] bg-[#0d0f14]'
+                                                                        : 'border-white/[0.06] hover:border-white/[0.15]'
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+                                                                    {/* AVATAR + TÊN & CHỨC DANH + TRẠNG THÁI */}
+                                                                    <div 
+                                                                        className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+                                                                        onClick={() => setShowHistoryUser(p.user)}
+                                                                        title="Click xem lịch sử chấm công chi tiết"
+                                                                    >
+                                                                        <div className="relative shrink-0">
+                                                                            {renderSafeAvatar(p.user, "w-8 h-8 border border-white/10 rounded-full shrink-0 shadow-sm")}
+                                                                            <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border border-[#0a0a0a] ${isWorking ? 'bg-emerald-400 animate-pulse' : (todayStatus.includes('nghỉ') ? 'bg-rose-500' : 'bg-zinc-600')}`}></span>
+                                                                        </div>
+                                                                        <div className="min-w-0">
+                                                                            <div className="font-black text-white text-[12.5px] truncate hover:text-[#00a8e8] transition-colors flex items-center gap-1.5">
+                                                                                <span className="truncate">{p.user}</span>
+                                                                                {p.role && (
+                                                                                    <span className="text-[8.5px] text-zinc-400 bg-white/[0.05] px-1.5 py-0.2 rounded border border-white/5 font-semibold">
+                                                                                        {p.role}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="text-[10px] mt-0.5">
+                                                                                {isWorking ? (
+                                                                                    <span className="text-emerald-400 font-bold flex items-center gap-1">
+                                                                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                                                                        Đang làm việc
+                                                                                    </span>
+                                                                                ) : todayStatus.includes('nghỉ') ? (
+                                                                                    <span className="text-rose-400 font-bold flex items-center gap-1">
+                                                                                        <i className="fas fa-calendar-times text-[9px]"></i>
+                                                                                        {todayStatus}
+                                                                                    </span>
+                                                                                ) : todayStatus.includes('Hoàn thành') || todayStatus.includes('Cuối') ? (
+                                                                                    <span className="text-sky-400 font-bold flex items-center gap-1">
+                                                                                        <i className="fas fa-check-circle text-[9px]"></i>
+                                                                                        {todayStatus}
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span className="text-zinc-500">{todayStatus}</span>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* GIỜ LÀM + NGÀY NGHỈ + BADGE VI PHẠM GỌN GÀNG */}
+                                                                    <div className="flex items-center gap-3 shrink-0">
+                                                                        <div className="text-right text-[10.5px]">
+                                                                            <div className="font-mono font-black text-emerald-400">
+                                                                                {Math.floor(Number(p.totalGateHours))}h <span className="text-zinc-500 font-normal text-[9px]">làm</span>
+                                                                            </div>
+                                                                            <div className="text-[9.5px] text-zinc-400 mt-0.5">
+                                                                                Nghỉ: <span className={`font-black ${p.soNgayNghi > (p.allowedLeaveDays || 2) ? 'text-rose-400' : 'text-zinc-300'}`}>{p.soNgayNghi}/{p.allowedLeaveDays || 2}</span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* BADGE VI PHẠM GỌN GÀNG - BẤM ĐỂ MỞ CHI TIẾT KHÔNG PHƠI BÀY RA NGOÀI */}
+                                                                        {userPenalties.length > 0 ? (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={(e) => { e.stopPropagation(); toggleSection(p.user, 'penalty', e); }}
+                                                                                className="px-2 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-[9.5px] font-black flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                                                                                title="Click để xem chi tiết vi phạm"
+                                                                            >
+                                                                                <i className="fas fa-exclamation-triangle text-amber-400 text-[8.5px]"></i>
+                                                                                <span>{userPenalties.length} vi phạm</span>
+                                                                            </button>
+                                                                        ) : (
+                                                                            <span className="px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[9.5px] font-bold">
+                                                                                Chuẩn chỉ
+                                                                            </span>
+                                                                        )}
+
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(e) => { e.stopPropagation(); toggleSection(p.user, 'penalty', e); }}
+                                                                            className={`w-6 h-6 rounded-lg border border-white/10 flex items-center justify-center transition-all ${isPenaltyExpanded ? 'bg-[#00a8e8]/20 text-[#00a8e8] rotate-180' : 'text-zinc-400 hover:text-white'}`}
+                                                                        >
+                                                                            <i className="fas fa-chevron-down text-[9px]"></i>
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* ACCORDION CHI TIẾT NGHỈ & VI PHẠM (CHỈ HIỂN THỊ KHI BẤM MỞ) */}
+                                                                {isPenaltyExpanded && (
+                                                                    <div className="mt-3 pt-3 border-t border-white/[0.08] space-y-2 animate-fade-in text-[11px]">
+                                                                        {/* 1. Danh sách đơn nghỉ phép */}
+                                                                        {userLeaves.length > 0 && (
+                                                                            <div className="space-y-1">
+                                                                                <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider">Đơn nghỉ trong kỳ:</div>
+                                                                                {userLeaves.map((lv, lIdx) => {
+                                                                                    const isKP = String(lv.status).includes('không phép');
+                                                                                    const dStr = lv.date ? lv.date.slice(5, 10).replace('-', '/') : '';
+                                                                                    const shiftLabel = lv.shift && lv.shift !== 'Nghỉ Phép' ? (lv.shift.includes('Ca') ? lv.shift : `Ca ${lv.shift}`) : (lv.leaveShift || 'Cả Ngày');
+                                                                                    return (
+                                                                                        <div
+                                                                                            key={lIdx}
+                                                                                            onClick={() => setEditingLeave({ user: p.user, date: lv.date, attRecord: lv })}
+                                                                                            className="p-2 rounded-lg bg-[#121214] border border-white/[0.06] flex items-center justify-between cursor-pointer hover:border-white/20 text-[10px]"
+                                                                                        >
+                                                                                            <span className="flex items-center gap-1.5 text-zinc-300">
+                                                                                                <i className={`fas ${isKP ? 'fa-times-circle text-rose-400' : 'fa-check-circle text-cyan-400'}`}></i>
+                                                                                                <b className="text-white font-mono">{dStr}</b> • {shiftLabel}: <span className={isKP ? 'text-rose-400' : 'text-cyan-400'}>{isKP ? 'Không phép' : 'Có phép'}</span>
+                                                                                            </span>
+                                                                                            <span className="text-[9px] text-zinc-400 hover:text-white font-bold">Duyệt ✎</span>
+                                                                                        </div>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                        )}
+
+                                                                        {/* 2. Chi tiết phạt */}
+                                                                        <div className="space-y-1">
+                                                                            <div className="text-[10px] font-black text-zinc-400 uppercase tracking-wider flex justify-between">
+                                                                                <span>Khoản trừ vi phạm:</span>
+                                                                                {userPenalties.length > 0 && <span className="text-rose-400 font-mono font-bold">{userPenalties.length} mục</span>}
+                                                                            </div>
+                                                                            {userPenalties.length > 0 ? userPenalties.map((pen, i) => (
+                                                                                <div key={i} className="flex justify-between items-center bg-[#121214] p-2 rounded-lg border border-white/[0.06] text-[10.5px]">
+                                                                                    <span className="text-zinc-300 truncate mr-2">
+                                                                                        <b className="text-white">{pen.date ? pen.date.slice(5, 10).replace('-', '/') : ''}</b> - {pen.note || pen.type}
+                                                                                    </span>
+                                                                                    <div className="flex items-center gap-2 shrink-0">
+                                                                                        <span className="text-rose-400 font-bold font-mono">{formatMoney(pen.amount)}đ</span>
+                                                                                        {(canPenalize || isAdmin || isBoss) && (
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={(e) => { e.stopPropagation(); handleDeletePenalty(pen, p.user); }}
+                                                                                                className="w-5 h-5 rounded bg-rose-500/10 hover:bg-rose-500 text-rose-400 hover:text-white flex items-center justify-center transition-all active:scale-95 cursor-pointer shrink-0"
+                                                                                                title="Xoá khoản phạt này"
+                                                                                            >
+                                                                                                <i className="fas fa-trash-alt text-[8px]"></i>
+                                                                                            </button>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            )) : (
+                                                                                <div className="text-[10px] text-zinc-500 italic py-1">Không có vi phạm nào trong kỳ</div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -5223,79 +5321,58 @@
                                     };
 
                                     return (
-                                        <div key={u} className={`rf-card shadow-xl relative transition-all duration-500 rounded-2xl overflow-hidden flex flex-col ${levelInfo.colorStyle.cardBg} ${levelInfo.colorStyle.border} ${levelInfo.colorStyle.shadowAura} ${isExpanded ? "ring-2 ring-sky-500/60 scale-[1.005]" : "hover:scale-[1.005]"}`}>
-                                            {/* Tactical Corner Bracket for Tier >= 1 */}
-                                            {levelInfo.colorStyle.cornerDeco && (
-                                                <div className={`absolute top-0 right-0 w-4 h-4 ${levelInfo.colorStyle.cornerDeco} rounded-tr-xl pointer-events-none z-20`}></div>
-                                            )}
-                                            {levelInfo.colorStyle.glowDot && (
-                                                <div className={`absolute top-2 right-2 w-1.5 h-1.5 rounded-full ${levelInfo.colorStyle.glowDot} pointer-events-none z-20`}></div>
-                                            )}
-
-                                            <div onClick={() => toggleKPIExpand(u)} className={"p-3 sm:p-3.5 pb-3 sm:pb-3.5 cursor-pointer flex flex-col gap-2.5 relative group select-none"}>
-                                                {/* HÀNG TRÊN: AVATAR + THÔNG TIN NHÂN SỰ + HUY HIỆU EXP / XU */}
-                                                <div className="flex items-start justify-between gap-2.5 relative z-10 w-full">
+                                        <div key={u} className={`bg-[#121215] border ${isExpanded ? "border-sky-500/40 shadow-[0_0_15px_rgba(14,165,233,0.12)]" : "border-white/[0.08] hover:border-white/[0.16]"} transition-all duration-300 rounded-2xl overflow-hidden flex flex-col relative`}>
+                                            <div onClick={() => toggleKPIExpand(u)} className="p-3 sm:p-3.5 pb-3 sm:pb-3.5 cursor-pointer flex flex-col gap-2.5 relative group select-none">
+                                                {/* HÀNG TRÊN: AVATAR + THÔNG TIN NHÂN SỰ + HUY HIỆU XU & TÁC VỤ */}
+                                                <div className="flex items-center justify-between gap-2.5 relative z-10 w-full">
                                                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
                                                         <div className="relative shrink-0">
-                                                            {renderSafeAvatar(u, `w-10 h-10 sm:w-11 sm:h-11 shadow-md transition-all rounded-full ${rank === 1 ? "border-2 border-yellow-400 shadow-[0_0_15px_rgba(250,204,21,0.7)]" : rank === 2 ? "border-2 border-slate-300 shadow-[0_0_12px_rgba(226,232,240,0.5)]" : rank === 3 ? "border-2 border-orange-500 shadow-[0_0_12px_rgba(249,115,22,0.5)]" : levelInfo.colorStyle.avatarRing}`)}
+                                                            {renderSafeAvatar(u, "w-10 h-10 rounded-full border border-white/10 shadow-sm")}
                                                             {rank === 1 && (
-                                                                <div className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-300 text-black font-black text-[9px] flex items-center justify-center shadow-md border border-yellow-100 ring-1 ring-black">
+                                                                <div className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-amber-500 text-black font-black text-[9px] flex items-center justify-center shadow-md border border-yellow-200">
                                                                     👑
                                                                 </div>
                                                             )}
                                                             {rank === 2 && (
-                                                                <div className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 rounded-full bg-gradient-to-tr from-slate-400 to-zinc-200 text-black font-black text-[9px] flex items-center justify-center shadow-md border border-white ring-1 ring-black">
+                                                                <div className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-slate-400 text-black font-black text-[9px] flex items-center justify-center shadow-md border border-white">
                                                                     🥈
                                                                 </div>
                                                             )}
                                                             {rank === 3 && (
-                                                                <div className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 rounded-full bg-gradient-to-tr from-amber-700 to-orange-500 text-white font-black text-[9px] flex items-center justify-center shadow-md border border-orange-300 ring-1 ring-black">
+                                                                <div className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-amber-700 text-white font-black text-[9px] flex items-center justify-center shadow-md border border-orange-300">
                                                                     🥉
                                                                 </div>
                                                             )}
                                                         </div>
 
                                                         <div className="min-w-0 flex-1">
-                                                            {/* TÊN NHÂN SỰ + LEVEL BADGE */}
-                                                            <div className="flex items-center gap-1.5 flex-wrap">
-                                                                <span className={`font-black text-[13px] sm:text-[14px] uppercase tracking-wide truncate transition-colors ${isExpanded ? "text-sky-400" : (levelInfo.colorStyle.headerText || "text-white")}`}>
+                                                            {/* TÊN NHÂN SỰ + LEVEL BADGE TINH GỌN */}
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className={`font-black text-[13px] sm:text-[14px] uppercase tracking-wide truncate transition-colors ${isExpanded ? "text-sky-400" : "text-white"}`}>
                                                                     {u}
                                                                 </span>
 
-                                                                {/* NÚT BẤM HUY HIỆU CẤP ĐỘ 2 KHỐI TINH GỌN */}
                                                                 <button
                                                                     type="button"
                                                                     onClick={(e) => { e.stopPropagation(); setExpModalUser(u); }}
-                                                                    className="inline-flex items-center gap-1 p-0.5 bg-black/90 rounded-lg border border-white/20 hover:border-white/40 transition-all hover:scale-105 active:scale-95 shadow-sm group/lvl cursor-pointer"
+                                                                    className="px-1.5 py-0.5 rounded bg-zinc-900 border border-white/10 text-zinc-400 hover:text-amber-300 hover:border-amber-400/40 text-[9.5px] font-mono font-bold tracking-tight transition-all cursor-pointer shadow-sm"
                                                                     title="Bấm để xem lịch sử tích lũy EXP & Chi tiết 100 cấp độ"
                                                                 >
-                                                                    {/* KHỐI 1: SỐ CẤP ĐỘ (LV) */}
-                                                                    <span className={`px-1.5 py-0.5 rounded bg-zinc-950 border ${levelInfo.colorStyle.lvlBorder || 'border-amber-400'} text-white font-black text-[10px] sm:text-[10.5px] font-mono tracking-tight flex items-center gap-1 shadow-inner`}>
-                                                                        <span className="text-[10px]">{levelInfo.colorStyle.iconEmoji}</span>
-                                                                        <span className="text-amber-300 font-extrabold tracking-wide drop-shadow-[0_0_6px_rgba(251,191,36,0.6)]">CẤP {levelInfo.level}</span>
-                                                                    </span>
-
-                                                                    {/* KHỐI 2: BẬC QUÂN HÀM (TIER) */}
-                                                                    <span className={`px-1.5 py-0.5 rounded font-black text-[8.5px] sm:text-[9px] uppercase tracking-wider ${levelInfo.colorStyle.tierPillStyle} flex items-center gap-1 shadow-sm`}>
-                                                                        <i className={`fas ${levelInfo.colorStyle.icon} text-[7.5px]`}></i>
-                                                                        <span>{levelInfo.colorStyle.tierLabel}</span>
-                                                                    </span>
+                                                                    Lv.{levelInfo.level}
                                                                 </button>
                                                             </div>
 
-                                                            {/* CHỨC DANH + DANH HIỆU QUÂN HÀM */}
-                                                            <div className="text-[10px] text-zinc-400 font-semibold flex items-center gap-1.5 mt-0.5 truncate">
-                                                                <span className="text-zinc-300 truncate">{uRole}</span>
-                                                                <span className="text-zinc-600">•</span>
-                                                                <span className="text-amber-400/90 font-bold truncate">{levelInfo.title}</span>
+                                                            {/* CHỨC DANH */}
+                                                            <div className="text-[10.5px] text-zinc-400 font-medium truncate mt-0.5">
+                                                                {uRole}
                                                             </div>
                                                         </div>
                                                     </div>
 
-                                                    {/* GÓC PHẢI: HUY HIỆU XU & TÁC VỤ & NÚT ẨN */}
+                                                    {/* GÓC PHẢI: HUY HIỆU XU & TÁC VỤ & NÚT ẨN & CHEVRON */}
                                                     <div className="flex items-center gap-1.5 shrink-0">
                                                         {/* HUY HIỆU XU */}
-                                                        <span className="text-[10px] font-black text-amber-300 flex items-center gap-1 bg-amber-500/15 px-2 py-0.5 rounded-lg border border-amber-500/30 shadow-sm" title="Số Xu tích luỹ trong ví">
+                                                        <span className="text-[10px] font-black text-amber-300 flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20" title="Số Xu tích luỹ trong ví">
                                                             <i className="fas fa-coins text-amber-400 text-[9.5px]"></i>
                                                             <span>{formatMoney(totalXu)} Xu</span>
                                                         </span>
@@ -5327,42 +5404,38 @@
                                                             </button>
                                                         )}
 
-                                                        <div className={`w-6 h-6 shrink-0 rounded-lg flex items-center justify-center transition-all duration-300 border ${isExpanded ? "bg-sky-500/20 text-sky-400 border-sky-500/40 rotate-180" : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:bg-zinc-800 hover:text-white"}`}>
-                                                            <i className={"fas fa-chevron-down text-[9px]"}></i>
+                                                        <div className={`w-6 h-6 shrink-0 rounded-lg flex items-center justify-center transition-all duration-200 border ${isExpanded ? "bg-sky-500/20 text-sky-400 border-sky-500/40 rotate-180" : "bg-zinc-900 text-zinc-400 border-zinc-800 group-hover:text-white"}`}>
+                                                            <i className="fas fa-chevron-down text-[9px]"></i>
                                                         </div>
                                                     </div>
                                                 </div>
 
-                                                {/* HÀNG DƯỚI: THANH EXP SHIMMER TINH GỌN */}
+                                                {/* THANH TIẾN ĐỘ NHIỆM VỤ PHẲNG TINH GỌN (Linear Progress) */}
                                                 <div
                                                     onClick={(e) => { e.stopPropagation(); setExpModalUser(u); }}
-                                                    className="w-full bg-black/60 hover:bg-black/80 p-1.5 px-2 rounded-xl border border-white/10 transition-all cursor-pointer group/exp shadow-inner"
-                                                    title="Bấm để xem lịch sử tích lũy EXP & Chi tiết 5 nguồn cống hiến"
+                                                    className="w-full bg-zinc-900/60 hover:bg-zinc-900 p-1.5 px-2 rounded-xl border border-white/[0.06] transition-all cursor-pointer group/exp shadow-inner"
+                                                    title="Bấm để xem lịch sử tích lũy EXP & Chi tiết 100 cấp độ"
                                                 >
                                                     <div className="flex justify-between items-center text-[9.5px] mb-1 px-0.5">
-                                                        <span className={`font-mono font-black flex items-center gap-1 ${levelInfo.colorStyle.expText || "text-zinc-300"}`}>
-                                                            <i className="fas fa-bolt text-amber-400 animate-pulse text-[9px]"></i>
+                                                        <span className="font-mono font-bold text-zinc-400 flex items-center gap-1.5">
+                                                            <i className="fas fa-bolt text-amber-400 text-[9px]"></i>
                                                             <span>{formatMoney(levelInfo.expInLevel)} / {formatMoney(levelInfo.neededForNext)} EXP</span>
                                                         </span>
-                                                        <span className="text-[9px] font-bold text-amber-400 flex items-center gap-1 group-hover/exp:text-amber-300 transition-colors">
-                                                            <span>Tiến độ cấp {levelInfo.level}: {levelInfo.progressPct.toFixed(1)}%</span>
-                                                            <i className="fas fa-history text-[8px] opacity-70 group-hover/exp:opacity-100 transition-opacity"></i>
+                                                        <span className="text-[9px] font-bold text-zinc-400 group-hover/exp:text-amber-300 transition-colors">
+                                                            Tiến độ: {levelInfo.progressPct.toFixed(1)}%
                                                         </span>
                                                     </div>
-                                                    <div className="w-full h-2 bg-zinc-900/90 rounded-full overflow-hidden border border-white/5 relative shadow-inner">
+                                                    <div className="w-full h-1.5 bg-zinc-950 rounded-full overflow-hidden border border-white/[0.04]">
                                                         <div
-                                                            className={`h-full bg-gradient-to-r ${levelInfo.colorStyle.bar} rounded-full transition-all duration-700 relative overflow-hidden`}
+                                                            className="h-full bg-sky-500 rounded-full transition-all duration-500"
                                                             style={{ width: `${Math.min(100, Math.max(2, levelInfo.progressPct))}%` }}
-                                                        >
-                                                            {/* Tia Shimmer lướt qua */}
-                                                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent translate-x-[-100%] group-hover/exp:animate-[shine_1.2s_infinite]"></div>
-                                                        </div>
+                                                        ></div>
                                                     </div>
                                                 </div>
 
                                                 {/* MANA BAR (TIẾN ĐỘ HOÀN THÀNH TỔNG THỂ NHIỆM VỤ) */}
                                                 <div className="absolute bottom-0 left-0 w-full h-1 bg-black/60 overflow-hidden">
-                                                    <div className={`h-full transition-all duration-1000 ${isCritical ? "bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.8)] animate-pulse" : `bg-${manaColor}-500`}`} style={{ width: `${manaPct}%` }}></div>
+                                                    <div className={`h-full transition-all duration-700 ${isCritical ? "bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.8)] animate-pulse" : `bg-${manaColor}-500`}`} style={{ width: `${manaPct}%` }}></div>
                                                 </div>
                                             </div>
 
@@ -5452,17 +5525,31 @@
                         <div className={"mt-4 animate-fade-in pb-10"}>
 
                             {/* KHUNG TỔNG QUỸ LƯƠNG (Chỉ Boss/HR/Kế toán thấy) */}
-                            <div className={"bg-gradient-to-br from-[#1a1c29] to-[#0a0a0a] border border-[#3b82f6]/30 rounded-2xl p-4 shadow-lg mb-5"}>
-                                <div className={"flex items-center justify-between mb-3 border-b border-[#222] pb-2"}>
+                            <div className={"bg-[#121215] border border-white/[0.08] rounded-2xl p-4 shadow-sm mb-5"}>
+                                <div className={"flex items-center justify-between mb-3 border-b border-white/[0.06] pb-2.5 flex-wrap gap-2"}>
                                     <div className={"flex items-center gap-2"}>
-                                        <div className={"w-7 h-7 rounded-full bg-[#3b82f6]/20 flex items-center justify-center text-[#3b82f6]"}><i className={"fas fa-wallet"}></i></div>
-                                        <span className={"font-black text-[13px] text-[#3b82f6] uppercase tracking-widest"}>Tổng Quỹ Lương Kỳ Này</span>
+                                        <div className={"w-7 h-7 rounded-xl bg-sky-500/10 flex items-center justify-center text-sky-400 border border-sky-500/20"}>
+                                            <i className={"fas fa-wallet text-[12px]"}></i>
+                                        </div>
+                                        <div>
+                                            <span className={"font-black text-[12.5px] text-white uppercase tracking-wider"}>Tổng Quỹ Lương Kỳ Này</span>
+                                            <span className={"ml-2 text-[10px] text-zinc-400 font-mono"}>({periodLabel})</span>
+                                        </div>
                                     </div>
                                     <div className={"flex items-center gap-2 flex-wrap"}>
                                         <button
                                             type="button"
+                                            onClick={handleExportPayrollExcel}
+                                            className="px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500 hover:text-black text-emerald-400 border border-emerald-500/30 text-[10.5px] font-black uppercase flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer shrink-0"
+                                            title="Xuất Bảng Lương Excel Tổng Hợp Toàn Xưởng (.xlsx)"
+                                        >
+                                            <i className="fas fa-file-excel text-[11px]"></i>
+                                            <span>Xuất Excel Lương</span>
+                                        </button>
+                                        <button
+                                            type="button"
                                             onClick={toggleHideResigned}
-                                            className={`px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer shrink-0 ${
+                                            className={`px-3 py-1.5 rounded-xl border text-[10.5px] font-black uppercase flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer shrink-0 ${
                                                 hideResigned 
                                                     ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.2)]' 
                                                     : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
@@ -5473,9 +5560,9 @@
                                             <span>{hideResigned ? 'Đang Ẩn NV Nghỉ' : 'Hiện Tất Cả NV'}</span>
                                         </button>
                                         {isBoss && (
-                                            <button onClick={handleCloseMonth} disabled={closingMonth} className={"text-[10px] bg-rose-500/20 text-rose-500 hover:bg-rose-500 hover:text-white px-3 py-1.5 rounded border border-rose-500/50 font-black transition-all shadow-sm flex items-center gap-1"}>
+                                            <button onClick={handleCloseMonth} disabled={closingMonth} className={"text-[10.5px] bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white px-3 py-1.5 rounded-xl border border-rose-500/40 font-black transition-all shadow-sm flex items-center gap-1 cursor-pointer"}>
                                                 {closingMonth ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-lock"></i>}
-                                                {closingMonth ? 'Đang xử lý...' : 'Chốt Sổ Cuối Tháng'}
+                                                <span>{closingMonth ? 'Đang xử lý...' : 'Chốt Sổ Cuối Tháng'}</span>
                                             </button>
                                         )}
                                         <div className={"text-[10px] text-gray-500 font-bold bg-[#111] px-2 py-1 rounded border border-[#222]"}>
@@ -5483,37 +5570,47 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div className={"flex justify-between items-center"}>
-                                    <div>
-                                        <div className={"text-[10px] text-amber-400 uppercase font-bold mb-1 flex items-center gap-1"}><i className="fas fa-bullseye text-[#d4af37]"></i> Tổng Lương Mục Tiêu toàn xưởng (Đã cộng 100% KPI)</div>
-                                        <div className={"text-[22px] font-black text-[#d4af37]"}>
+                                <div className={"grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1"}>
+                                    <div className={"bg-[#0b0b0e] p-3.5 rounded-xl border border-white/[0.06]"}>
+                                        <div className={"text-[10px] text-zinc-400 uppercase font-bold mb-1 flex items-center gap-1.5"}>
+                                            <i className="fas fa-coins text-amber-400"></i> Lương Lũy Kế Thực Tế Đến Hôm Nay
+                                        </div>
+                                        <div className={"text-[22px] font-black text-amber-400 font-mono"}>
                                             {(isBoss || isAdmin || ['KẾ TOÁN', 'QUẢN LÝ NHÂN SỰ', 'NHÂN SỰ', 'TỐI CAO', 'FOUNDER', 'ADMIN', 'QUẢN LÝ CẤP TRUNG'].includes(String(currentRole).toUpperCase()))
-                                                ? `${formatMoney(payroll.reduce((sum, p) => sum + cleanNumber(p.tongThuNhapTarget > 0 ? p.tongThuNhapTarget : p.tongThuNhap), 0))} đ`
+                                                ? `${formatMoney(payroll.reduce((sum, p) => sum + cleanNumber(p.tongThuNhap), 0))} đ`
                                                 : '*****'}
                                         </div>
+                                        <div className={"text-[9px] text-zinc-500 mt-1"}>
+                                            * Thu nhập tích lũy theo thời gian làm việc & KPI đã hoàn thành thực tế
+                                        </div>
                                     </div>
-                                    <div className={"text-right"}>
-                                        <div className={"text-[10px] text-emerald-400 uppercase font-bold mb-1 flex items-center gap-1 justify-end"}><i className="fas fa-hand-holding-usd"></i> Thực tế cần chi trả (Đã đạt KPI)</div>
-                                        <div className={"text-[22px] font-black text-[#10b981]"}>
+                                    <div className={"bg-[#0b0b0e] p-3.5 rounded-xl border border-white/[0.06]"}>
+                                        <div className={"text-[10px] text-zinc-400 uppercase font-bold mb-1 flex items-center gap-1.5"}>
+                                            <i className="fas fa-hand-holding-usd text-emerald-400"></i> Thực Tế Còn Cần Chi Trả
+                                        </div>
+                                        <div className={"text-[22px] font-black text-emerald-400 font-mono"}>
                                             {(isBoss || isAdmin || ['KẾ TOÁN', 'QUẢN LÝ NHÂN SỰ', 'NHÂN SỰ', 'TỐI CAO', 'FOUNDER', 'ADMIN', 'QUẢN LÝ CẤP TRUNG'].includes(String(currentRole).toUpperCase()))
                                                 ? `${formatMoney(payroll.reduce((sum, p) => sum + cleanNumber(p.conCanTra), 0))} đ`
                                                 : '*****'}
+                                        </div>
+                                        <div className={"text-[9px] text-zinc-500 mt-1"}>
+                                            * Sau khi trừ tạm ứng, quỹ công đoàn & các khoản khấu trừ / KCS phạt
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className={"grid grid-cols-1 lg:grid-cols-2 gap-5 mt-5"}>
+                            <div className={"grid grid-cols-1 lg:grid-cols-2 gap-4 mt-5"}>
                                 {payroll.filter(p => !hideResigned || !isStaffResignedOrInactive(p.user) || p.totalGateHours > 0 || p.conCanTra > 0).map(p => (
-                                    <div key={p.user} className={"rf-card p-4 md:p-5 relative overflow-hidden"}>
+                                    <div key={p.user} className={`bg-[#121215] border ${expandedPayroll === p.user ? 'border-sky-500/40 shadow-[0_0_15px_rgba(14,165,233,0.12)]' : 'border-white/[0.08] hover:border-white/[0.16]'} rounded-2xl p-3.5 sm:p-4 relative transition-all duration-200 overflow-hidden flex flex-col`}>
                                         {canManagePayroll && (erpData?.BonusPenalty || []).filter(b => b.user === p.user && b.type === 'Yêu Cầu Tạm Ứng' && b.orderCode === 'Chờ Duyệt').map(req => (
-                                            <div key={req.id} className="bg-rose-500/10 border border-rose-500/30 rounded-lg p-3 mb-4 flex justify-between items-center animate-fade-in shadow-sm">
+                                            <div key={req.id} className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 mb-3 flex justify-between items-center animate-fade-in shadow-sm">
                                                 <div>
-                                                    <div className="text-rose-500 font-bold text-[12px]"><i className="fas fa-hand-holding-usd mr-1"></i> Yêu cầu tạm ứng: {formatMoney(req.amount)}đ</div>
-                                                    <div className="text-gray-400 text-[11px] mt-1">Lý do: {req.note}</div>
+                                                    <div className="text-rose-400 font-bold text-[11.5px]"><i className="fas fa-hand-holding-usd mr-1"></i> Yêu cầu tạm ứng: {formatMoney(req.amount)}đ</div>
+                                                    <div className="text-zinc-400 text-[10.5px] mt-0.5">Lý do: {req.note}</div>
                                                 </div>
                                                 <div className="flex gap-2">
-                                                    <button onClick={(e) => { e.stopPropagation(); pushDeltas({ deletes: { BonusPenalty: [req.id] } }, 'Đã từ chối', 'fa-times') }} className="px-3 py-1.5 bg-[#111] border border-[#333] text-gray-400 rounded text-[10px] hover:text-white transition-colors"><i className="fas fa-times"></i> Từ chối</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); pushDeltas({ deletes: { BonusPenalty: [req.id] } }, 'Đã từ chối', 'fa-times') }} className="px-2.5 py-1 bg-zinc-900 border border-white/10 text-zinc-400 rounded-lg text-[10px] hover:text-white transition-colors cursor-pointer"><i className="fas fa-times"></i> Từ chối</button>
                                                     <button onClick={(e) => {
                                                         e.stopPropagation();
                                                         const defaultAcc = (erpData?.Accounts || []).find(a => (a.accountName || a.name) === 'Công Ty') || (erpData?.Accounts || [])[0];
@@ -5525,44 +5622,55 @@
                                                             accountId: defaultAcc?.id || '',
                                                             requestId: req.id
                                                         });
-                                                    }} className="px-4 py-1.5 bg-gradient-to-r from-rose-500 to-red-500 text-white rounded text-[11px] font-black shadow-sm hover:scale-105 active:scale-95 transition-transform">DUYỆT</button>
+                                                    }} className="px-3 py-1 bg-gradient-to-r from-rose-500 to-red-500 text-white rounded-lg text-[10.5px] font-black shadow-sm hover:scale-105 active:scale-95 transition-transform cursor-pointer">DUYỆT</button>
                                                 </div>
                                             </div>
                                         ))}
 
-                                        <div onClick={() => setExpandedPayroll(expandedPayroll === p.user ? null : p.user)} className={"flex justify-between items-center cursor-pointer group"}>
-                                            <div className={"flex items-center gap-3"}>
-                                                {renderSafeAvatar(p.user, "w-10 h-10 border-[#333]")}
-                                                <div>
-                                                    <div className={"font-black text-[14px] text-white group-hover:text-[#3b82f6] transition-colors flex items-center gap-2"}>
-                                                        {p.user}
+                                        {/* HÀNG NÉN GỌN 1 DÒNG LINEAR UX */}
+                                        <div onClick={() => setExpandedPayroll(expandedPayroll === p.user ? null : p.user)} className={"flex justify-between items-center cursor-pointer group select-none gap-2"}>
+                                            <div className={"flex items-center gap-2.5 min-w-0 flex-1"}>
+                                                {renderSafeAvatar(p.user, "w-10 h-10 rounded-full border border-white/10 shrink-0")}
+                                                <div className="min-w-0 flex-1">
+                                                    <div className={"font-black text-[13.5px] text-white group-hover:text-sky-400 transition-colors flex items-center gap-1.5 truncate"}>
+                                                        <span className="truncate">{p.user}</span>
                                                         {p.isLocked && (
-                                                            <span className="px-2 py-0.5 text-[9px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full inline-flex items-center gap-1" title={`Đã khóa sổ chính thức vào ${p.lockedAt || ''}`}>
-                                                                <i className="fas fa-lock text-[8px]"></i> ĐÃ KHÓA SỔ
+                                                            <span className="px-1.5 py-0.5 text-[8.5px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-md shrink-0 inline-flex items-center gap-1" title={`Đã khóa sổ chính thức vào ${p.lockedAt || ''}`}>
+                                                                <i className="fas fa-lock text-[8px]"></i> ĐÃ KHÓA
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <div className={"text-[10px] text-gray-500 uppercase mt-0.5"}>{p.role}</div>
+                                                    <div className={"text-[10px] text-zinc-400 truncate mt-0.5"}>{p.role}</div>
                                                 </div>
                                             </div>
-                                            <div className={"text-right flex items-center gap-3"}>
-                                                <div>
-                                                    <div className={"text-[9px] text-amber-400 font-bold uppercase tracking-wider flex items-center justify-end gap-1"}>
-                                                        <i className="fas fa-bullseye text-[#d4af37]"></i> Lương Mục Tiêu
-                                                    </div>
-                                                    <div className={"text-[18px] font-black text-[#d4af37] leading-none mt-0.5"}>
-                                                        {formatMoney(p.tongThuNhapTarget || p.tongThuNhap)}đ
-                                                    </div>
-                                                    <div className={"text-[8px] text-gray-500 font-bold mt-1"}>
-                                                        Đủ 26 công + 100% KPI chỉ tiêu
+
+                                            <div className={"flex items-center gap-3 shrink-0"}>
+                                                {/* CỘT LƯƠNG LŨY KẾ THỰC TẾ */}
+                                                <div className="text-right hidden sm:block">
+                                                    <div className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider">Lũy kế đến nay</div>
+                                                    <div className="text-[14px] font-black text-amber-300 font-mono leading-tight mt-0.5">
+                                                        {formatMoney(p.tongThuNhap)}đ
                                                     </div>
                                                 </div>
-                                                <div className={"w-6 h-6 rounded-full bg-[#222] flex items-center justify-center text-gray-500 group-hover:bg-[#333] transition-all"}><i className={`fas fa-chevron-${expandedPayroll === p.user ? 'up' : 'down'} text-[10px]`}></i></div>
+
+                                                {/* CỘT CÒN CẦN TRẢ / THỰC NHẬN */}
+                                                <div className="text-right">
+                                                    <div className="text-[9px] uppercase font-bold tracking-wider text-zinc-400">
+                                                        {p.conCanTra < 0 ? <span className="text-rose-400 font-black">Âm lương</span> : 'Còn cần trả'}
+                                                    </div>
+                                                    <div className={`text-[15px] font-black font-mono leading-tight mt-0.5 ${p.conCanTra < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                                        {p.conCanTra < 0 ? `-${formatMoney(Math.abs(p.conCanTra))}` : formatMoney(p.conCanTra)}đ
+                                                    </div>
+                                                </div>
+
+                                                <div className={`w-6 h-6 shrink-0 rounded-lg flex items-center justify-center transition-all duration-200 border ${expandedPayroll === p.user ? "bg-sky-500/20 text-sky-400 border-sky-500/40 rotate-180" : "bg-zinc-900 text-zinc-400 border-zinc-800 group-hover:text-white"}`}>
+                                                    <i className="fas fa-chevron-down text-[9px]"></i>
+                                                </div>
                                             </div>
                                         </div>
 
                                         {expandedPayroll === p.user && (
-                                            <div className={"mt-4 pt-4 border-t border-[#222] animate-fade-in"}>
+                                            <div className={"mt-3.5 pt-3.5 border-t border-white/[0.06] animate-fade-in"}>
 
                                                 {/* NHÓM NÚT XEM TRƯỚC / GHI NHẬN XÉT / IN PHIẾU LƯƠNG */}
                                                 <div className={"flex justify-end mb-3 gap-2"}>
