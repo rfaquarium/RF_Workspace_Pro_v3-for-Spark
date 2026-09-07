@@ -20258,13 +20258,13 @@ const OrdersTab = React.memo(function OrdersTab({
   });
   const [filterStatus, setFilterStatus] = React.useState('Chờ Sản Xuất');
   const [filterChannel, setFilterChannel] = React.useState('ALL');
-  const [renderLimit, setRenderLimit] = React.useState(30);
+  const [renderLimit, setRenderLimit] = React.useState(50);
+  const [viewMode, setViewMode] = React.useState('TABLE');
+  const [selectedDrawerOrder, setSelectedDrawerOrder] = React.useState(null);
   const [addingMode, setAddingMode] = React.useState(false);
   const [draftData, setDraftData] = React.useState(null);
   const [selectedIds, setSelectedIds] = React.useState([]);
   const tabsContainerRef = React.useRef(null);
-
-  // STATE KÍCH HOẠT MÁY QUÉT HOÀN HÀNG & HỦY ĐƠN
   const [isScanningReturn, setIsScanningReturn] = React.useState(false);
   const [isScanningCancel, setIsScanningCancel] = React.useState(false);
   const [isBulkFinanceOpen, setIsBulkFinanceOpen] = React.useState(false);
@@ -20273,20 +20273,18 @@ const OrdersTab = React.memo(function OrdersTab({
   const [showRules, setShowRules] = React.useState(false);
   const [editingOrder, setEditingOrder] = React.useState(null);
   const [collapsedGroups, setCollapsedGroups] = React.useState({});
+  const [showRevenueStats, setShowRevenueStats] = React.useState(false);
   const currentRole = propUserRole || localStorage.getItem('rf_role') || '';
   const isBossRole = localStorage.getItem('rf_boss') === 'true' || currentRole === 'TỐI CAO';
   const isBoss = isBossRole || Boolean(isAdmin);
   const isCTV = currentRole === 'CTV' || currentRole === 'CỘNG TÁC VIÊN';
+  const canViewFinance = isBoss || isAdmin || ['KẾ TOÁN', 'QUẢN LÝ NHÂN SỰ', 'NHÂN SỰ', 'TỐI CAO', 'FOUNDER', 'ADMIN', 'QUẢN LÝ CẤP TRUNG'].includes(String(currentRole).toUpperCase());
   const hasPerm = React.useCallback(actionCode => {
     if (isBossRole || currentRole === 'TỐI CAO') return true;
     if (typeof propHasPerm === 'function') return propHasPerm(actionCode);
     if (typeof canUserDo === 'function') return canUserDo(actionCode, currentRole, currentUser);
     return isBoss;
   }, [propHasPerm, currentRole, currentUser, isBoss, isBossRole]);
-  const [showRevenueStats, setShowRevenueStats] = React.useState(false);
-  const [showQuickNotes, setShowQuickNotes] = React.useState(false);
-
-  // STATE ARCHIVING ENGINE & LAZY LOADING
   const [isArchiveEngineOpen, setIsArchiveEngineOpen] = React.useState(false);
   const [isLazyLoadingArchive, setIsLazyLoadingArchive] = React.useState(false);
   const [loadedArchiveKeys, setLoadedArchiveKeys] = React.useState({});
@@ -20313,8 +20311,6 @@ const OrdersTab = React.memo(function OrdersTab({
       setIsLazyLoadingArchive(false);
     }
   }, [isLazyLoadingArchive, fetchArchivedOrders, loadedArchiveKeys, triggerToast]);
-
-  // Tự động kích hoạt Lazy-load khi người dùng lọc tháng cũ hoặc xem tất cả
   React.useEffect(() => {
     if (filterTime === 'Chọn Tháng' && customMonth) {
       handleLazyLoadArchive({
@@ -20352,15 +20348,10 @@ const OrdersTab = React.memo(function OrdersTab({
       if (triggerToast) triggerToast('Môi trường Dev: Chưa kết nối Google Apps Script backend', 'fa-info-circle', 'warning');
     }
   }, [isSyncingGHN, triggerToast]);
-
-  // Removed buggy handleImportShopeeOrders, use BulkFinanceModal instead
-
   React.useEffect(() => {
     setSelectedIds([]);
-    setRenderLimit(30);
+    setRenderLimit(50);
   }, [filterStatus, filterTime, searchCode]);
-
-  // TỰ ĐỘNG CUỘN ĐẾN TAB ĐANG HOẠT ĐỘNG (AUTO-SCROLL TO ACTIVE TAB)
   React.useEffect(() => {
     if (tabsContainerRef.current) {
       const activeBtn = tabsContainerRef.current.querySelector('[data-active="true"]');
@@ -20373,8 +20364,6 @@ const OrdersTab = React.memo(function OrdersTab({
       }
     }
   }, [filterStatus]);
-
-  // LẮNG NGHE SỰ KIỆN ĐIỀU HƯỚNG NHANH TỪ DASHBOARD
   React.useEffect(() => {
     const handleGlobalNav = e => {
       const trigger = e.detail?.trigger || (e.type === 'triggerCreateOrder' ? 'triggerCreateOrder' : e.type === 'filterReadyPack' ? 'filterReadyPack' : '');
@@ -20410,8 +20399,7 @@ const OrdersTab = React.memo(function OrdersTab({
     if (!dateStr) return false;
     if (filterStr === 'Tất Cả') return true;
     const d = typeof window.parseOrderDateSafe === 'function' ? window.parseOrderDateSafe(dateStr) : null;
-    if (!d || isNaN(d.getTime())) return false; // Không hợp lệ thì không match tháng
-
+    if (!d || isNaN(d.getTime())) return false;
     const today = new Date();
     if (filterStr === 'Hôm Nay') return d.toDateString() === today.toDateString();
     if (filterStr === 'Hôm Qua') {
@@ -20438,21 +20426,9 @@ const OrdersTab = React.memo(function OrdersTab({
     }
     return true;
   };
-  const packedOrderSet = React.useMemo(() => {
-    const set = new Set();
-    if (!packings || packings.length === 0) return set;
-    packings.forEach(p => {
-      if (p && p.orderId && (p.status === 'Done' || p.status === 'Hoàn thành' || p.status === 'Đã Xong')) {
-        set.add(String(p.orderId).trim());
-      }
-    });
-    return set;
-  }, [packings]);
   const prodMapByOrderId = React.useMemo(() => {
     const map = {};
     if (!prodItems || prodItems.length === 0) return map;
-
-    // Lặp 1 lần qua prodItems (O(M)) thay vì O(N*M)
     prodItems.forEach(p => {
       if (!p || !p.orderId) return;
       const pOrd = String(p.orderId).trim();
@@ -20507,8 +20483,6 @@ const OrdersTab = React.memo(function OrdersTab({
     }
     return unique;
   }, [prodMapByOrderId]);
-
-  // 1. Pre-index done packings into a fast Set (O(M) once)
   const donePackSet = React.useMemo(() => {
     const set = new Set();
     const allPackings = packings || erpData?.Packings || [];
@@ -20525,34 +20499,6 @@ const OrdersTab = React.memo(function OrdersTab({
     });
     return set;
   }, [packings, erpData?.Packings]);
-
-  // 2. Pre-index product inventory map for fast O(1) stock lookup
-  const productStockMap = React.useMemo(() => {
-    const map = new Map();
-    const list = erpProducts || erpData?.Products || [];
-    list.forEach(prd => {
-      if (prd && prd.name) {
-        const rawName = String(prd.name).trim();
-        const cleanName = rawName.toLowerCase().replace(/\s+/g, ' ');
-        const normName = cleanName.replace(/[^a-z0-9àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/gi, ' ').replace(/\s+/g, ' ').trim();
-        const qty = Number(prd.quantity || 0);
-        const cat = String(prd.category || '').toUpperCase().trim();
-        const subCat = String(prd.sub_category || '').toUpperCase().trim();
-        const isProdCat = cat === 'LAYOUT' || cat === 'BỂ KÍNH' || subCat === 'LAYOUT' || subCat === 'BỂ KÍNH';
-        const info = {
-          qty,
-          isProdCat,
-          prd
-        };
-        map.set(cleanName, info);
-        if (normName && !map.has(normName)) map.set(normName, info);
-        if (prd.sku) map.set(String(prd.sku).trim().toUpperCase(), info);
-      }
-    });
-    return map;
-  }, [erpProducts, erpData?.Products]);
-
-  // 3. Helper compute metadata flags (Warning Badges) without overriding DB status
   const computeOrderMetadata = React.useCallback(o => {
     const oIdStr = String(o.id || '').trim();
     const oCodeStr = String(o.orderCode || '').trim();
@@ -20567,7 +20513,6 @@ const OrdersTab = React.memo(function OrdersTab({
     if (related.length > 0) {
       allProdDone = related.every(p => checkItemReady(p));
     } else if (hasProdFlag) {
-      // Đơn hàng yêu cầu sản xuất nhưng không có lệnh sản xuất nào (hoặc đã bị xoá) -> Chưa hoàn thành sản xuất!
       allProdDone = false;
     }
     const isGHNShipping = String(o.shippingMethod || '').trim() === 'Gửi GHN' || String(o.shippingMethod || '').toLowerCase().includes('ghn');
@@ -20579,24 +20524,17 @@ const OrdersTab = React.memo(function OrdersTab({
     }
     const hasShippingCode = Boolean(pureShippingCode && pureShippingCode.length >= 3);
     const requiresShippingCode = isTMDT || isGHNShipping || isGuiXeShipping;
-
-    // Đơn thiếu mã vận đơn (chưa có mã vận đơn hợp lệ từ sàn/nhà xe/GHN)
     const isMissingMVD = !isOrderClosedOrPacked && requiresShippingCode && !hasShippingCode;
-
-    // PHỤ KIỆN CHO PHÉP ÂM KHO: Không chặn đơn, đơn luôn sẵn sàng đóng gói
-    const isMissingAccessories = false;
     return {
       hasDonePack,
       isMissingMVD,
       allProdDone,
-      isMissingAccessories
+      isMissingAccessories: false
     };
-  }, [donePackSet, productStockMap, getMatchedProds]);
+  }, [donePackSet, getMatchedProds]);
   const isReconciledSafe = val => {
     return val === true || val === 'true' || val === 'TRUE';
   };
-
-  // Đồng bộ nguồn dữ liệu tham chiếu
   React.useEffect(() => {
     if (Array.isArray(orders)) {
       window.GLOBAL_ALL_ORDERS = orders;
@@ -20607,10 +20545,6 @@ const OrdersTab = React.memo(function OrdersTab({
     const st = String(order.status || order._effectiveStatus || '').toUpperCase().trim();
     const isRec = isReconciledSafe(order.isReconciled);
     const isReturnOrder = st === 'HÀNG HOÀN' || st.includes('HOÀN CHỜ XỬ') || st.includes('HOÀN TRẢ') || st === 'KIỂM HÀNG HOÀN';
-
-    // 🛡️ NGUYÊN TẮC ZERO-DROPPED CHO ĐƠN HOÀN CHỜ KIỂM:
-    // Đơn Hàng Hoàn mà chưa đối soát/duyệt kho (!isRec) là công việc tồn đọng cần Diệu Hương đi kiểm.
-    // Khi lọc "Tháng Này", LUÔN LUÔN hiển thị để không bao giờ bị sót việc!
     if (isReturnOrder && !isRec && (filterTime === 'Tháng Này' || filterTime === 'this_month')) {
       return true;
     }
@@ -20618,8 +20552,6 @@ const OrdersTab = React.memo(function OrdersTab({
     if (!isClosed && (filterTime === 'Tháng Này' || filterTime === 'this_month')) {
       return true;
     }
-
-    // Với đơn Hàng Hoàn: ngày ưu tiên hàng đầu là ngày quét nhận hoàn (returnedAt)
     const dateCandidate = isReturnOrder ? order.returnedAt || order.reconciledAt || order.date || order.createdAt || order.updatedAt : order.date || order.createdAt || order.reconciledAt || order.returnedAt || order.updatedAt;
     const orderDateObj = typeof window.parseOrderDateSafe === 'function' ? window.parseOrderDateSafe(dateCandidate) : null;
     const now = new Date();
@@ -20679,26 +20611,20 @@ const OrdersTab = React.memo(function OrdersTab({
         eff = 'ĐƠN HUỶ';
       }
       const meta = computeOrderMetadata(o);
-
-      // Khi toàn bộ sản phẩm sản xuất đã xong (meta.allProdDone = true), cho phép đơn chuyển sang SẴN SÀNG ĐÓNG GÓI
-      // để đóng hộp trước (tiết kiệm thời gian chờ mã vận đơn, triệt tiêu nghẽn giao hàng lúc 16:00).
       if (meta.allProdDone && (eff === 'CHỜ SẢN XUẤT' || eff === 'QUÉT TỰ ĐỘNG' || eff === 'ĐANG SẢN XUẤT' || eff === 'CHỜ PHỤ KIỆN')) {
         eff = 'SẴN SÀNG ĐÓNG GÓI';
       } else if (!meta.allProdDone && eff === 'SẴN SÀNG ĐÓNG GÓI' && !meta.hasDonePack) {
-        // Nếu đơn cần sản xuất nhưng phôi/bể chưa xong hoặc lệnh đã bị xoá, bắt buộc giữ ở Chờ Sản Xuất
         eff = 'CHỜ SẢN XUẤT';
       }
-      const normalized = {
+      return {
         ...o,
         status: eff === 'SẴN SÀNG ĐÓNG GÓI' ? 'Sẵn Sàng Đóng Gói' : o.status && o.status !== '0' ? o.status : 'Chờ Sản Xuất',
         _effectiveStatus: eff,
-        _isMissingAccessories: false,
         _isMissingMVD: meta.isMissingMVD,
         _allProdDone: meta.allProdDone,
         _hasDonePack: meta.hasDonePack,
         _computedStatus: eff
       };
-      return normalized;
     }).filter(o => {
       const isCtvOrder = String(o.channel || '').toUpperCase().includes('CỘNG TÁC VIÊN') || String(o.channel || '').toUpperCase() === 'CTV';
       if (isCTV && o.createdBy !== currentUser && o.sale !== currentUser && o.responsibleUser !== currentUser && !isCtvOrder) return false;
@@ -20706,8 +20632,6 @@ const OrdersTab = React.memo(function OrdersTab({
       return matchTimeFilter(o);
     });
   }, [sourceOrders, matchTimeFilter, currentUser, isCTV, computeOrderMetadata]);
-
-  // TẦNG 2: LỌC TÌM KIẾM MÃ ĐƠN & KHÁCH HÀNG (CHO DANH SÁCH HIỂN THỊ VẬN HÀNH)
   const baseFiltered = React.useMemo(() => {
     if (!deferredSearchCode || !deferredSearchCode.trim()) return timeFilteredOrders;
     const searchLower = deferredSearchCode.toLowerCase().trim();
@@ -20715,7 +20639,8 @@ const OrdersTab = React.memo(function OrdersTab({
       const mvd = String(o.orderCode || '').toLowerCase();
       const cus = String(o.customer || '').toLowerCase();
       const phone = String(o.phone || '').toLowerCase();
-      return mvd.includes(searchLower) || cus.includes(searchLower) || phone && phone.includes(searchLower);
+      const shipCode = String(o.shippingCode || '').toLowerCase();
+      return mvd.includes(searchLower) || cus.includes(searchLower) || phone.includes(searchLower) || shipCode.includes(searchLower);
     });
   }, [timeFilteredOrders, deferredSearchCode]);
   const getOrderTabGroup = React.useCallback(o => {
@@ -20738,7 +20663,6 @@ const OrdersTab = React.memo(function OrdersTab({
     if (st === 'SẴN SÀNG ĐÓNG GÓI' || st === 'CHỜ PHỤ KIỆN') {
       return 'Sẵn Sàng Đóng Gói';
     }
-    if (st === 'CHỜ MÃ VẬN ĐƠN') return 'Chờ Sản Xuất';
     return 'Chờ Sản Xuất';
   }, []);
   const matchChannelFilter = React.useCallback((o, targetChannel) => {
@@ -20773,7 +20697,7 @@ const OrdersTab = React.memo(function OrdersTab({
       const aUrgent = a.isUrgent === true || String(a.isUrgent).toUpperCase() === 'TRUE';
       const bUrgent = b.isUrgent === true || String(b.isUrgent).toUpperCase() === 'TRUE';
       if (aUrgent !== bUrgent) return bUrgent ? 1 : -1;
-      return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+      return new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0);
     });
   }, [filtered]);
   const latestPackMap = React.useMemo(() => {
@@ -20815,92 +20739,6 @@ const OrdersTab = React.memo(function OrdersTab({
       completed
     };
   }, [channelFiltered, getOrderTabGroup]);
-  const tabs = React.useMemo(() => [{
-    id: 'ALL',
-    label: 'Tất Cả',
-    count: channelFiltered.length,
-    icon: 'fa-layer-group',
-    activeClass: 'bg-white text-zinc-950 shadow-md font-black',
-    inactiveClass: 'bg-white/10 text-zinc-300 border border-white/20 hover:bg-white/20 hover:text-white',
-    activeBadgeClass: 'bg-black text-white font-black',
-    inactiveBadgeClass: 'bg-white/20 text-zinc-300 font-bold'
-  }, {
-    id: 'Chờ Sản Xuất',
-    label: 'Chờ Sản Xuất',
-    count: stats.pending,
-    icon: 'fa-tools',
-    activeClass: 'bg-amber-400 text-zinc-950 shadow-md font-black',
-    inactiveClass: 'bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 hover:text-amber-300',
-    activeBadgeClass: 'bg-black text-amber-400 font-black',
-    inactiveBadgeClass: 'bg-amber-500/20 text-amber-300 font-bold'
-  }, {
-    id: 'Sẵn Sàng Đóng Gói',
-    label: 'Sẵn Sàng Đóng Gói',
-    count: stats.ready,
-    icon: 'fa-box-open',
-    activeClass: 'bg-purple-500 text-white shadow-md font-black',
-    inactiveClass: 'bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 hover:text-purple-300',
-    activeBadgeClass: 'bg-black/30 text-white font-black',
-    inactiveBadgeClass: 'bg-purple-500/20 text-purple-300 font-bold'
-  }, {
-    id: 'Chờ Bàn Giao',
-    label: 'Chờ Bàn Giao',
-    count: stats.shipping,
-    icon: 'fa-truck-loading',
-    activeClass: 'bg-blue-500 text-white shadow-md font-black',
-    inactiveClass: 'bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:text-blue-300',
-    activeBadgeClass: 'bg-black/30 text-white font-black',
-    inactiveBadgeClass: 'bg-blue-500/20 text-blue-300 font-bold'
-  }, {
-    id: 'Đã Bàn Giao',
-    label: 'Đã Bàn Giao',
-    count: stats.done,
-    icon: 'fa-check-double',
-    activeClass: 'bg-emerald-500 text-zinc-950 shadow-md font-black',
-    inactiveClass: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 hover:text-emerald-300',
-    activeBadgeClass: 'bg-black text-emerald-300 font-black',
-    inactiveBadgeClass: 'bg-emerald-500/20 text-emerald-300 font-bold'
-  }, {
-    id: 'Đơn Huỷ',
-    label: 'Đơn Huỷ',
-    count: stats.cancel,
-    icon: 'fa-ban',
-    activeClass: 'bg-rose-500 text-white shadow-md font-black',
-    inactiveClass: 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 hover:text-rose-300',
-    activeBadgeClass: 'bg-black/30 text-white font-black',
-    inactiveBadgeClass: 'bg-rose-500/20 text-rose-300 font-bold'
-  }, {
-    id: 'Hàng Hoàn',
-    label: 'Hàng Hoàn Chờ Xử',
-    count: stats.returns,
-    icon: 'fa-undo-alt',
-    activeClass: 'bg-orange-500 text-white shadow-md font-black',
-    inactiveClass: 'bg-orange-500/10 text-orange-400 border border-orange-500/20 hover:bg-orange-500/20 hover:text-orange-300',
-    activeBadgeClass: 'bg-black/30 text-white font-black',
-    inactiveBadgeClass: 'bg-orange-500/20 text-orange-300 font-bold'
-  }, {
-    id: 'Hoàn Thành',
-    label: 'Hoàn Thành',
-    count: stats.completed,
-    icon: 'fa-certificate',
-    activeClass: 'bg-teal-500 text-zinc-950 shadow-md font-black',
-    inactiveClass: 'bg-teal-500/10 text-teal-400 border border-teal-500/20 hover:bg-teal-500/20 hover:text-teal-300',
-    activeBadgeClass: 'bg-black text-teal-300 font-black',
-    inactiveBadgeClass: 'bg-teal-500/20 text-teal-300 font-bold'
-  }], [stats, channelFiltered.length]);
-  const realTimeSummary = React.useMemo(() => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const getCleanStatus = status => String(status || '').toUpperCase().trim();
-    const urgentAlerts = (orders || []).filter(o => {
-      const orderDate = String(o.returnedAt || o.updatedAt || o.createdAt || o.date || '');
-      const isToday = orderDate.includes(todayStr);
-      const cleanSt = getCleanStatus(o.status);
-      return (cleanSt === 'ĐƠN HỦY' || cleanSt === 'ĐƠN HUỶ' || cleanSt === 'HÀNG HOÀN' || cleanSt.includes('HOÀN')) && isToday;
-    }).sort((a, b) => new Date(b.returnedAt || b.updatedAt || b.createdAt || 0) - new Date(a.returnedAt || a.updatedAt || a.createdAt || 0));
-    return {
-      urgentAlerts
-    };
-  }, [orders]);
   const parseRevenue = (raw, channel) => {
     if (raw === null || raw === undefined || raw === '') return 0;
     let s = String(raw).trim();
@@ -21618,10 +21456,234 @@ const OrdersTab = React.memo(function OrdersTab({
   };
 
   // ==========================================
-  // 6. RENDER GIAO DIỆN
+  // 6. HELPER HANDLERS & FORMATTERS MỚI (HALLMARK UX)
+  // ==========================================
+  const parseAccessoriesSafe = React.useCallback(accessories => {
+    if (!accessories) return [];
+    if (Array.isArray(accessories)) return accessories;
+    if (typeof accessories === 'string') {
+      try {
+        const parsed = JSON.parse(accessories);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        return [];
+      }
+    }
+    return [];
+  }, []);
+  const formatMoneySafe = React.useCallback(amt => {
+    if (typeof window.formatMoney === 'function') return window.formatMoney(amt);
+    const n = Number(amt) || 0;
+    return n.toLocaleString('vi-VN');
+  }, []);
+  const handleToggleUrgent = React.useCallback(async (order, e) => {
+    if (e) e.stopPropagation();
+    const currentUrgent = order.isUrgent === true || order.isUrgent === 'TRUE' || order.isUrgent === 1;
+    const newUrgent = !currentUrgent;
+    try {
+      await pushDeltas({
+        orders: [{
+          ...order,
+          isUrgent: newUrgent
+        }]
+      }, newUrgent ? `Đã đánh dấu ĐƠN GẤP: ${order.orderCode}!` : `Đã gỡ ưu tiên: ${order.orderCode}`, 'fa-bolt');
+      triggerToast(newUrgent ? `⚡ Đã ưu tiên đơn ${order.orderCode}!` : `Đã bỏ ưu tiên đơn ${order.orderCode}`, 'fa-check', 'info');
+      if (selectedDrawerOrder && selectedDrawerOrder.id === order.id) {
+        setSelectedDrawerOrder(prev => prev ? {
+          ...prev,
+          isUrgent: newUrgent
+        } : null);
+      }
+    } catch (err) {
+      triggerToast('Lỗi cập nhật ưu tiên: ' + err.message, 'fa-times', 'danger');
+    }
+  }, [pushDeltas, triggerToast, selectedDrawerOrder]);
+  const handleUpdateOrderStatus = React.useCallback(async (order, newStatus, e) => {
+    if (e) e.stopPropagation();
+    if (!newStatus || order.status === newStatus) return;
+    try {
+      const safeDateFull = typeof getLocalISODate === 'function' ? getLocalISODate() : new Date().toISOString().slice(0, 16).replace('T', ' ');
+      const updatePayload = {
+        ...order,
+        status: newStatus,
+        updatedBy: currentUser || 'SYSTEM'
+      };
+      if (newStatus === 'Hoàn Thành' || newStatus === 'Đối Soát Thành Công') {
+        updatePayload.isReconciled = true;
+        updatePayload.reconciledAt = safeDateFull;
+      }
+      await pushDeltas({
+        orders: [updatePayload]
+      }, `Đã chuyển đơn ${order.orderCode} sang [${newStatus}]!`, 'fa-exchange-alt');
+      triggerToast(`Đã chuyển trạng thái: ${newStatus}`, 'fa-check', 'success');
+      if (selectedDrawerOrder && selectedDrawerOrder.id === order.id) {
+        setSelectedDrawerOrder(prev => prev ? {
+          ...prev,
+          ...updatePayload
+        } : null);
+      }
+    } catch (err) {
+      triggerToast('Lỗi cập nhật trạng thái: ' + err.message, 'fa-times', 'danger');
+    }
+  }, [currentUser, pushDeltas, triggerToast, selectedDrawerOrder]);
+  const handlePrintShippingLabel = React.useCallback((order, e) => {
+    if (e) e.stopPropagation();
+    if (typeof window.printK58Order === 'function') {
+      window.printK58Order(order);
+    } else if (typeof window.triggerPrintOrder === 'function') {
+      window.triggerPrintOrder(order);
+    } else {
+      const printWindow = window.open('', '_blank', 'width=360,height=620');
+      if (printWindow) {
+        const code = String(order.orderCode || '').split(' | ')[0];
+        const accs = parseAccessoriesSafe(order.accessories);
+        printWindow.document.write(`
+                        <html><head><title>In Đơn ${code}</title>
+                        <style>
+                            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace; font-size: 12px; padding: 12px; width: 290px; color: #000; }
+                            .title { font-size: 15px; font-weight: 800; text-align: center; border-bottom: 2px dashed #000; padding-bottom: 6px; margin-bottom: 8px; letter-spacing: 0.5px; }
+                            .line { margin: 4px 0; line-height: 1.4; word-break: break-word; }
+                            .bold { font-weight: bold; }
+                            .items { border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 6px 0; margin: 8px 0; }
+                            .footer { text-align: center; margin-top: 14px; font-size: 11px; font-weight: bold; }
+                        </style>
+                        </head><body>
+                            <div class="title">RICH FISH AQUARIUM</div>
+                            <div class="line"><b>Mã Đơn:</b> ${code}</div>
+                            <div class="line"><b>Kênh Bán:</b> ${order.channel || 'Bán Lẻ'}</div>
+                            <div class="line"><b>Khách Hàng:</b> ${order.customer || 'Khách Lẻ'}</div>
+                            <div class="line"><b>SĐT:</b> ${order.phone || '---'}</div>
+                            <div class="line"><b>Địa Chỉ:</b> ${order.address || '---'}</div>
+                            <div class="items">
+                                <div class="bold" style="margin-bottom:4px;">DANH SÁCH MẶT HÀNG:</div>
+                                ${Array.isArray(accs) && accs.length > 0 ? accs.map((a, i) => `<div>${i + 1}. ${a.name || a.title || 'Sản phẩm'} x${a.quantity || a.qty || 1}</div>`).join('') : '<div>1x Đơn hàng tiêu chuẩn</div>'}
+                            </div>
+                            <div class="line"><b>Ghi Chú:</b> ${order.note || 'Không có'}</div>
+                            <div class="footer">--- CẢM ƠN QUÝ KHÁCH ---</div>
+                            <script>window.onload = function() { window.print(); window.close(); }<\/script>
+                        </body></html>
+                    `);
+        printWindow.document.close();
+      } else {
+        triggerToast('Trình duyệt đã chặn cửa sổ in ấn!', 'fa-exclamation-triangle', 'warning');
+      }
+    }
+  }, [parseAccessoriesSafe, triggerToast]);
+  const handleExportOrdersExcel = React.useCallback(async () => {
+    if (typeof window.ensureXLSXLoaded === 'function') await window.ensureXLSXLoaded();
+    if (typeof window.XLSX === 'undefined') {
+      triggerToast('Thư viện XLSX chưa tải xong, vui lòng thử lại sau 2 giây!', 'fa-exclamation-triangle', 'warning');
+      return;
+    }
+    try {
+      const exportData = sortedFiltered.map((o, idx) => {
+        const code = String(o.orderCode || '').split(' | ')[0];
+        const mvd = String(o.orderCode || '').includes('MVĐ:') ? String(o.orderCode).split('MVĐ:')[1].trim() : o.shippingCode || '';
+        const accs = parseAccessoriesSafe(o.accessories);
+        const itemsSummary = accs.map(a => `${a.name || ''} (x${a.quantity || a.qty || 1})`).join('; ');
+        return {
+          'STT': idx + 1,
+          'Mã Đơn': code,
+          'Mã Vận Đơn': mvd,
+          'Kênh Bán': o.channel || '',
+          'Khách Hàng': o.customer || '',
+          'Số Điện Thoại': o.phone || '',
+          'Địa Chỉ': o.address || '',
+          'Hạn Giao (SLA)': o.deadline || '',
+          'Trạng Thái': o.status || '',
+          'Sản Phẩm': itemsSummary,
+          'Doanh Thu': canViewFinance ? Number(o.revenue) || 0 : '***',
+          'Giá Vốn (COGS)': canViewFinance ? Number(o.cogs) || 0 : '***',
+          'Ghi Chú': o.note || ''
+        };
+      });
+      const ws = window.XLSX.utils.json_to_sheet(exportData);
+      const wb = window.XLSX.utils.book_new();
+      window.XLSX.utils.book_append_sheet(wb, ws, "Orders");
+      const fileName = `RF_Orders_${filterStatus || 'All'}_${filterChannel || 'All'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      window.XLSX.writeFile(wb, fileName);
+      triggerToast(`Đã xuất file ${fileName} thành công!`, 'fa-check', 'success');
+    } catch (err) {
+      triggerToast('Lỗi xuất Excel: ' + err.message, 'fa-times', 'danger');
+    }
+  }, [sortedFiltered, filterStatus, filterChannel, canViewFinance, parseAccessoriesSafe, triggerToast]);
+  const getChannelBadge = React.useCallback(channel => {
+    const c = String(channel || '').toUpperCase().trim();
+    if (c.includes('SHOPEE VN') || c === 'SHOPEE') return {
+      bg: 'bg-[#f97316]/10 text-[#f97316] border-[#f97316]/25',
+      icon: 'fa-shopping-bag',
+      label: 'Shopee VN'
+    };
+    if (c.includes('SHOPEE MY') || c.includes('SHOPEE SG') || c.includes('SHOPEE TH') || c.includes('XUẤT KHẨU') || c.includes('EXPORT')) return {
+      bg: 'bg-[#10b981]/10 text-[#10b981] border-[#10b981]/25',
+      icon: 'fa-globe-asia',
+      label: channel || 'Xuất Khẩu'
+    };
+    if (c.includes('TIKTOK')) return {
+      bg: 'bg-[#ec4899]/10 text-[#ec4899] border-[#ec4899]/25',
+      icon: 'fa-video',
+      label: 'TikTok Shop'
+    };
+    if (c.includes('CTV') || c.includes('CỘNG TÁC')) return {
+      bg: 'bg-[#c084fc]/10 text-[#c084fc] border-[#c084fc]/25',
+      icon: 'fa-handshake',
+      label: 'CTV'
+    };
+    if (c.includes('BÁN SỈ') || c.includes('WHOLESALE')) return {
+      bg: 'bg-amber-500/10 text-amber-400 border-amber-500/25',
+      icon: 'fa-boxes-stacked',
+      label: 'Bán Sỉ'
+    };
+    return {
+      bg: 'bg-blue-500/10 text-blue-400 border-blue-500/25',
+      icon: 'fa-store',
+      label: channel || 'Bán Lẻ'
+    };
+  }, []);
+  const getStatusBadge = React.useCallback(status => {
+    const s = String(status || '').toUpperCase().trim();
+    if (s === 'HOÀN THÀNH' || s === 'ĐỐI SOÁT THÀNH CÔNG') return {
+      bg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25',
+      icon: 'fa-check-double',
+      dot: 'bg-emerald-400'
+    };
+    if (s === 'ĐÃ BÀN GIAO' || s === 'ĐÃ GIAO') return {
+      bg: 'bg-sky-500/10 text-sky-400 border-sky-500/25',
+      icon: 'fa-truck',
+      dot: 'bg-sky-400'
+    };
+    if (s === 'ĐANG ĐÓNG GÓI' || s === 'SẴN SÀNG ĐÓNG GÓI') return {
+      bg: 'bg-amber-500/10 text-amber-400 border-amber-500/25',
+      icon: 'fa-box-open',
+      dot: 'bg-amber-400'
+    };
+    if (s === 'CHỜ SẢN XUẤT' || s === 'ĐANG SẢN XUẤT') return {
+      bg: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/25',
+      icon: 'fa-hammer',
+      dot: 'bg-indigo-400'
+    };
+    if (s === 'ĐƠN HUỶ' || s === 'ĐƠN HỦY' || s === 'HUỶ' || s === 'HỦY') return {
+      bg: 'bg-rose-500/10 text-rose-400 border-rose-500/25',
+      icon: 'fa-ban',
+      dot: 'bg-rose-400'
+    };
+    if (s.includes('HOÀN')) return {
+      bg: 'bg-purple-500/10 text-purple-400 border-purple-500/25',
+      icon: 'fa-undo',
+      dot: 'bg-purple-400'
+    };
+    return {
+      bg: 'bg-white/[0.04] text-zinc-300 border-white/[0.08]',
+      icon: 'fa-clock',
+      dot: 'bg-zinc-400'
+    };
+  }, []);
+
+  // ==========================================
+  // 7. RENDER GIAO DIỆN LINEAR UX & ROYAL WORKBENCH
   // ==========================================
   return /*#__PURE__*/React.createElement("div", {
-    className: "space-y-4 animate-fade-in relative pb-4"
+    className: "space-y-3.5 animate-fade-in relative pb-10 text-zinc-100 font-sans"
   }, /*#__PURE__*/React.createElement("input", {
     type: "file",
     accept: ".xlsx, .xls",
@@ -21629,25 +21691,85 @@ const OrdersTab = React.memo(function OrdersTab({
     className: "hidden",
     onChange: handleReconciliationImport
   }), /*#__PURE__*/React.createElement("div", {
-    className: "flex flex-col gap-2.5 mb-3"
+    className: "bg-[#121214] border border-white/[0.06] rounded-2xl p-3 shadow-xl space-y-2.5"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "flex items-center justify-between gap-2 overflow-x-auto custom-scrollbar no-scrollbar py-0.5"
+    className: "flex flex-wrap items-center justify-between gap-2.5"
   }, /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 min-w-[240px] max-w-xl relative"
+  }, /*#__PURE__*/React.createElement("i", {
+    className: "fas fa-search absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 text-xs"
+  }), /*#__PURE__*/React.createElement("input", {
+    type: "text",
+    value: searchCode,
+    onChange: e => setSearchCode(e.target.value),
+    placeholder: "T\xECm m\xE3 \u0111\u01A1n, m\xE3 v\u1EADn \u0111\u01A1n, kh\xE1ch h\xE0ng, s\u1ED1 \u0111i\u1EC7n tho\u1EA1i...",
+    className: "w-full h-10 pl-9 pr-8 bg-[#09090b] border border-white/[0.06] focus:border-[#d4af37]/60 focus:bg-black rounded-xl text-xs text-zinc-200 placeholder:text-zinc-500 outline-none transition-all"
+  }), searchCode && /*#__PURE__*/React.createElement("button", {
+    onClick: () => setSearchCode(''),
+    className: "absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 w-5 h-5 flex items-center justify-center text-xs"
+  }, /*#__PURE__*/React.createElement("i", {
+    className: "fas fa-times"
+  }))), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-1.5 shrink-0"
+  }, /*#__PURE__*/React.createElement("select", {
+    value: filterTime,
+    onChange: e => {
+      setFilterTime(e.target.value);
+      if (e.target.value !== 'Chọn Tháng') setCustomMonth('');
+    },
+    className: "h-10 px-3 bg-[#09090b] border border-white/[0.06] rounded-xl text-xs font-semibold text-zinc-300 outline-none focus:border-[#d4af37]/60 cursor-pointer"
+  }, /*#__PURE__*/React.createElement("option", {
+    value: "Th\xE1ng N\xE0y"
+  }, "Th\xE1ng N\xE0y"), /*#__PURE__*/React.createElement("option", {
+    value: "Th\xE1ng Tr\u01B0\u1EDBc"
+  }, "Th\xE1ng Tr\u01B0\u1EDBc"), /*#__PURE__*/React.createElement("option", {
+    value: "Ch\u1ECDn Th\xE1ng"
+  }, "Ch\u1ECDn Th\xE1ng"), /*#__PURE__*/React.createElement("option", {
+    value: "T\u1EA5t C\u1EA3"
+  }, "T\u1EA5t C\u1EA3")), filterTime === 'Chọn Tháng' && /*#__PURE__*/React.createElement("input", {
+    type: "month",
+    value: customMonth,
+    onChange: e => setCustomMonth(e.target.value),
+    className: "h-10 px-2.5 bg-[#09090b] border border-white/[0.06] rounded-xl text-xs font-semibold text-zinc-300 outline-none focus:border-[#d4af37]/60"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center bg-[#09090b] border border-white/[0.06] p-0.5 rounded-xl shrink-0"
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setViewMode('TABLE'),
+    className: `h-8 px-2.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${viewMode === 'TABLE' ? 'bg-[#d4af37] text-black shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`,
+    title: "Ch\u1EBF \u0111\u1ED9 b\u1EA3ng n\xE9n High-Density (h-14)"
+  }, /*#__PURE__*/React.createElement("i", {
+    className: "fas fa-table-list text-[11px]"
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "hidden sm:inline"
+  }, "B\u1EA3ng n\xE9n")), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setViewMode('CARDS'),
+    className: `h-8 px-2.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${viewMode === 'CARDS' ? 'bg-[#d4af37] text-black shadow-sm' : 'text-zinc-400 hover:text-zinc-200'}`,
+    title: "Ch\u1EBF \u0111\u1ED9 th\u1EBB gom theo k\xEAnh"
+  }, /*#__PURE__*/React.createElement("i", {
+    className: "fas fa-grip text-[11px]"
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "hidden sm:inline"
+  }, "Th\u1EBB k\xEAnh"))), /*#__PURE__*/React.createElement("div", {
     className: "flex items-center gap-1.5 shrink-0"
   }, hasPerm('ORDER_CREATE') && /*#__PURE__*/React.createElement("button", {
     onClick: () => setAddingMode(true),
-    className: "w-9 h-9 rounded-xl bg-gradient-to-r from-amber-500/20 to-yellow-500/20 hover:from-amber-500/30 hover:to-yellow-500/30 text-amber-300 flex items-center justify-center border border-amber-500/40 shadow-sm transition-all duration-200 active:scale-95 cursor-pointer shrink-0",
+    className: "h-10 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-black font-black text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/10 transition-all active:scale-95 cursor-pointer",
     title: "T\u1EA1o \u0110\u01A1n H\xE0ng M\u1EDBi"
   }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-plus text-amber-400 text-[13px]"
-  })), /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: () => setShowQuickNotes(prev => !prev),
-    className: `w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 active:scale-95 cursor-pointer shrink-0 ${showQuickNotes ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50' : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30'} shadow-sm`,
-    title: "Ghi ch\xFA & nh\u1EAFc vi\u1EC7c \u0111\u01A1n h\xE0ng"
+    className: "fas fa-plus text-xs"
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "hidden md:inline"
+  }, "Th\xEAm \u0110\u01A1n")), /*#__PURE__*/React.createElement("button", {
+    onClick: handleExportOrdersExcel,
+    className: "h-10 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/25 font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer",
+    title: "Xu\u1EA5t B\xE1o C\xE1o Excel"
   }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-sticky-note text-amber-400 text-[13px]"
-  })), /*#__PURE__*/React.createElement("button", {
+    className: "fas fa-file-excel text-xs"
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "hidden lg:inline"
+  }, "Xu\u1EA5t B\xE1o C\xE1o")), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => {
       const orderCodeInput = window.prompt("Nhập Mã Đơn Hàng cần phát tín hiệu GẤP tới xưởng:");
@@ -21669,275 +21791,94 @@ const OrdersTab = React.memo(function OrdersTab({
       }
       triggerToast(`⚡ ĐÃ PHÁT TÍN HIỆU ĐƠN GẤP: ${targetCode}!`, 'fa-bolt', 'warning');
     },
-    className: "w-9 h-9 rounded-xl bg-amber-950/60 hover:bg-amber-900/70 text-amber-300 flex items-center justify-center border border-amber-500/60 shadow-[0_0_10px_rgba(245,158,11,0.25)] transition-all duration-200 active:scale-95 cursor-pointer shrink-0",
-    title: "Ph\xE1t th\xF4ng b\xE1o \u0110\u01A1n G\u1EA5p / H\u1ECFa T\u1ED1c t\u1EDBi to\xE0n b\u1ED9 x\u01B0\u1EDFng s\u1EA3n xu\u1EA5t"
+    className: "w-10 h-10 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/25 flex items-center justify-center text-xs transition-all active:scale-95 cursor-pointer shrink-0",
+    title: "Ph\xE1t t\xEDn hi\u1EC7u \u0110\u01A1n G\u1EA5p t\u1EDBi x\u01B0\u1EDFng"
   }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-bolt text-amber-400 text-[13px] animate-pulse"
+    className: "fas fa-bolt text-amber-400"
   })), hasPerm('ORDER_IMPORT') && /*#__PURE__*/React.createElement("button", {
     onClick: () => window.dispatchEvent(new CustomEvent('openBulkImport')),
-    className: "w-9 h-9 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 flex items-center justify-center border border-emerald-500/40 transition-all duration-200 active:scale-95 cursor-pointer shrink-0",
-    title: "Nh\u1EADp File Excel Order.all"
+    className: "w-10 h-10 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/25 flex items-center justify-center text-xs transition-all active:scale-95 cursor-pointer shrink-0",
+    title: "Nh\u1EADp Excel Order.all"
   }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-file-excel text-emerald-400 text-[13px]"
+    className: "fas fa-file-import text-cyan-400"
   })), hasPerm('ORDER_STATUS_RECONCILED') && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
     onClick: () => setIsScanningReturn(true),
-    className: "w-9 h-9 rounded-xl bg-purple-950/60 hover:bg-purple-900/70 text-purple-300 flex items-center justify-center border border-purple-500/60 shadow-[0_0_10px_rgba(168,85,247,0.2)] transition-all duration-200 active:scale-95 cursor-pointer shrink-0",
-    title: "Qu\xE9t \u0110\u01A1n Ho\xE0n (\u0110\u01B0a v\u1EC1 Kho Ho\xE0n)"
+    className: "w-10 h-10 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/25 flex items-center justify-center text-xs transition-all active:scale-95 cursor-pointer shrink-0",
+    title: "Qu\xE9t \u0110\u01A1n Ho\xE0n Kho"
   }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-undo text-purple-400 text-[13px]"
+    className: "fas fa-undo text-purple-400"
   })), /*#__PURE__*/React.createElement("button", {
     onClick: () => setIsBulkFinanceOpen(true),
-    className: "w-9 h-9 rounded-xl bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-300 flex items-center justify-center border border-cyan-500/40 transition-all duration-200 active:scale-95 cursor-pointer shrink-0",
-    title: "\u0110\u1ED1i So\xE1t Doanh Thu Shopee / TikTok"
+    className: "w-10 h-10 rounded-xl bg-teal-500/10 hover:bg-teal-500/20 text-teal-400 border border-teal-500/25 flex items-center justify-center text-xs transition-all active:scale-95 cursor-pointer shrink-0",
+    title: "\u0110\u1ED1i So\xE1t Doanh Thu S\xE0n"
   }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-check-double text-cyan-400 text-[13px]"
+    className: "fas fa-check-double text-teal-400"
   })), /*#__PURE__*/React.createElement("button", {
     onClick: handleSyncGHN,
     disabled: isSyncingGHN,
-    className: "w-9 h-9 rounded-xl bg-amber-950/60 hover:bg-amber-900/70 text-amber-300 flex items-center justify-center border border-amber-500/60 shadow-[0_0_10px_rgba(245,158,11,0.2)] transition-all duration-200 active:scale-95 cursor-pointer disabled:opacity-50 shrink-0",
-    title: "\u0110\u1ED3ng b\u1ED9 tr\u1EA1ng th\xE1i & \u0110\u1ED1i so\xE1t GHN t\u1EF1 \u0111\u1ED9ng qua API"
+    className: "w-10 h-10 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/25 flex items-center justify-center text-xs transition-all active:scale-95 cursor-pointer shrink-0 disabled:opacity-50",
+    title: "\u0110\u1ED3ng b\u1ED9 API GHN"
   }, /*#__PURE__*/React.createElement("i", {
-    className: isSyncingGHN ? "fas fa-spinner fa-spin text-amber-400 text-[13px]" : "fas fa-bolt text-amber-400 text-[13px]"
+    className: isSyncingGHN ? "fas fa-spinner fa-spin" : "fas fa-cloud-arrow-down"
   }))), hasPerm('ORDER_CANCEL') && /*#__PURE__*/React.createElement("button", {
     onClick: () => setIsScanningCancel(true),
-    className: "w-9 h-9 rounded-xl bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 flex items-center justify-center border border-rose-500/40 transition-all duration-200 active:scale-95 cursor-pointer shrink-0",
+    className: "w-10 h-10 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 flex items-center justify-center text-xs transition-all active:scale-95 cursor-pointer shrink-0",
     title: "Qu\xE9t & H\u1EE7y \u0110\u01A1n T\u1EF1 \u0110\u1ED9ng"
   }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-ban text-rose-400 text-[13px]"
-  })), hasPerm('ORDER_STATUS_RECONCILED') && /*#__PURE__*/React.createElement("button", {
+    className: "fas fa-ban text-rose-400"
+  })), canViewFinance && /*#__PURE__*/React.createElement("button", {
     onClick: () => setShowRevenueStats(prev => !prev),
-    className: `w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 active:scale-95 cursor-pointer shrink-0 ${showRevenueStats ? 'bg-fuchsia-950/60 text-fuchsia-300 border border-fuchsia-500/60 shadow-[0_0_10px_rgba(217,70,239,0.3)]' : 'bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.1]'}`,
-    title: "Xem Th\u1ED1ng K\xEA Doanh Thu"
+    className: `w-10 h-10 rounded-xl border flex items-center justify-center text-xs transition-all active:scale-95 cursor-pointer shrink-0 ${showRevenueStats ? 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/40 shadow-sm' : 'bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border-white/[0.08]'}`,
+    title: "Th\u1ED1ng K\xEA Doanh Thu"
   }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-chart-bar text-fuchsia-400 text-[13px]"
+    className: "fas fa-chart-pie text-fuchsia-400"
   })), hasPerm('ORDER_ARCHIVE_VIEW') && /*#__PURE__*/React.createElement("button", {
     onClick: () => setIsArchiveEngineOpen(true),
-    className: "w-9 h-9 rounded-xl bg-gradient-to-r from-amber-950/50 to-yellow-950/50 hover:from-amber-900/60 hover:to-yellow-900/60 text-amber-300 flex items-center justify-center border border-amber-500/40 shadow-sm transition-all duration-200 active:scale-95 cursor-pointer shrink-0",
-    title: "Qu\u1EA3n l\xFD L\u01B0u Tr\u1EEF \u0110\u01A1n C\u0169 (Orders_Archive) & Gi\u1EA3i ph\xF3ng RAM"
+    className: "w-10 h-10 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/25 flex items-center justify-center text-xs transition-all active:scale-95 cursor-pointer shrink-0",
+    title: "Qu\u1EA3n l\xFD Kho L\u01B0u Tr\u1EEF Orders_Archive"
   }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-box-archive text-amber-400 text-[13px]"
-  })))), showQuickNotes && /*#__PURE__*/React.createElement(window.QuickNotesPanel, {
-    targetTab: "DON_HANG",
-    documents: documents || erpData?.Documents || window._rf_documents || [],
-    pushDeltas: pushDeltas,
-    currentUser: currentUser,
-    isBoss: isBoss,
-    triggerToast: triggerToast
-  }), !isCTV && showRevenueStats && /*#__PURE__*/React.createElement("div", {
-    className: "grid grid-cols-2 md:grid-cols-3 gap-2.5 my-1 animate-fade-in"
-  }, /*#__PURE__*/React.createElement(RFCard, {
-    className: "flex items-center justify-between group p-3"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "absolute -right-6 -top-6 w-24 h-24 bg-[#10b981]/5 rounded-full blur-xl group-hover:bg-[#10b981]/15 transition-all"
-  }), /*#__PURE__*/React.createElement("div", {
-    className: "relative z-10 min-w-0 pr-2"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 truncate"
-  }, "T\u1ED5ng Doanh Thu"), /*#__PURE__*/React.createElement("div", {
-    className: "text-[#10b981] font-black text-xl sm:text-2xl drop-shadow-[0_0_10px_rgba(16,185,129,0.3)] truncate"
-  }, formatMoney(summaryStats.totalRevenue), "\u0111")), /*#__PURE__*/React.createElement("div", {
-    className: "w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#10b981]/10 flex items-center justify-center text-[#10b981] text-lg sm:text-xl border border-[#10b981]/20 relative z-10 group-hover:scale-110 transition-transform shrink-0"
-  }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-coins"
-  }))), /*#__PURE__*/React.createElement(RFCard, {
-    className: "flex items-center justify-between group p-3"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "absolute -right-6 -top-6 w-24 h-24 bg-[#06b6d4]/5 rounded-full blur-xl group-hover:bg-[#06b6d4]/15 transition-all"
-  }), /*#__PURE__*/React.createElement("div", {
-    className: "relative z-10 min-w-0 pr-2"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 truncate"
-  }, "S\u1ED1 \u0110\u01A1n B\xE1n"), /*#__PURE__*/React.createElement("div", {
-    className: "text-[#06b6d4] font-black text-xl sm:text-2xl drop-shadow-[0_0_10px_rgba(6,182,212,0.3)] truncate"
-  }, formatMoney(summaryStats.totalSoldOrders), " ", /*#__PURE__*/React.createElement("span", {
-    className: "text-xs text-zinc-400 font-bold"
-  }, "\u0111\u01A1n"))), /*#__PURE__*/React.createElement("div", {
-    className: "w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#06b6d4]/10 flex items-center justify-center text-[#06b6d4] text-lg sm:text-xl border border-[#06b6d4]/20 relative z-10 group-hover:scale-110 transition-transform shrink-0"
-  }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-shopping-bag"
-  }))), /*#__PURE__*/React.createElement(RFCard, {
-    className: "flex items-center justify-between group p-3"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "absolute -right-6 -top-6 w-24 h-24 bg-[#f97316]/5 rounded-full blur-xl group-hover:bg-[#f97316]/15 transition-all"
-  }), /*#__PURE__*/React.createElement("div", {
-    className: "relative z-10 min-w-0 pr-2"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 truncate"
-  }, "Gi\xE1 Tr\u1ECB Ho\xE0n"), /*#__PURE__*/React.createElement("div", {
-    className: "text-[#f97316] font-black text-xl sm:text-2xl drop-shadow-[0_0_10px_rgba(249,115,22,0.3)] truncate"
-  }, formatMoney(summaryStats.totalReturnedValue), "\u0111")), /*#__PURE__*/React.createElement("div", {
-    className: "w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#f97316]/10 flex items-center justify-center text-[#f97316] text-lg sm:text-xl border border-[#f97316]/20 relative z-10 group-hover:scale-110 transition-transform shrink-0"
-  }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-undo"
-  }))), /*#__PURE__*/React.createElement(RFCard, {
-    className: "flex items-center justify-between group p-3"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "absolute -right-6 -top-6 w-24 h-24 bg-[#f43f5e]/5 rounded-full blur-xl group-hover:bg-[#f43f5e]/15 transition-all"
-  }), /*#__PURE__*/React.createElement("div", {
-    className: "relative z-10 min-w-0 pr-2"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 truncate"
-  }, "S\u1ED1 \u0110\u01A1n Tr\u1EA3 H\xE0ng"), /*#__PURE__*/React.createElement("div", {
-    className: "text-[#f43f5e] font-black text-xl sm:text-2xl drop-shadow-[0_0_10px_rgba(244,63,94,0.3)] truncate"
-  }, formatMoney(summaryStats.totalReturnOrders), " ", /*#__PURE__*/React.createElement("span", {
-    className: "text-xs text-zinc-400 font-bold"
-  }, "\u0111\u01A1n"))), /*#__PURE__*/React.createElement("div", {
-    className: "w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#f43f5e]/10 flex items-center justify-center text-[#f43f5e] text-lg sm:text-xl border border-[#f43f5e]/20 relative z-10 group-hover:scale-110 transition-transform shrink-0"
-  }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-box-tissue"
-  }))), /*#__PURE__*/React.createElement(RFCard, {
-    className: "flex items-center justify-between group p-3"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "absolute -right-6 -top-6 w-24 h-24 bg-[#3b82f6]/5 rounded-full blur-xl group-hover:bg-[#3b82f6]/15 transition-all"
-  }), /*#__PURE__*/React.createElement("div", {
-    className: "relative z-10 min-w-0 pr-2"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 truncate"
-  }, "B\xE1n L\u1EBB"), /*#__PURE__*/React.createElement("div", {
-    className: "text-[#3b82f6] font-black text-xl sm:text-2xl drop-shadow-[0_0_10px_rgba(59,130,246,0.3)] truncate"
-  }, formatMoney(summaryStats.totalRetail), "\u0111")), /*#__PURE__*/React.createElement("div", {
-    className: "w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#3b82f6]/10 flex items-center justify-center text-[#3b82f6] text-lg sm:text-xl border border-[#3b82f6]/20 relative z-10 group-hover:scale-110 transition-transform shrink-0"
-  }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-store"
-  }))), /*#__PURE__*/React.createElement(RFCard, {
-    className: "flex items-center justify-between group p-3"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "absolute -right-6 -top-6 w-24 h-24 bg-[#d4af37]/5 rounded-full blur-xl group-hover:bg-[#d4af37]/15 transition-all"
-  }), /*#__PURE__*/React.createElement("div", {
-    className: "relative z-10 min-w-0 pr-2"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 truncate"
-  }, "C\u1ED9ng T\xE1c Vi\xEAn"), /*#__PURE__*/React.createElement("div", {
-    className: "text-[#d4af37] font-black text-xl sm:text-2xl drop-shadow-[0_0_10px_rgba(212,175,55,0.3)] truncate"
-  }, formatMoney(summaryStats.totalCtv), "\u0111")), /*#__PURE__*/React.createElement("div", {
-    className: "w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-[#d4af37]/10 flex items-center justify-center text-[#d4af37] text-lg sm:text-xl border border-[#d4af37]/20 relative z-10 group-hover:scale-110 transition-transform shrink-0"
-  }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-handshake"
+    className: "fas fa-box-archive text-amber-400"
   })))), /*#__PURE__*/React.createElement("div", {
-    className: "flex gap-2 w-full shrink-0 items-center"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "flex-1"
-  }, /*#__PURE__*/React.createElement(RFInput, {
-    value: searchCode,
-    onChange: e => setSearchCode(e.target.value),
-    placeholder: "T\xECm m\xE3 \u0111\u01A1n, kh\xE1ch h\xE0ng...",
-    icon: "fa-search"
-  })), /*#__PURE__*/React.createElement("select", {
-    value: filterTime,
-    onChange: e => {
-      setFilterTime(e.target.value);
-      if (e.target.value !== 'Chọn Tháng') setCustomMonth('');
-    },
-    className: "h-[42px] px-3 bg-[#0a0a0a] border border-[#333] rounded-xl text-[10px] font-bold text-gray-300 outline-none focus:border-[#d4af37]"
-  }, /*#__PURE__*/React.createElement("option", {
-    value: "Th\xE1ng N\xE0y"
-  }, "Th\xE1ng N\xE0y"), /*#__PURE__*/React.createElement("option", {
-    value: "Th\xE1ng Tr\u01B0\u1EDBc"
-  }, "Th\xE1ng Tr\u01B0\u1EDBc"), /*#__PURE__*/React.createElement("option", {
-    value: "Ch\u1ECDn Th\xE1ng"
-  }, "Ch\u1ECDn Th\xE1ng"), /*#__PURE__*/React.createElement("option", {
-    value: "T\u1EA5t C\u1EA3"
-  }, "T\u1EA5t C\u1EA3")), filterTime === 'Chọn Tháng' && /*#__PURE__*/React.createElement("input", {
-    type: "month",
-    value: customMonth,
-    onChange: e => setCustomMonth(e.target.value),
-    className: "h-[42px] w-[110px] bg-[#0a0a0a] border border-[#333] rounded-xl px-2 text-[10px] font-bold text-gray-300 outline-none focus:border-[#d4af37]"
-  }))), !isCTV && realTimeSummary.urgentAlerts.length > 0 && /*#__PURE__*/React.createElement("div", {
-    className: "bg-transparent border border-rose-500/30 rounded-2xl p-3 mb-3 space-y-2"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "flex items-center gap-2 text-rose-400 font-black text-[10px] uppercase tracking-wider border-b border-rose-950/60 pb-1.5"
-  }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-exclamation-triangle text-rose-500 text-sm"
-  }), /*#__PURE__*/React.createElement("span", null, "C\u1EA2NH B\xC1O: \u0110\u01A0N H\u1EE6Y & HO\xC0N TR\u1EA2")), /*#__PURE__*/React.createElement("div", {
-    className: "max-h-[130px] overflow-y-auto custom-scrollbar space-y-1.5 pr-1"
-  }, realTimeSummary.urgentAlerts.map(alertOrder => {
-    const isHuy = String(alertOrder.status || '').toUpperCase().includes('HỦY') || String(alertOrder.status || '').toUpperCase() === 'HUỶ';
-    return /*#__PURE__*/React.createElement("div", {
-      key: alertOrder.id,
-      className: "flex justify-between items-center bg-rose-500/5 border border-rose-500/20 px-2.5 py-1.5 rounded-xl text-[11px] font-bold"
-    }, /*#__PURE__*/React.createElement("div", {
-      className: "flex items-center gap-2 truncate"
-    }, /*#__PURE__*/React.createElement("span", {
-      className: `px-1.5 py-0.5 rounded text-[8px] font-black uppercase ${isHuy ? 'bg-rose-600 text-white' : 'bg-orange-500 text-white'}`
-    }, isHuy ? 'HUỶ' : 'HOÀN'), /*#__PURE__*/React.createElement("span", {
-      className: "text-zinc-100 font-mono font-black tracking-wide truncate"
-    }, alertOrder.orderCode.split(' | ')[0])), isHuy ? /*#__PURE__*/React.createElement("button", {
-      onClick: () => {
-        setSearchCode(alertOrder.orderCode.split(' | ')[0]);
-        setFilterStatus('Đơn Hủy');
-      },
-      className: "text-[9px] bg-rose-600 hover:bg-rose-500 text-white px-2.5 py-1 rounded-lg transition-all font-black uppercase tracking-wider shrink-0 active:scale-95 cursor-pointer"
-    }, "Xem \u0111\u01A1n") : /*#__PURE__*/React.createElement("button", {
-      onClick: () => {
-        setSearchCode(alertOrder.orderCode.split(' | ')[0]);
-        setFilterStatus('Hàng Hoàn');
-      },
-      className: "text-[9px] bg-orange-600 hover:bg-orange-500 text-white px-2.5 py-1 rounded-lg transition-all font-black uppercase tracking-wider shrink-0 active:scale-95 cursor-pointer"
-    }, "Ki\u1EC3m ho\xE0n"));
-  }))), /*#__PURE__*/React.createElement("div", {
-    className: "flex items-center gap-2 overflow-x-auto custom-scrollbar no-scrollbar mb-3 pb-1"
+    className: "flex items-center gap-1.5 overflow-x-auto custom-scrollbar no-scrollbar pt-1"
   }, [{
     id: 'ALL',
-    label: 'Tất Cả',
-    icon: 'fa-store',
-    activeClass: 'bg-white text-zinc-950 shadow-md font-black',
-    inactiveClass: 'bg-white/5 text-zinc-300 border border-white/10 hover:bg-white/10 hover:text-white',
-    activeIconClass: 'text-zinc-950',
-    inactiveIconClass: 'text-zinc-300'
+    label: 'Tất Cả Kênh',
+    icon: 'fa-layer-group'
   }, {
     id: 'SHOPEE',
-    label: 'Shopee',
-    icon: 'fa-shopping-bag',
-    activeClass: 'bg-[#f97316] text-white shadow-md font-black',
-    inactiveClass: 'bg-orange-500/10 text-orange-400 border border-orange-500/20 hover:bg-orange-500/20 hover:text-orange-300',
-    activeIconClass: 'text-white',
-    inactiveIconClass: 'text-orange-400'
+    label: 'Shopee VN',
+    icon: 'fa-shopping-bag'
   }, {
     id: 'EXPORT',
-    label: 'Xuất Khẩu',
-    icon: 'fa-globe-asia',
-    activeClass: 'bg-[#10b981] text-zinc-950 shadow-md font-black',
-    inactiveClass: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 hover:text-emerald-300',
-    activeIconClass: 'text-zinc-950',
-    inactiveIconClass: 'text-emerald-400'
+    label: 'Shopee MY / Xuất Khẩu',
+    icon: 'fa-globe-asia'
   }, {
     id: 'TIKTOK',
-    label: 'TikTok',
-    icon: 'fa-video',
-    activeClass: 'bg-[#ec4899] text-white shadow-md font-black',
-    inactiveClass: 'bg-pink-500/10 text-pink-400 border border-pink-500/20 hover:bg-pink-500/20 hover:text-pink-300',
-    activeIconClass: 'text-white',
-    inactiveIconClass: 'text-pink-400'
+    label: 'TikTok Shop',
+    icon: 'fa-video'
   }, {
     id: 'BÁN LẺ',
-    label: 'Bán Lẻ',
-    icon: 'fa-box',
-    activeClass: 'bg-[#60a5fa] text-zinc-950 shadow-md font-black',
-    inactiveClass: 'bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:text-blue-300',
-    activeIconClass: 'text-zinc-950',
-    inactiveIconClass: 'text-blue-400'
+    label: 'Trực Tiếp / Bán Lẻ',
+    icon: 'fa-store'
   }, {
     id: 'CTV',
-    label: 'CTV',
-    icon: 'fa-handshake',
-    activeClass: 'bg-[#c084fc] text-zinc-950 shadow-md font-black',
-    inactiveClass: 'bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 hover:text-purple-300',
-    activeIconClass: 'text-zinc-950',
-    inactiveIconClass: 'text-purple-400'
+    label: 'Cộng Tác Viên',
+    icon: 'fa-handshake'
   }].map(ch => {
     const isActive = filterChannel === ch.id;
     return /*#__PURE__*/React.createElement("button", {
       key: ch.id,
+      type: "button",
       onClick: () => setFilterChannel(ch.id),
-      className: `shrink-0 px-3.5 py-2 rounded-xl text-[11px] transition-all duration-200 flex items-center gap-2 active:scale-95 cursor-pointer ${isActive ? ch.activeClass : ch.inactiveClass}`
+      className: `shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer ${isActive ? 'bg-[#d4af37] text-black shadow-md' : 'bg-[#09090b] text-zinc-400 hover:text-zinc-200 border border-white/[0.06] hover:bg-white/[0.04]'}`
     }, /*#__PURE__*/React.createElement("i", {
-      className: `fas ${ch.icon} ${isActive ? ch.activeIconClass : ch.inactiveIconClass}`
+      className: `fas ${ch.icon} text-[10px]`
     }), /*#__PURE__*/React.createElement("span", null, ch.label));
   })), /*#__PURE__*/React.createElement("div", {
-    className: "relative mb-4"
+    className: "relative pt-1"
   }, /*#__PURE__*/React.createElement("div", {
     ref: tabsContainerRef,
-    className: "flex items-center gap-2 overflow-x-auto custom-scrollbar no-scrollbar pb-1 scroll-smooth"
+    className: "flex items-center gap-1.5 overflow-x-auto custom-scrollbar no-scrollbar scroll-smooth pb-0.5"
   }, tabs.map(t => {
     const cur = String(filterStatus || '').toUpperCase().trim();
     const target = String(t.id || '').toUpperCase().trim();
@@ -21946,76 +21887,274 @@ const OrdersTab = React.memo(function OrdersTab({
       key: t.id,
       "data-active": isActive ? "true" : "false",
       onClick: () => setFilterStatus(t.id),
-      className: `shrink-0 px-3.5 py-2 rounded-xl text-[11px] transition-all duration-200 flex items-center gap-2 active:scale-95 cursor-pointer ${isActive ? t.activeClass : t.inactiveClass}`
+      className: `shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 active:scale-95 cursor-pointer ${isActive ? 'bg-white text-black shadow-md' : 'bg-[#09090b] text-zinc-400 hover:text-zinc-200 border border-white/[0.06] hover:bg-white/[0.04]'}`
     }, /*#__PURE__*/React.createElement("i", {
-      className: `fas ${t.icon} ${isActive ? '' : 'opacity-80'}`
+      className: `fas ${t.icon} text-[10px] ${isActive ? 'text-black' : 'text-zinc-400'}`
     }), /*#__PURE__*/React.createElement("span", null, t.label), /*#__PURE__*/React.createElement("span", {
-      className: `px-1.5 py-0.5 rounded-md text-[9px] min-w-[20px] text-center ${isActive ? t.activeBadgeClass : t.inactiveBadgeClass}`
+      className: `px-1.5 py-0.2 rounded-md text-[10px] font-mono min-w-[20px] text-center ${isActive ? 'bg-black text-white' : 'bg-white/[0.08] text-zinc-300'}`
     }, t.count));
-  }))), !isCTV && selectedIds.length > 0 && /*#__PURE__*/React.createElement("div", {
-    className: "sticky top-2 z-40 bg-[#111114]/95 backdrop-blur-md border border-sky-500/30 rounded-2xl p-2 sm:px-3.5 sm:py-2 mb-3 flex items-center justify-between gap-2 shadow-[0_8px_30px_rgba(0,0,0,0.6)] animate-slide-down"
+  })))), canViewFinance && showRevenueStats && /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 animate-fade-in"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "flex items-center gap-2 min-w-0"
+    className: "bg-[#121214] border border-white/[0.06] p-3 rounded-2xl"
   }, /*#__PURE__*/React.createElement("div", {
-    className: "flex items-center gap-1.5 bg-sky-500/15 border border-sky-500/40 text-sky-300 px-2.5 py-1 rounded-xl text-xs font-black shrink-0"
+    className: "text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1"
+  }, "T\u1ED5ng Doanh Thu"), /*#__PURE__*/React.createElement("div", {
+    className: "text-emerald-400 font-mono font-bold text-lg truncate"
+  }, formatMoneySafe(summaryStats.totalRevenue), "\u0111")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-[#121214] border border-white/[0.06] p-3 rounded-2xl"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1"
+  }, "S\u1ED1 \u0110\u01A1n B\xE1n"), /*#__PURE__*/React.createElement("div", {
+    className: "text-cyan-400 font-mono font-bold text-lg"
+  }, formatMoneySafe(summaryStats.totalSoldOrders), " ", /*#__PURE__*/React.createElement("span", {
+    className: "text-xs text-zinc-500 font-normal"
+  }, "\u0111\u01A1n"))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-[#121214] border border-white/[0.06] p-3 rounded-2xl"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1"
+  }, "Gi\xE1 Tr\u1ECB Ho\xE0n"), /*#__PURE__*/React.createElement("div", {
+    className: "text-orange-400 font-mono font-bold text-lg truncate"
+  }, formatMoneySafe(summaryStats.totalReturnedValue), "\u0111")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-[#121214] border border-white/[0.06] p-3 rounded-2xl"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1"
+  }, "S\u1ED1 \u0110\u01A1n Ho\xE0n"), /*#__PURE__*/React.createElement("div", {
+    className: "text-rose-400 font-mono font-bold text-lg"
+  }, formatMoneySafe(summaryStats.totalReturnOrders), " ", /*#__PURE__*/React.createElement("span", {
+    className: "text-xs text-zinc-500 font-normal"
+  }, "\u0111\u01A1n"))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-[#121214] border border-white/[0.06] p-3 rounded-2xl"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1"
+  }, "B\xE1n L\u1EBB"), /*#__PURE__*/React.createElement("div", {
+    className: "text-blue-400 font-mono font-bold text-lg truncate"
+  }, formatMoneySafe(summaryStats.totalRetail), "\u0111")), /*#__PURE__*/React.createElement("div", {
+    className: "bg-[#121214] border border-white/[0.06] p-3 rounded-2xl"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1"
+  }, "C\u1ED9ng T\xE1c Vi\xEAn"), /*#__PURE__*/React.createElement("div", {
+    className: "text-[#d4af37] font-mono font-bold text-lg truncate"
+  }, formatMoneySafe(summaryStats.totalCtv), "\u0111"))), selectedIds.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "sticky top-2 z-40 bg-[#121214]/95 backdrop-blur-xl border border-sky-500/40 rounded-2xl p-2.5 px-4 flex items-center justify-between gap-2 shadow-2xl shadow-black animate-slide-down"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-1.5 bg-sky-500/15 border border-sky-500/40 text-sky-300 px-2.5 py-1 rounded-xl text-xs font-black"
   }, /*#__PURE__*/React.createElement("span", {
-    className: "w-4.5 h-4.5 rounded-lg bg-sky-500 text-black flex items-center justify-center text-[10px] font-black"
-  }, selectedIds.length), /*#__PURE__*/React.createElement("span", {
-    className: "text-[11px] uppercase tracking-wider font-extrabold"
-  }, "\u0110\xE3 ch\u1ECDn")), /*#__PURE__*/React.createElement("button", {
+    className: "w-4 h-4 rounded-lg bg-sky-500 text-black flex items-center justify-center text-[10px] font-black"
+  }, selectedIds.length), /*#__PURE__*/React.createElement("span", null, "\u0110\xC3 CH\u1ECCN")), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: clearSelection,
-    className: "text-[11px] text-zinc-400 hover:text-rose-400 flex items-center gap-1 py-1 px-1.5 rounded-lg hover:bg-white/5 transition-colors cursor-pointer shrink-0 font-medium",
-    title: "B\u1ECF ch\u1ECDn t\u1EA5t c\u1EA3"
-  }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-times text-[10px]"
-  }), /*#__PURE__*/React.createElement("span", null, "B\u1ECF ch\u1ECDn"))), /*#__PURE__*/React.createElement("div", {
+    className: "text-xs text-zinc-400 hover:text-rose-400 py-1 px-2 rounded-lg hover:bg-white/5 transition-colors cursor-pointer"
+  }, "B\u1ECF ch\u1ECDn")), /*#__PURE__*/React.createElement("div", {
     className: "flex items-center gap-1.5 shrink-0"
   }, (filterStatus === 'Hàng Hoàn' || filterStatus === 'HÀNG HOÀN CHỜ XỬ' || filterStatus === 'HÀNG HOÀN CHỜ XỬ LÝ') && hasPerm('ORDER_STATUS_RECONCILED') && /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: handleBulkReturnApprove,
     disabled: isBulkHandovering,
-    className: "flex items-center gap-1.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-black px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] uppercase active:scale-95 transition-all shadow-md border border-teal-400/30 disabled:opacity-50 cursor-pointer"
+    className: "px-3.5 py-1.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
   }, /*#__PURE__*/React.createElement("i", {
-    className: `fas ${isBulkHandovering ? 'fa-spinner fa-spin' : 'fa-check-double'} text-[10px]`
-  }), /*#__PURE__*/React.createElement("span", null, "Duy\u1EC7t Ho\xE0n (", selectedIds.length, ")")), hasPerm('ORDER_DELETE') && /*#__PURE__*/React.createElement("button", {
-    type: "button",
-    onClick: handleBulkDelete,
-    disabled: isBulkDeleting,
-    className: "flex items-center gap-1.5 bg-rose-950/70 hover:bg-rose-900 border border-rose-800/50 text-rose-300 hover:text-white font-bold px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-xl text-[11px] uppercase active:scale-95 transition-all disabled:opacity-50 cursor-pointer",
-    title: `Xoá ${selectedIds.length} đơn đã chọn`
-  }, /*#__PURE__*/React.createElement("i", {
-    className: `fas ${isBulkDeleting ? 'fa-spinner fa-spin' : 'fa-trash-alt'} text-[10px]`
-  }), /*#__PURE__*/React.createElement("span", {
-    className: "hidden sm:inline"
-  }, isBulkDeleting ? 'Xoá...' : 'Xoá')), hasPerm('ORDER_STATUS_DELIVERED') && (eligibleHandoverOrders.length > 0 ? /*#__PURE__*/React.createElement("button", {
+    className: isBulkHandovering ? "fas fa-spinner fa-spin" : "fas fa-check-double"
+  }), /*#__PURE__*/React.createElement("span", null, "Duy\u1EC7t Ho\xE0n (", selectedIds.length, ")")), hasPerm('ORDER_STATUS_DELIVERED') && (eligibleHandoverOrders.length > 0 ? /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: handleBulkHandover,
     disabled: isBulkHandovering,
-    className: "flex items-center gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-black px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-[11px] uppercase active:scale-95 transition-all shadow-[0_0_15px_rgba(16,185,129,0.25)] border border-emerald-300 disabled:opacity-50 cursor-pointer",
-    title: `Bàn giao hàng loạt ${eligibleHandoverOrders.length} đơn`
+    className: "px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-black rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
   }, /*#__PURE__*/React.createElement("i", {
-    className: `fas ${isBulkHandovering ? 'fa-spinner fa-spin' : 'fa-truck-fast'} text-[11px]`
-  }), /*#__PURE__*/React.createElement("span", null, isBulkHandovering ? 'Đang Giao...' : `Bàn Giao (${eligibleHandoverOrders.length})`)) : /*#__PURE__*/React.createElement("div", {
-    className: "flex items-center gap-1.5 bg-emerald-950/70 border border-emerald-500/40 text-emerald-400 font-bold px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl text-[11px] uppercase tracking-wider select-none shadow-sm",
-    title: "T\u1EA5t c\u1EA3 c\xE1c \u0111\u01A1n \u0111\xE3 ch\u1ECDn \u0111\u1EC1u \u0111\xE3 \u1EDF tr\u1EA1ng th\xE1i \u0110\xC3 B\xC0N GIAO"
+    className: isBulkHandovering ? "fas fa-spinner fa-spin" : "fas fa-truck-fast"
+  }), /*#__PURE__*/React.createElement("span", null, "B\xE0n Giao (", eligibleHandoverOrders.length, ")")) : /*#__PURE__*/React.createElement("div", {
+    className: "px-3 py-1.5 bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-bold flex items-center gap-1.5 select-none"
   }, /*#__PURE__*/React.createElement("i", {
     className: "fas fa-check-double text-[10px]"
-  }), /*#__PURE__*/React.createElement("span", null, "\u0110\xE3 B\xE0n Giao (", selectedOrdersList.length, ")"))))), /*#__PURE__*/React.createElement("div", {
-    className: "space-y-4"
-  }, sortedFiltered.length === 0 ? /*#__PURE__*/React.createElement("div", {
-    className: "text-center py-10 px-4 text-gray-500 font-bold text-[11px] bg-[#0f0f11] rounded-2xl border-2 border-dashed border-white/[0.07] space-y-3"
+  }), /*#__PURE__*/React.createElement("span", null, "\u0110\xE3 B\xE0n Giao (", selectedOrdersList.length, ")"))), hasPerm('ORDER_DELETE') && /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: handleBulkDelete,
+    disabled: isBulkDeleting,
+    className: "px-3 py-1.5 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-400 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer disabled:opacity-50"
   }, /*#__PURE__*/React.createElement("i", {
-    className: "fas fa-box-open text-3xl block opacity-30"
-  }), /*#__PURE__*/React.createElement("div", null, "Kh\xF4ng c\xF3 \u0111\u01A1n h\xE0ng n\xE0o ph\xF9 h\u1EE3p v\u1EDBi b\u1ED9 l\u1ECDc hi\u1EC7n t\u1EA1i."), searchCode.trim().length >= 4 && /*#__PURE__*/React.createElement("button", {
+    className: isBulkDeleting ? "fas fa-spinner fa-spin" : "fas fa-trash-alt"
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "hidden sm:inline"
+  }, "Xo\xE1")))), sortedFiltered.length === 0 ? /*#__PURE__*/React.createElement("div", {
+    className: "text-center py-16 px-4 bg-[#121214] rounded-2xl border border-white/[0.06] space-y-3"
+  }, /*#__PURE__*/React.createElement("i", {
+    className: "fas fa-box-open text-4xl text-zinc-600 block"
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "text-sm font-semibold text-zinc-400"
+  }, "Kh\xF4ng c\xF3 \u0111\u01A1n h\xE0ng n\xE0o ph\xF9 h\u1EE3p v\u1EDBi b\u1ED9 l\u1ECDc hi\u1EC7n t\u1EA1i."), searchCode.trim().length >= 4 && /*#__PURE__*/React.createElement("button", {
     onClick: () => handleLazyLoadArchive({
       searchCode: searchCode.trim()
     }),
     disabled: isLazyLoadingArchive,
-    className: "px-4 py-2.5 bg-[#d4af37]/15 hover:bg-[#d4af37]/25 border border-[#d4af37]/40 text-[#d4af37] font-black text-[11px] uppercase tracking-wider rounded-xl transition-all active:scale-95 inline-flex items-center gap-2 mx-auto cursor-pointer"
+    className: "px-4 py-2 bg-[#d4af37]/15 hover:bg-[#d4af37]/25 border border-[#d4af37]/40 text-[#d4af37] font-bold text-xs rounded-xl transition-all inline-flex items-center gap-2 cursor-pointer"
   }, /*#__PURE__*/React.createElement("i", {
     className: isLazyLoadingArchive ? "fas fa-spinner fa-spin" : "fas fa-search"
-  }), /*#__PURE__*/React.createElement("span", null, isLazyLoadingArchive ? "Đang quét Kho Lưu Trữ..." : `Tìm "${searchCode.trim()}" trong Orders_Archive`))) : /*#__PURE__*/React.createElement(React.Fragment, null, (() => {
+  }), /*#__PURE__*/React.createElement("span", null, isLazyLoadingArchive ? "Đang quét Kho Lưu Trữ..." : `Tìm "${searchCode.trim()}" trong Orders_Archive`))) : /*#__PURE__*/React.createElement(React.Fragment, null, viewMode === 'TABLE' ? /*#__PURE__*/React.createElement("div", {
+    className: "bg-[#121214] border border-white/[0.06] rounded-2xl overflow-hidden shadow-xl"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "overflow-x-auto custom-scrollbar"
+  }, /*#__PURE__*/React.createElement("table", {
+    className: "w-full text-left border-collapse min-w-[900px]"
+  }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+    className: "border-b border-white/[0.06] bg-[#09090b]/80 text-[11px] font-black uppercase text-zinc-400 tracking-wider h-11"
+  }, /*#__PURE__*/React.createElement("th", {
+    className: "w-12 px-3 text-center"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "checkbox",
+    checked: sortedFiltered.slice(0, renderLimit).length > 0 && sortedFiltered.slice(0, renderLimit).every(o => selectedIds.includes(o.id)),
+    onChange: e => {
+      const visibleIds = sortedFiltered.slice(0, renderLimit).map(o => o.id);
+      if (e.target.checked) {
+        setSelectedIds(prev => [...new Set([...prev, ...visibleIds])]);
+      } else {
+        setSelectedIds(prev => prev.filter(id => !visibleIds.includes(id)));
+      }
+    },
+    className: "w-4 h-4 rounded accent-[#d4af37] cursor-pointer"
+  })), /*#__PURE__*/React.createElement("th", {
+    className: "px-3 min-w-[190px]"
+  }, "M\xC3 \u0110\u01A0N & V\u1EACN \u0110\u01A0N"), /*#__PURE__*/React.createElement("th", {
+    className: "px-3 w-36"
+  }, "K\xCANH B\xC1N"), /*#__PURE__*/React.createElement("th", {
+    className: "px-3 min-w-[180px]"
+  }, "KH\xC1CH H\xC0NG"), /*#__PURE__*/React.createElement("th", {
+    className: "px-3 w-32"
+  }, "H\u1EA0N GIAO (SLA)"), /*#__PURE__*/React.createElement("th", {
+    className: "px-3 w-36"
+  }, "TR\u1EA0NG TH\xC1I"), /*#__PURE__*/React.createElement("th", {
+    className: "px-3 w-36 text-right"
+  }, canViewFinance ? 'DOANH THU' : 'SỐ LƯỢNG SP'), /*#__PURE__*/React.createElement("th", {
+    className: "px-3 w-28 text-center"
+  }, "THAO T\xC1C"))), /*#__PURE__*/React.createElement("tbody", {
+    className: "divide-y divide-white/[0.04]"
+  }, sortedFiltered.slice(0, renderLimit).map(order => {
+    const code = String(order.orderCode || '').split(' | ')[0];
+    const mvd = String(order.orderCode || '').includes('MVĐ:') ? String(order.orderCode).split('MVĐ:')[1].trim() : order.shippingCode || '';
+    const isSelected = selectedIds.includes(order.id);
+    const isUrgent = order.isUrgent === true || order.isUrgent === 'TRUE' || order.isUrgent === 1;
+    const chanBadge = getChannelBadge(order.channel);
+    const statBadge = getStatusBadge(order.status);
+    const accs = parseAccessoriesSafe(order.accessories);
+    const itemCount = accs.reduce((sum, item) => sum + (Number(item.quantity || item.qty) || 1), 0) || 1;
+    const matchedProds = getMatchedProds(order);
+    const hasProd = order.hasProduction === true || order.hasProduction === 'true' || matchedProds.length > 0;
+
+    // Deadline check
+    const deadlineStr = order.deadline || order.date || '';
+    let isOverdue = false;
+    if (deadlineStr && typeof window.parseOrderDateSafe === 'function') {
+      const d = window.parseOrderDateSafe(deadlineStr);
+      if (d && !isNaN(d.getTime())) {
+        const now = new Date();
+        if (d < now && order.status !== 'Hoàn Thành' && order.status !== 'Đã Bàn Giao' && order.status !== 'Đơn Huỷ') {
+          isOverdue = true;
+        }
+      }
+    }
+    return /*#__PURE__*/React.createElement("tr", {
+      key: order.id,
+      onClick: () => setSelectedDrawerOrder(order),
+      className: `h-14 transition-colors duration-150 cursor-pointer group ${isSelected ? 'bg-[#d4af37]/5' : 'hover:bg-white/[0.02]'}`
+    }, /*#__PURE__*/React.createElement("td", {
+      className: "px-3 text-center",
+      onClick: e => e.stopPropagation()
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center justify-center gap-1.5"
+    }, /*#__PURE__*/React.createElement("input", {
+      type: "checkbox",
+      checked: isSelected,
+      onChange: () => toggleSelect(order.id),
+      className: "w-4 h-4 rounded accent-[#d4af37] cursor-pointer"
+    }), /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: e => handleToggleUrgent(order, e),
+      className: `w-5 h-5 flex items-center justify-center text-xs transition-transform active:scale-125 cursor-pointer ${isUrgent ? 'text-[#d4af37]' : 'text-zinc-600 hover:text-zinc-400'}`,
+      title: isUrgent ? "Đơn ưu tiên (GẤP)" : "Đánh dấu ưu tiên"
+    }, /*#__PURE__*/React.createElement("i", {
+      className: `fas fa-star ${isUrgent ? 'drop-shadow-[0_0_8px_rgba(212,175,55,0.6)]' : ''}`
+    })))), /*#__PURE__*/React.createElement("td", {
+      className: "px-3 min-w-[190px]"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex flex-col"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center gap-1.5"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "font-mono font-bold text-xs text-zinc-100 group-hover:text-[#d4af37] transition-colors"
+    }, code), isUrgent && /*#__PURE__*/React.createElement("span", {
+      className: "px-1.5 py-0.2 rounded bg-amber-500/20 border border-amber-500/40 text-[#d4af37] text-[9px] font-black uppercase"
+    }, "G\u1EA4P")), /*#__PURE__*/React.createElement("span", {
+      className: "font-mono text-[11px] text-zinc-500 truncate"
+    }, mvd ? `MVĐ: ${mvd}` : 'Chưa có MVĐ'))), /*#__PURE__*/React.createElement("td", {
+      className: "px-3"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border ${chanBadge.bg} ${chanBadge.border} truncate max-w-[130px]`
+    }, /*#__PURE__*/React.createElement("i", {
+      className: `fas ${chanBadge.icon} text-[10px]`
+    }), /*#__PURE__*/React.createElement("span", {
+      className: "truncate"
+    }, chanBadge.label))), /*#__PURE__*/React.createElement("td", {
+      className: "px-3 min-w-[180px]"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex flex-col"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center gap-1.5 truncate"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "text-xs font-semibold text-zinc-200 truncate"
+    }, order.customer || 'Khách vãng lai'), hasProd && /*#__PURE__*/React.createElement("span", {
+      className: "px-1.5 py-0.2 rounded bg-purple-500/15 border border-purple-500/30 text-purple-300 text-[9px] font-black uppercase shrink-0"
+    }, "C\xD3 SX")), /*#__PURE__*/React.createElement("span", {
+      className: "text-[11px] text-zinc-500 truncate"
+    }, order.phone || 'Không có SĐT'))), /*#__PURE__*/React.createElement("td", {
+      className: "px-3"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex flex-col"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: `text-xs font-mono font-medium ${isOverdue ? 'text-rose-400 font-bold' : 'text-zinc-300'}`
+    }, deadlineStr ? deadlineStr.slice(0, 10) : '---'), isOverdue && /*#__PURE__*/React.createElement("span", {
+      className: "text-[9px] text-rose-400 font-black uppercase"
+    }, "Tr\u1EC5 SLA"))), /*#__PURE__*/React.createElement("td", {
+      className: "px-3"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border ${statBadge.bg} ${statBadge.border}`
+    }, /*#__PURE__*/React.createElement("span", {
+      className: `w-1.5 h-1.5 rounded-full ${statBadge.dot}`
+    }), /*#__PURE__*/React.createElement("span", {
+      className: "truncate"
+    }, order.status || 'Chờ Sản Xuất'))), /*#__PURE__*/React.createElement("td", {
+      className: "px-3 text-right"
+    }, canViewFinance ? /*#__PURE__*/React.createElement("span", {
+      className: "font-mono font-bold text-xs text-emerald-400"
+    }, formatMoneySafe(order.revenue), "\u0111") : /*#__PURE__*/React.createElement("span", {
+      className: "text-xs font-medium text-zinc-400 inline-flex items-center gap-1"
+    }, /*#__PURE__*/React.createElement("i", {
+      className: "fas fa-box text-zinc-500 text-[10px]"
+    }), /*#__PURE__*/React.createElement("span", null, itemCount, " m\xF3n"))), /*#__PURE__*/React.createElement("td", {
+      className: "px-3 text-center",
+      onClick: e => e.stopPropagation()
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "flex items-center justify-center gap-1"
+    }, /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: () => setSelectedDrawerOrder(order),
+      className: "w-7 h-7 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 hover:text-white flex items-center justify-center text-xs transition-colors cursor-pointer",
+      title: "Xem chi ti\u1EBFt \u0111\u01A1n h\xE0ng"
+    }, /*#__PURE__*/React.createElement("i", {
+      className: "fas fa-eye"
+    })), /*#__PURE__*/React.createElement("button", {
+      type: "button",
+      onClick: e => handlePrintShippingLabel(order, e),
+      className: "w-7 h-7 rounded-lg bg-white/[0.04] hover:bg-[#d4af37]/20 text-zinc-300 hover:text-[#d4af37] flex items-center justify-center text-xs transition-colors cursor-pointer",
+      title: "In phi\u1EBFu K58 / V\u1EADn \u0111\u01A1n"
+    }, /*#__PURE__*/React.createElement("i", {
+      className: "fas fa-print"
+    })))));
+  }))))) :
+  /*#__PURE__*/
+  /* CHẾ ĐỘ 2: GOM THEO KÊNH BÁN (CARDS VIEW) */
+  React.createElement("div", {
+    className: "space-y-4"
+  }, (() => {
     const channelPriorityMap = {
       'XUẤT KHẨU': 1,
       'BẢO HÀNH': 2,
@@ -22039,8 +22178,6 @@ const OrdersTab = React.memo(function OrdersTab({
       if (upperChan.includes('BÁN SỈ') || upperChan.includes('BAN SI') || upperChan.includes('WHOLESALE')) return 'BÁN SỈ';
       if (upperChan.includes('SẢN XUẤT TỒN') || upperChan.includes('SẢN XUẤT BÙ KHO') || upperChan.includes('TỒN XƯỞNG')) return 'SẢN XUẤT TỒN';
       if (upperChan.includes('BẢO HÀNH') || upperChan.includes('SỬA CHỮA')) return 'BẢO HÀNH';
-
-      // Nhận diện thông minh theo cấu trúc mã đơn nếu channel rỗng
       if (codeStr.includes('SPXVN') || codeStr.includes('SHOPEE') || /^2\d{13,15}/.test(codeStr)) return 'SHOPEE VN';
       if (codeStr.includes('TIKTOK') || /^57\d{16,18}/.test(codeStr)) return 'TIKTOK SHOP';
       return 'BÁN LẺ';
@@ -22074,15 +22211,15 @@ const OrdersTab = React.memo(function OrdersTab({
         className: "space-y-3"
       }, /*#__PURE__*/React.createElement("div", {
         style: getChannelInlineStyle(groupKey),
-        className: "w-full py-3 px-4 mt-4 mb-2 flex items-center justify-between gap-2 rounded-2xl uppercase tracking-wider shadow-lg select-none transition-all font-black"
+        className: "w-full py-2.5 px-4 mt-4 mb-2 flex items-center justify-between gap-2 rounded-2xl uppercase tracking-wider shadow-lg select-none font-black"
       }, /*#__PURE__*/React.createElement("div", {
-        className: "text-[13px] font-black flex items-center gap-2 truncate cursor-pointer",
+        className: "text-xs font-black flex items-center gap-2 truncate cursor-pointer",
         onClick: () => setCollapsedGroups(prev => ({
           ...prev,
           [groupKey]: !isCollapsed
         }))
       }, /*#__PURE__*/React.createElement("i", {
-        className: "fas fa-layer-group opacity-90 text-[12px]"
+        className: "fas fa-layer-group text-xs"
       }), /*#__PURE__*/React.createElement("span", {
         className: "truncate"
       }, groupKey)), /*#__PURE__*/React.createElement("div", {
@@ -22104,19 +22241,19 @@ const OrdersTab = React.memo(function OrdersTab({
         type: "checkbox",
         checked: groupOrders.length > 0 && groupOrders.every(x => selectedIds.includes(x.order.id)),
         readOnly: true,
-        className: "w-4 h-4 accent-[#10b981] rounded cursor-pointer pointer-events-none"
+        className: "w-3.5 h-3.5 accent-[#10b981] rounded cursor-pointer pointer-events-none"
       }), /*#__PURE__*/React.createElement("span", {
         className: "text-[10px] font-black"
-      }, "CH\u1ECCN T\u1EA4T C\u1EA2")), /*#__PURE__*/React.createElement("div", {
+      }, "CH\u1ECCN H\u1EBET")), /*#__PURE__*/React.createElement("div", {
         className: "flex items-center gap-1.5 bg-black/25 text-current px-2.5 py-1 rounded-xl border border-black/10 font-black cursor-pointer",
         onClick: () => setCollapsedGroups(prev => ({
           ...prev,
           [groupKey]: !isCollapsed
         }))
       }, /*#__PURE__*/React.createElement("span", {
-        className: "text-[11px] font-black"
+        className: "text-xs font-black"
       }, groupOrders.length, " \u0110\u01A0N"), /*#__PURE__*/React.createElement("i", {
-        className: `fas fa-chevron-${isCollapsed ? 'down' : 'up'} text-[11px]`
+        className: `fas fa-chevron-${isCollapsed ? 'down' : 'up'} text-xs`
       })))), !isCollapsed && /*#__PURE__*/React.createElement("div", {
         className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3"
       }, groupOrders.map(({
@@ -22156,13 +22293,196 @@ const OrdersTab = React.memo(function OrdersTab({
         });
       })));
     });
-  })(), renderLimit < sortedFiltered.length && /*#__PURE__*/React.createElement("div", {
-    className: "pt-4 pb-2 flex justify-center"
-  }, /*#__PURE__*/React.createElement(RFButton, {
-    variant: "outline",
+  })()), renderLimit < sortedFiltered.length && /*#__PURE__*/React.createElement("div", {
+    className: "pt-3 pb-2 flex justify-center"
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
     onClick: () => setRenderLimit(prev => prev + 50),
-    className: "w-full max-w-sm rounded-xl py-3 text-sm font-bold border-white/20 hover:bg-white/5"
-  }, "T\u1EA3i th\xEAm (", sortedFiltered.length - renderLimit, " \u0111\u01A1n)")))), (addingMode || draftData || editingOrder) && /*#__PURE__*/React.createElement(AddModal, {
+    className: "px-6 py-2.5 rounded-xl bg-[#121214] hover:bg-[#18181b] border border-white/[0.08] text-xs font-bold text-zinc-300 hover:text-white transition-all active:scale-95 shadow-lg cursor-pointer"
+  }, "T\u1EA3i th\xEAm (", sortedFiltered.length - renderLimit, " \u0111\u01A1n ti\u1EBFp theo)"))), selectedDrawerOrder && /*#__PURE__*/React.createElement("div", {
+    className: "fixed inset-0 z-50 flex justify-end animate-fade-in"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity",
+    onClick: () => setSelectedDrawerOrder(null)
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "relative w-full max-w-lg bg-[#18181b] border-l border-white/[0.08] shadow-2xl flex flex-col h-full z-10 animate-slide-left text-zinc-100 overflow-hidden"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "p-4 border-b border-white/[0.06] bg-[#121214] flex items-center justify-between gap-3 shrink-0"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-2 min-w-0"
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: e => handleToggleUrgent(selectedDrawerOrder, e),
+    className: `w-8 h-8 rounded-xl flex items-center justify-center text-sm transition-transform active:scale-125 cursor-pointer ${selectedDrawerOrder.isUrgent ? 'text-[#d4af37] bg-amber-500/15' : 'text-zinc-500 bg-white/[0.04]'}`,
+    title: selectedDrawerOrder.isUrgent ? "Bỏ ưu tiên" : "Đánh dấu Đơn Gấp"
+  }, /*#__PURE__*/React.createElement("i", {
+    className: "fas fa-star"
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "min-w-0"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "font-mono font-black text-sm text-zinc-100 truncate"
+  }, String(selectedDrawerOrder.orderCode || '').split(' | ')[0]), /*#__PURE__*/React.createElement("div", {
+    className: "text-[11px] text-zinc-400 truncate"
+  }, selectedDrawerOrder.channel || 'Bán Lẻ', " \u2022 ", selectedDrawerOrder.customer || 'Khách Lẻ'))), /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-1.5 shrink-0"
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: e => handlePrintShippingLabel(selectedDrawerOrder, e),
+    className: "h-8 px-3 rounded-xl bg-[#d4af37]/15 hover:bg-[#d4af37]/25 text-[#d4af37] border border-[#d4af37]/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer",
+    title: "In phi\u1EBFu \u0111\xF3ng g\xF3i K58"
+  }, /*#__PURE__*/React.createElement("i", {
+    className: "fas fa-print text-xs"
+  }), /*#__PURE__*/React.createElement("span", null, "In K58")), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => setSelectedDrawerOrder(null),
+    className: "w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white flex items-center justify-center text-xs transition-colors cursor-pointer"
+  }, /*#__PURE__*/React.createElement("i", {
+    className: "fas fa-times"
+  })))), /*#__PURE__*/React.createElement("div", {
+    className: "flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "bg-[#121214] border border-white/[0.06] rounded-2xl p-3.5 space-y-2.5"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-[11px] font-black uppercase text-zinc-400 tracking-wider flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement("i", {
+    className: "fas fa-user-tag text-zinc-500"
+  }), /*#__PURE__*/React.createElement("span", null, "Th\xF4ng Tin Kh\xE1ch H\xE0ng & Giao Nh\u1EADn")), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-2 gap-2 text-xs"
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "text-zinc-500 block text-[10px]"
+  }, "Ng\u01B0\u1EDDi nh\u1EADn:"), /*#__PURE__*/React.createElement("span", {
+    className: "font-semibold text-zinc-200"
+  }, selectedDrawerOrder.customer || 'Khách vãng lai')), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "text-zinc-500 block text-[10px]"
+  }, "S\u1ED1 \u0111i\u1EC7n tho\u1EA1i:"), /*#__PURE__*/React.createElement("span", {
+    className: "font-mono font-semibold text-zinc-200"
+  }, selectedDrawerOrder.phone || '---')), /*#__PURE__*/React.createElement("div", {
+    className: "col-span-2"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "text-zinc-500 block text-[10px]"
+  }, "\u0110\u1ECBa ch\u1EC9 giao:"), /*#__PURE__*/React.createElement("span", {
+    className: "text-zinc-300 leading-relaxed"
+  }, selectedDrawerOrder.address || 'Giao tại xưởng / Chưa có địa chỉ')), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "text-zinc-500 block text-[10px]"
+  }, "H\u1EA1n giao (SLA):"), /*#__PURE__*/React.createElement("span", {
+    className: "font-mono text-zinc-300"
+  }, selectedDrawerOrder.deadline || selectedDrawerOrder.date || 'Không có')), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+    className: "text-zinc-500 block text-[10px]"
+  }, "M\xE3 v\u1EADn \u0111\u01A1n s\xE0n:"), /*#__PURE__*/React.createElement("span", {
+    className: "font-mono text-zinc-300"
+  }, String(selectedDrawerOrder.orderCode || '').includes('MVĐ:') ? String(selectedDrawerOrder.orderCode).split('MVĐ:')[1].trim() : selectedDrawerOrder.shippingCode || '---')), selectedDrawerOrder.note && /*#__PURE__*/React.createElement("div", {
+    className: "col-span-2 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px]"
+  }, /*#__PURE__*/React.createElement("b", null, "Ghi ch\xFA:"), " ", selectedDrawerOrder.note))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-[#121214] border border-white/[0.06] rounded-2xl p-3.5 space-y-3"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-[11px] font-black uppercase text-zinc-400 tracking-wider flex items-center justify-between"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement("i", {
+    className: "fas fa-boxes-stacked text-zinc-500"
+  }), /*#__PURE__*/React.createElement("span", null, "Danh S\xE1ch H\xE0ng H\xF3a")), /*#__PURE__*/React.createElement("span", {
+    className: "text-[10px] text-zinc-500 font-mono"
+  }, parseAccessoriesSafe(selectedDrawerOrder.accessories).length, " m\u1EE5c")), /*#__PURE__*/React.createElement("div", {
+    className: "space-y-2"
+  }, parseAccessoriesSafe(selectedDrawerOrder.accessories).length === 0 ? /*#__PURE__*/React.createElement("div", {
+    className: "text-xs text-zinc-500 py-2"
+  }, "\u0110\u01A1n h\xE0ng kh\xF4ng c\xF3 danh m\u1EE5c s\u1EA3n ph\u1EA9m chi ti\u1EBFt.") : parseAccessoriesSafe(selectedDrawerOrder.accessories).map((acc, aIdx) => /*#__PURE__*/React.createElement("div", {
+    key: aIdx,
+    className: "flex items-center justify-between p-2 rounded-xl bg-[#09090b] border border-white/[0.04] text-xs"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "min-w-0 pr-2"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "font-semibold text-zinc-200 truncate"
+  }, acc.name || acc.title || 'Sản phẩm'), /*#__PURE__*/React.createElement("div", {
+    className: "text-[10px] text-zinc-500"
+  }, acc.category || acc.unit || 'Chiếc')), /*#__PURE__*/React.createElement("div", {
+    className: "font-mono font-bold text-zinc-200 px-2 py-1 bg-white/[0.06] rounded-lg text-xs shrink-0"
+  }, "x", acc.quantity || acc.qty || 1)))), (() => {
+    const relProds = getMatchedProds(selectedDrawerOrder);
+    if (relProds.length === 0) return null;
+    return /*#__PURE__*/React.createElement("div", {
+      className: "pt-2 border-t border-white/[0.06] space-y-2"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "text-[10px] font-bold uppercase text-purple-400 flex items-center gap-1.5"
+    }, /*#__PURE__*/React.createElement("i", {
+      className: "fas fa-hammer"
+    }), /*#__PURE__*/React.createElement("span", null, "L\u1EC7nh S\u1EA3n Xu\u1EA5t X\u01B0\u1EDFng (", relProds.length, ")")), /*#__PURE__*/React.createElement("div", {
+      className: "space-y-1.5"
+    }, relProds.map((rp, rpIdx) => /*#__PURE__*/React.createElement("div", {
+      key: rp.id || rpIdx,
+      className: "p-2 rounded-xl bg-purple-500/5 border border-purple-500/20 text-xs flex items-center justify-between"
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      className: "font-bold text-zinc-200"
+    }, rp.name), /*#__PURE__*/React.createElement("div", {
+      className: "text-[10px] text-zinc-400"
+    }, "Kh\xE2u 1: ", rp.p1_user || 'Chưa nhận', " (", rp.p1_status || 'Chờ', ") \u2022 Kh\xE2u 2: ", rp.p2_user || 'Chưa nhận', " (", rp.p2_status || 'Chờ', ")")), /*#__PURE__*/React.createElement("span", {
+      className: "px-2 py-0.5 rounded text-[10px] font-bold bg-purple-500/20 text-purple-300"
+    }, rp.status || 'Chờ')))));
+  })()), canViewFinance && /*#__PURE__*/React.createElement("div", {
+    className: "bg-[#121214] border border-white/[0.06] rounded-2xl p-3.5 space-y-2.5"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-[11px] font-black uppercase text-emerald-400 tracking-wider flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement("i", {
+    className: "fas fa-wallet"
+  }), /*#__PURE__*/React.createElement("span", null, "B\xF3c T\xE1ch Chi Ph\xED & Doanh Thu")), /*#__PURE__*/React.createElement("div", {
+    className: "space-y-1.5 text-xs"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "flex justify-between text-zinc-300"
+  }, /*#__PURE__*/React.createElement("span", null, "Doanh thu ni\xEAm y\u1EBFt:"), /*#__PURE__*/React.createElement("span", {
+    className: "font-mono font-bold text-emerald-400"
+  }, formatMoneySafe(selectedDrawerOrder.revenue), "\u0111")), /*#__PURE__*/React.createElement("div", {
+    className: "flex justify-between text-zinc-400"
+  }, /*#__PURE__*/React.createElement("span", null, "Gi\xE1 v\u1ED1n h\xE0ng b\xE1n (COGS):"), /*#__PURE__*/React.createElement("span", {
+    className: "font-mono text-zinc-300"
+  }, formatMoneySafe(selectedDrawerOrder.cogs), "\u0111")), Number(selectedDrawerOrder.feeFixed) > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "flex justify-between text-zinc-400"
+  }, /*#__PURE__*/React.createElement("span", null, "Ph\xED c\u1ED1 \u0111\u1ECBnh s\xE0n:"), /*#__PURE__*/React.createElement("span", {
+    className: "font-mono text-rose-400"
+  }, "-", formatMoneySafe(selectedDrawerOrder.feeFixed), "\u0111")), Number(selectedDrawerOrder.feeService) > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "flex justify-between text-zinc-400"
+  }, /*#__PURE__*/React.createElement("span", null, "Ph\xED d\u1ECBch v\u1EE5:"), /*#__PURE__*/React.createElement("span", {
+    className: "font-mono text-rose-400"
+  }, "-", formatMoneySafe(selectedDrawerOrder.feeService), "\u0111")), Number(selectedDrawerOrder.feePayment) > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "flex justify-between text-zinc-400"
+  }, /*#__PURE__*/React.createElement("span", null, "Ph\xED thanh to\xE1n:"), /*#__PURE__*/React.createElement("span", {
+    className: "font-mono text-rose-400"
+  }, "-", formatMoneySafe(selectedDrawerOrder.feePayment), "\u0111")), /*#__PURE__*/React.createElement("div", {
+    className: "pt-2 border-t border-white/[0.06] flex justify-between font-bold text-zinc-100"
+  }, /*#__PURE__*/React.createElement("span", null, "L\xE3i g\u1ED9p \u01B0\u1EDBc t\xEDnh:"), /*#__PURE__*/React.createElement("span", {
+    className: "font-mono text-emerald-400"
+  }, formatMoneySafe((Number(selectedDrawerOrder.revenue) || 0) - (Number(selectedDrawerOrder.cogs) || 0) - (Number(selectedDrawerOrder.feeFixed) || 0) - (Number(selectedDrawerOrder.feeService) || 0) - (Number(selectedDrawerOrder.feePayment) || 0)), "\u0111")))), /*#__PURE__*/React.createElement("div", {
+    className: "bg-[#121214] border border-white/[0.06] rounded-2xl p-3.5 space-y-2.5"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "text-[11px] font-black uppercase text-zinc-400 tracking-wider flex items-center gap-2"
+  }, /*#__PURE__*/React.createElement("i", {
+    className: "fas fa-sliders text-zinc-500"
+  }), /*#__PURE__*/React.createElement("span", null, "Thao T\xE1c \u0110\u1ED5i Tr\u1EA1ng Th\xE1i Nhanh")), /*#__PURE__*/React.createElement("div", {
+    className: "grid grid-cols-2 gap-2"
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: e => handleUpdateOrderStatus(selectedDrawerOrder, 'Chờ Sản Xuất', e),
+    className: "p-2.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/25 text-indigo-300 font-bold text-xs transition-all active:scale-95 cursor-pointer"
+  }, "Ch\u1EDD S\u1EA3n Xu\u1EA5t"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: e => handleUpdateOrderStatus(selectedDrawerOrder, 'Đang Đóng Gói', e),
+    className: "p-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-300 font-bold text-xs transition-all active:scale-95 cursor-pointer"
+  }, "\u0110ang \u0110\xF3ng G\xF3i"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: e => handleUpdateOrderStatus(selectedDrawerOrder, 'Đã Bàn Giao', e),
+    className: "p-2.5 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/25 text-sky-300 font-bold text-xs transition-all active:scale-95 cursor-pointer"
+  }, "\u0110\xE3 B\xE0n Giao"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: e => handleUpdateOrderStatus(selectedDrawerOrder, 'Hoàn Thành', e),
+    className: "p-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-300 font-bold text-xs transition-all active:scale-95 cursor-pointer"
+  }, "\u0110\u1ED1i So\xE1t Xong"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: e => handleUpdateOrderStatus(selectedDrawerOrder, 'Hàng Hoàn', e),
+    className: "p-2.5 rounded-xl bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/25 text-purple-300 font-bold text-xs transition-all active:scale-95 cursor-pointer"
+  }, "Ki\u1EC3m \u0110\u1ECBnh Ho\xE0n"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    onClick: () => handleCancelOrder(selectedDrawerOrder),
+    className: "p-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 text-rose-400 font-bold text-xs transition-all active:scale-95 cursor-pointer"
+  }, "Hu\u1EF7 \u0110\u01A1n H\xE0ng")))))), (addingMode || draftData || editingOrder) && /*#__PURE__*/React.createElement(AddModal, {
     onClose: () => {
       setAddingMode(false);
       setDraftData(null);
