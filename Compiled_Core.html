@@ -20739,6 +20739,47 @@ const OrdersTab = React.memo(function OrdersTab({
       completed
     };
   }, [channelFiltered, getOrderTabGroup]);
+  const tabs = React.useMemo(() => [{
+    id: 'ALL',
+    label: 'Tất Cả',
+    icon: 'fa-layer-group',
+    count: (channelFiltered || []).length
+  }, {
+    id: 'Chờ Sản Xuất',
+    label: 'Chờ Sản Xuất',
+    icon: 'fa-hammer',
+    count: stats.pending
+  }, {
+    id: 'Sẵn Sàng Đóng Gói',
+    label: 'Sẵn Sàng Đóng Gói',
+    icon: 'fa-box',
+    count: stats.ready
+  }, {
+    id: 'Chờ Bàn Giao',
+    label: 'Chờ Bàn Giao',
+    icon: 'fa-dolly',
+    count: stats.shipping
+  }, {
+    id: 'Đã Bàn Giao',
+    label: 'Đã Bàn Giao',
+    icon: 'fa-truck',
+    count: stats.done
+  }, {
+    id: 'Đơn Huỷ',
+    label: 'Đơn Huỷ',
+    icon: 'fa-ban',
+    count: stats.cancel
+  }, {
+    id: 'Hàng Hoàn',
+    label: 'Hàng Hoàn',
+    icon: 'fa-rotate-left',
+    count: stats.returns
+  }, {
+    id: 'Hoàn Thành',
+    label: 'Hoàn Thành',
+    icon: 'fa-circle-check',
+    count: stats.completed
+  }], [channelFiltered, stats]);
   const parseRevenue = (raw, channel) => {
     if (raw === null || raw === undefined || raw === '') return 0;
     let s = String(raw).trim();
