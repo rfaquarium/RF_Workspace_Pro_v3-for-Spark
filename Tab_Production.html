@@ -4520,20 +4520,22 @@
         );
     });
 
-    // -------------------------------------------------------------------------
-    // MỤC 3: GIAO DIỆN CHÍNH TAB SẢN XUẤT (ProductionTab)
-    // -------------------------------------------------------------------------
     const ProductionTab = React.memo(function ProductionTab({ attendance, orders, prodItems, packings, erpProducts, currentUser, userRole: propUserRole, hasPerm: propHasPerm, pushDeltas, userConfigs, triggerToast, kpiConfig, erpData, models3D, documents }) {
-        const [typeTab, setTypeTab] = React.useState('Layout');
-        const [statusTab, setStatusTab] = React.useState('CHỜ SẢN XUẤT');
-        const [prodPhaseSubFilter, setProdPhaseSubFilter] = React.useState('ALL');
+        // --- CHUẨN DESIGN SYSTEM: HALLMARK ROYAL WORKBENCH TOKENS ---
+        const [viewMode, setViewMode] = React.useState('TABLE'); // 'TABLE' | 'CARDS'
+        const [typeTab, setTypeTab] = React.useState('ALL'); // 'ALL' | 'Bể Kính' | 'Layout'
+        const [stageFilter, setStageFilter] = React.useState('ALL'); // 'ALL' | 'PHASE1' | 'PHASE2' | 'QC' | 'DONE' | 'CANCEL'
         const [filterChannel, setFilterChannel] = React.useState('ALL');
         const [filterTime, setFilterTime] = React.useState('Tháng Này');
         const [customMonth, setCustomMonth] = React.useState('');
         const [searchQuery, setSearchQuery] = React.useState('');
         const deferredSearchQuery = React.useDeferredValue ? React.useDeferredValue(searchQuery) : searchQuery;
+
+        // Side Drawer state
+        const [activeDrawerItem, setActiveDrawerItem] = React.useState(null);
+
+        // Modals & previews
         const [globalPreview, setGlobalPreview] = React.useState(null);
-        const [showRules, setShowRules] = React.useState(false);
         const [showAddSXTModal, setShowAddSXTModal] = React.useState(false);
         const [sxtDraftData, setSxtDraftData] = React.useState(null);
         const [editingProdItem, setEditingProdItem] = React.useState(null);
@@ -4547,8 +4549,50 @@
         const [sosType, setSosType] = React.useState('Vỡ Kính / Hỏng Phôi');
         const [sosNote, setSosNote] = React.useState('');
         const [isSendingSOS, setIsSendingSOS] = React.useState(false);
+        const [selectedProdIds, setSelectedProdIds] = React.useState([]);
 
-        // Đếm số lượng bể kính & layout hết hàng trong kho để hiển thị badge cảnh báo trên nút
+        // --- HELPER QUY ĐỔI ẢNH DRIVE SANG THUMBNAIL SẮC NÉT ---
+        const getDriveThumbnailSafe = React.useCallback((url) => {
+            if (!url) return '';
+            const str = String(url).trim();
+            let fileId = '';
+            const matchD = str.match(/\/d\/([a-zA-Z0-9_-]+)/);
+            if (matchD) fileId = matchD[1];
+            else {
+                const matchId = str.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+                if (matchId) fileId = matchId[1];
+            }
+            if (fileId) {
+                return `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+            }
+            return str;
+        }, []);
+
+        // --- HELPER BÓC TÁCH KÍCH THƯỚC VÀ ĐỊNH MỨC HAO HỤT UOM 5% ---
+        const parseDimensionsFromName = React.useCallback((name) => {
+            if (!name) return null;
+            const match = String(name).match(/(\d+)\s*[xX*]\s*(\d+)\s*[xX*]\s*(\d+)/);
+            if (match) {
+                const d = parseFloat(match[1]);
+                const r = parseFloat(match[2]);
+                const c = parseFloat(match[3]);
+                if (d > 0 && r > 0 && c > 0) {
+                    const dM = d / 100;
+                    const rM = r / 100;
+                    const cM = c / 100;
+                    // Diện tích 5 mặt: (D*R + 2*D*C + 2*R*C) * 1.05 (hao hụt 5%)
+                    const areaM2 = ((dM * rM) + (2 * dM * cM) + (2 * rM * cM)) * 1.05;
+                    // Chiều dài đường dán keo: 2*(D+R) chu vi đáy + 4*C góc đứng
+                    const seamLengthCm = 2 * (d + r) + 4 * c;
+                    const glueMl = Math.round(seamLengthCm * 0.15);
+                    const glueBottles = (glueMl / 300).toFixed(2);
+                    return { d, r, c, areaM2: areaM2.toFixed(3), seamLengthCm, glueMl, glueBottles };
+                }
+            }
+            return null;
+        }, []);
+
+        // Đếm số lượng sản phẩm hết kho
         const outOfStockCount = React.useMemo(() => {
             return (erpProducts || []).filter(p => {
                 const cat = String(p.category || '').toUpperCase().trim();
@@ -4560,9 +4604,11 @@
             }).length;
         }, [erpProducts]);
 
+        // --- PHÂN QUYỀN VÀ ROLE MASKING ---
         const userRole = String(propUserRole || userConfigs?.[currentUser]?.role || localStorage.getItem('rf_role') || '').toUpperCase();
         const isBossRole = userRole === 'TỐI CAO' || localStorage.getItem('rf_role') === 'TỐI CAO' || localStorage.getItem('rf_boss') === 'true' || currentUser === 'Đỗ Tiến' || currentUser.includes('Tiến');
         const isAdmin = isBossRole || ['QUẢN LÝ SẢN XUẤT', 'QUẢN LÝ KHO', 'QUẢN LÝ KHO VẬN', 'ADMIN', 'FOUNDER'].includes(userRole);
+        const isCTV = localStorage.getItem('rf_role') === 'CTV';
 
         const hasPerm = React.useCallback((actionCode) => {
             if (isBossRole || userRole === 'TỐI CAO') return true;
@@ -4571,7 +4617,12 @@
             return isAdmin;
         }, [propHasPerm, userRole, currentUser, isAdmin, isBossRole]);
 
-        const [selectedProdIds, setSelectedProdIds] = React.useState([]);
+        // Thợ xưởng: KHÓA & ẨN 100% COGS, giá bán và lãi gộp
+        const canViewFinance = isAdmin || isBossRole;
+
+        const toggleSelectProd = React.useCallback((id) => {
+            setSelectedProdIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+        }, []);
 
         const handleBulkDelete = () => {
             if (selectedProdIds.length === 0) return;
@@ -4581,9 +4632,7 @@
             }
         };
 
-        const toggleSelectProd = React.useCallback((id) => {
-            setSelectedProdIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-        }, []); React.useEffect(() => {
+        React.useEffect(() => {
             const handleGlobalPreview = (e) => { if (e.detail) setGlobalPreview(e.detail); };
             const handleAnnotation = (e) => { if (e.detail) setAnnotationData(e.detail); };
             window.addEventListener('triggerInternalPreview', handleGlobalPreview);
@@ -4594,7 +4643,6 @@
             };
         }, []);
 
-        const isCTV = localStorage.getItem('rf_role') === 'CTV';
         const checkTimeFilter = (dateStr, filterStr, customM) => {
             if (!dateStr) return false;
             const d = new Date(dateStr);
@@ -4637,7 +4685,6 @@
                 return orderMap[clean];
             }
             
-            // Xử lý các tiền tố ORD_timestamp_index: dò theo ORD_timestamp
             const underParts = raw.split('_');
             if (underParts.length >= 3 && underParts[0] === 'ORD') {
                 const baseTimestampId = underParts[0] + '_' + underParts[1];
@@ -4653,7 +4700,6 @@
                 }
             }
 
-            // Dò tìm vét cạn trong orders và GLOBAL_ALL_ORDERS
             const allOrderSources = [
                 ...(orders || []),
                 ...(typeof window !== 'undefined' ? (window.GLOBAL_ALL_ORDERS || window.ALL_ORDERS || []) : [])
@@ -4664,6 +4710,7 @@
             return {};
         }, [orderMap, orders]);
 
+        // --- LỌC CƠ BẢN VÀ COMPUTED STATUS CHO TỪNG SẢN PHẨM ---
         const baseFiltered = React.useMemo(() => {
             return (prodItems || []).filter(i => {
                 if (!i || i.orderId === 'SHARED_TASK' || i.orderId === 'REMINDER' || i.orderId === 'MATERIAL_REQ' || i.type === 'Báo Nhập Hàng' || String(i.id || '').startsWith('MAT_REQ_') || String(i.name || '').includes('[DANH MỤC SẢN XUẤT]')) return false;
@@ -4675,7 +4722,8 @@
                     const q = deferredSearchQuery.toLowerCase();
                     const matchName = String(i.name || '').toLowerCase().includes(q);
                     const matchOrder = String(o.orderCode || '').toLowerCase().includes(q);
-                    if (!matchName && !matchOrder) return false;
+                    const matchSerial = String(i.serialCode || i.id || '').toLowerCase().includes(q);
+                    if (!matchName && !matchOrder && !matchSerial) return false;
                 }
 
                 const deadlineStr = i.deadline || o.createdAt || o.date;
@@ -4683,153 +4731,269 @@
 
                 if (filterTime === 'Tháng Này' && !isTimeMatch) {
                     const statusUpper = String(i.status || '').toUpperCase();
-                    const isFinished = statusUpper === 'DONE' || statusUpper === 'ĐÃ XONG' || statusUpper === 'ĐÃ HUỶ' || statusUpper === 'CANCEL' || statusUpper === 'HUỶ' || statusUpper === 'HỦY' || statusUpper === 'HOÀN KHO ĐẠT';
-                    // Lệnh CHƯA HOÀN THÀNH (Đang chờ sản xuất / Kiểm định) bắt buộc luôn hiển thị trên xưởng để thợ làm, kể cả hạn rơi vào đầu tháng sau hoặc tháng trước tồn sang
-                    if (!isFinished) {
-                        return true;
-                    }
+                    const isFinished = statusUpper === 'DONE' || statusUpper === 'ĐÃ XONG' || statusUpper === 'ĐÃ HUỶ' || statusUpper === 'CANCEL' || statusUpper === 'HUỶ' || statusUpper === 'HỦY' || statusUpper === 'HOÀN KHO ĐẠT' || statusUpper === 'QC_PASSED';
+                    if (!isFinished) return true;
                 }
                 if (!isTimeMatch) return false;
                 return true;
             });
-        }, [prodItems, getParentOrder, filterTime, customMonth, deferredSearchQuery]);
+        }, [prodItems, getParentOrder, filterTime, customMonth, deferredSearchQuery, isCTV, currentUser]);
 
-        const countBeKinh = baseFiltered.filter(i => {
-            const searchStr = String(i.type || '') + ' ' + String(i.name || '');
-            return searchStr.toLowerCase().includes('bể');
-        }).length;
+        // Phân loại: Bể Kính vs Layout
+        const listWithComputed = React.useMemo(() => {
+            return baseFiltered.map(i => {
+                const searchStr = (String(i.type || '') + ' ' + String(i.name || '')).toLowerCase();
+                const isBeKinh = i.type === 'Bể Kính' || searchStr.includes('bể');
+                const computedType = isBeKinh ? 'Bể Kính' : 'Layout';
 
-        const countLayout = baseFiltered.filter(i => {
-            const searchStr = String(i.type || '') + ' ' + String(i.name || '');
-            return !searchStr.toLowerCase().includes('bể');
-        }).length;
+                // Xác định trạng thái công đoạn P1, P2 và KCS
+                const p1Status = i.phases?.phase1?.status || i.p1_status || 'Pending';
+                const p2Status = i.phases?.phase2?.status || i.p2_status || 'Pending';
+                const p1User = i.phases?.phase1?.user || i.p1_user || '';
+                const p2User = i.phases?.phase2?.user || i.p2_user || '';
+                const p1Reward = Number(i.phases?.phase1?.reward_vnd ?? i.p1_reward_vnd ?? 0);
+                const p2Reward = Number(i.phases?.phase2?.reward_vnd ?? i.p2_reward_vnd ?? 0);
 
-        const typeFiltered = React.useMemo(() => {
-            return baseFiltered.filter(i => {
-                const searchStr = String(i.type || '') + ' ' + String(i.name || '');
-                const isG = searchStr.toLowerCase().includes('bể');
+                const isP1Done = p1Status === 'Done' || String(p1Status).toUpperCase() === 'ĐÃ XONG';
+                const isP2Done = p2Status === 'Done' || String(p2Status).toUpperCase() === 'ĐÃ XONG';
+                const isBothDone = isP1Done && isP2Done;
 
-                if (typeTab === 'Bể Kính' && !isG) return false;
-                if (typeTab === 'Layout' && isG) return false;
-                return true;
+                const statusUpper = String(i.status || '').toUpperCase();
+                const qcUpper = String(i.qc_status || '').toUpperCase();
+                const isStock = i.fulfilledFromStock === true || String(i.fulfilledFromStock).toUpperCase() === 'TRUE';
+                const isFinalQcPassed = qcUpper === 'ĐẠT' || qcUpper === 'QC_PASSED' || qcUpper.includes('TỰ ĐỘNG KCS') || qcUpper.includes('ĐÃ DUYỆT') || statusUpper === 'QC_PASSED' || statusUpper === 'DONE';
+
+                const parentOrder = getParentOrder(i.orderId);
+                const parentStatusUpper = String(parentOrder.status || '').toUpperCase().trim();
+                const isParentCancelled = parentStatusUpper === 'ĐƠN HUỶ' || parentStatusUpper === 'ĐƠN HỦY' || parentStatusUpper.includes('HUỶ') || parentStatusUpper.includes('HỦY') || parentStatusUpper.includes('CANCEL');
+                const isParentDelivered = parentStatusUpper === 'ĐÃ BÀN GIAO' || parentStatusUpper === 'HOÀN THÀNH' || parentStatusUpper === 'ĐỐI SOÁT THÀNH CÔNG' || parentStatusUpper === 'DELIVERED' || parentStatusUpper === 'COMPLETED';
+
+                let curSt = 'CHỜ SẢN XUẤT';
+                if (statusUpper === 'ĐÃ HUỶ' || statusUpper === 'HUỶ' || statusUpper === 'CANCEL' || statusUpper === 'HỦY' || isParentCancelled) {
+                    curSt = 'ĐÃ HUỶ';
+                } else if (isStock || (isBothDone && (isFinalQcPassed || isParentDelivered))) {
+                    curSt = 'ĐÃ XONG';
+                } else if (isBothDone) {
+                    curSt = 'KIỂM ĐỊNH';
+                } else {
+                    curSt = 'CHỜ SẢN XUẤT';
+                }
+
+                const isItemUrgent = i.isUrgent === true || String(i.isUrgent).toUpperCase() === 'TRUE' || parentOrder.isUrgent === true || String(parentOrder.isUrgent).toUpperCase() === 'TRUE';
+                const serial = i.serialCode || (i.id ? String(i.id).replace('PROD_', 'RF-') : 'RF-AUTO');
+                const dimensions = parseDimensionsFromName(i.name);
+
+                return {
+                    ...i,
+                    _computedType: computedType,
+                    _computedStatus: curSt,
+                    _parentOrder: parentOrder,
+                    _p1Status: p1Status,
+                    _p2Status: p2Status,
+                    _p1User: p1User,
+                    _p2User: p2User,
+                    _p1Reward: p1Reward,
+                    _p2Reward: p2Reward,
+                    _isP1Done: isP1Done,
+                    _isP2Done: isP2Done,
+                    _isBothDone: isBothDone,
+                    _isFinalQcPassed: isFinalQcPassed,
+                    _isItemUrgent: isItemUrgent,
+                    _serial: serial,
+                    _dimensions: dimensions
+                };
             });
-        }, [baseFiltered, typeTab]);
+        }, [baseFiltered, getParentOrder, parseDimensionsFromName]);
 
-        const listWithStatus = typeFiltered.map(i => {
-            let curSt = 'CHỜ SẢN XUẤT';
-            const p1 = i.phases?.phase1?.status || 'Pending';
-            const p2 = i.phases?.phase2?.status || 'Pending';
-            const isBothDone = (p1 === 'Done' && p2 === 'Done');
-            const statusUpper = String(i.status || '').toUpperCase();
-            const qcUpper = String(i.qc_status || '').toUpperCase();
-            const isStock = i.fulfilledFromStock === true || String(i.fulfilledFromStock).toUpperCase() === 'TRUE';
-            const itemNoteLower = String(i.note || '').toLowerCase();
-            const isKhoAm = itemNoteLower.includes('kho âm') && itemNoteLower.includes('chờ sản xuất');
+        // Đếm số lượng theo loại
+        const countBeKinh = listWithComputed.filter(i => i._computedType === 'Bể Kính').length;
+        const countLayout = listWithComputed.filter(i => i._computedType === 'Layout').length;
 
-            const isStatusDone = statusUpper === 'DONE' || statusUpper === 'ĐÃ XONG';
-            const isFinalQcPassed = qcUpper === 'ĐẠT' || qcUpper.includes('TỰ ĐỘNG KCS') || qcUpper.includes('ĐÃ DUYỆT KCS') || isStatusDone;
-            const isStockValid = (statusUpper === 'HOÀN KHO ĐẠT' || isStock) && !isKhoAm;
+        // Thống kê theo công đoạn KCS
+        const stageCounts = React.useMemo(() => {
+            let all = 0; let phase1 = 0; let phase2 = 0; let qc = 0; let done = 0; let cancel = 0;
+            listWithComputed.forEach(i => {
+                if (typeTab !== 'ALL' && i._computedType !== typeTab) return;
+                all++;
+                if (i._computedStatus === 'ĐÃ HUỶ') {
+                    cancel++;
+                } else if (i._computedStatus === 'ĐÃ XONG') {
+                    done++;
+                } else if (i._computedStatus === 'KIỂM ĐỊNH') {
+                    qc++;
+                } else if (!i._isP1Done) {
+                    phase1++;
+                } else if (i._isP1Done && !i._isP2Done) {
+                    phase2++;
+                }
+            });
+            return { all, phase1, phase2, qc, done, cancel };
+        }, [listWithComputed, typeTab]);
 
-            // LIÊN KẾT TRẠNG THÁI ĐƠN HÀNG MẸ (PARENT-CHILD CASCADE)
-            const parentOrder = getParentOrder(i.orderId);
-            const parentStatusUpper = String(parentOrder.status || '').toUpperCase().trim();
-            const isParentDelivered = parentStatusUpper === 'ĐÃ BÀN GIAO' || parentStatusUpper === 'HOÀN THÀNH' || 
-                                      parentStatusUpper === 'ĐỐI SOÁT THÀNH CÔNG' || parentStatusUpper === 'ĐÃ GIAO' || 
-                                      parentStatusUpper === 'DELIVERED' || parentStatusUpper === 'COMPLETED';
-            const isParentCancelled = parentStatusUpper === 'ĐƠN HUỶ' || parentStatusUpper === 'ĐƠN HỦY' || 
-                                      parentStatusUpper.includes('HUỶ') || parentStatusUpper.includes('HỦY') || 
-                                      parentStatusUpper.includes('CANCEL');
+        // Lọc danh sách hiển thị cuối cùng
+        const filteredList = React.useMemo(() => {
+            return listWithComputed.filter(i => {
+                if (typeTab !== 'ALL' && i._computedType !== typeTab) return false;
 
-            // Kiểm tra xem thợ đã từng làm khâu nào chưa
-            const hasAnyWorkerStarted = (p1 === 'Done') || (p2 === 'Done') || 
-                                        Boolean(i.p1_user || i.phases?.phase1?.user) || 
-                                        Boolean(i.p2_user || i.phases?.phase2?.user);
+                if (stageFilter === 'PHASE1') {
+                    if (i._computedStatus !== 'CHỜ SẢN XUẤT' || i._isP1Done) return false;
+                } else if (stageFilter === 'PHASE2') {
+                    if (i._computedStatus !== 'CHỜ SẢN XUẤT' || !i._isP1Done || i._isP2Done) return false;
+                } else if (stageFilter === 'QC') {
+                    if (i._computedStatus !== 'KIỂM ĐỊNH') return false;
+                } else if (stageFilter === 'DONE') {
+                    if (i._computedStatus !== 'ĐÃ XONG') return false;
+                } else if (stageFilter === 'CANCEL') {
+                    if (i._computedStatus !== 'ĐÃ HUỶ') return false;
+                }
 
-            if (statusUpper === 'ĐÃ HUỶ' || statusUpper === 'HUỶ' || statusUpper === 'CANCEL' || statusUpper === 'HỦY' || isParentCancelled) {
-                curSt = 'ĐÃ HUỶ';
-            } else if (isStockValid || (isBothDone && (isFinalQcPassed || isParentDelivered))) {
-                // ĐÃ XONG: Chỉ khi sản phẩm thực sự hoàn thành cả 2 khâu (hoặc xuất kho hàng có sẵn)
-                curSt = 'ĐÃ XONG';
-            } else if (isBothDone) {
-                curSt = 'KIỂM ĐỊNH';
-            } else if (isParentDelivered && !hasAnyWorkerStarted) {
-                // Đơn đã giao/bàn giao nhưng thợ CHƯA TỪNG ĐỤNG TAY VÀO (kho đã lấy hàng có sẵn xuất đi)
-                // -> Huỷ lệnh để thợ không bấm nhầm và không làm trùng
-                curSt = 'ĐÃ HUỶ';
+                if (filterChannel !== 'ALL') {
+                    const ch = String(i._parentOrder?.channel || i.channel || '').toUpperCase();
+                    if (filterChannel === 'SHOPEE' && !ch.includes('SHOPEE')) return false;
+                    if (filterChannel === 'EXPORT' && (!ch.includes('XUẤT KHẨU') && !ch.includes('MY') && !ch.includes('SG') && !ch.includes('TH'))) return false;
+                    if (filterChannel === 'TIKTOK' && !ch.includes('TIKTOK')) return false;
+                    if (filterChannel === 'BÁN LẺ' && !ch.includes('BÁN LẺ') && !ch.includes('LẺ')) return false;
+                    if (filterChannel === 'CTV' && !ch.includes('CỘNG TÁC') && !ch.includes('CTV')) return false;
+                }
+
+                return true;
+            }).sort((a, b) => {
+                if (a._isItemUrgent !== b._isItemUrgent) return b._isItemUrgent ? 1 : -1;
+                const dlA = a.deadline ? new Date(a.deadline).getTime() : Infinity;
+                const dlB = b.deadline ? new Date(b.deadline).getTime() : Infinity;
+                if (dlA !== dlB) return dlA - dlB;
+                return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+            });
+        }, [listWithComputed, typeTab, stageFilter, filterChannel]);
+
+        // Cập nhật activeDrawerItem khi dữ liệu thay đổi
+        React.useEffect(() => {
+            if (activeDrawerItem) {
+                const refreshed = listWithComputed.find(x => x.id === activeDrawerItem.id);
+                if (refreshed) setActiveDrawerItem(refreshed);
+            }
+        }, [listWithComputed]);
+
+        // --- CÁC HÀM XỬ LÝ NGHIỆP VỤ LINEAR UX ---
+        // 1. Chuyển đổi trạng thái Hỏa Tốc
+        const handleToggleUrgent = async (item) => {
+            const nextUrgent = !item._isItemUrgent;
+            const updated = {
+                ...item,
+                isUrgent: nextUrgent,
+                urgentAt: nextUrgent ? new Date().toISOString() : ''
+            };
+            await pushDeltas({ prodItems: [updated] }, nextUrgent ? 'Đã bật chế độ HỎA TỐC cho lệnh sản xuất!' : 'Đã tắt chế độ Hỏa tốc', nextUrgent ? 'fa-bolt' : 'fa-check');
+            if (triggerToast) triggerToast(nextUrgent ? '⚡ Đã gắn cờ HỎA TỐC' : 'Đã bỏ cờ Hỏa tốc', 'fa-bolt', nextUrgent ? 'warning' : 'info');
+        };
+
+        // 2. Thợ thao tác 1 chạm công đoạn (Bắt đầu / Hoàn thành)
+        const handleUpdateStageStatus = async (item, phaseKey, targetStatus, photoUrl = '') => {
+            const safeDateFull = typeof getLocalISODate === 'function' ? getLocalISODate() : new Date().toISOString();
+            const phaseName = phaseKey === 'phase1' ? (item._computedType === 'Bể Kính' ? 'Cắt Dán' : 'Dựng Khung') : (item._computedType === 'Bể Kính' ? 'Gọt Keo' : 'Gia Cố');
+            
+            const currentPhase = item.phases?.[phaseKey] || {};
+            const isStarting = targetStatus === 'In_Progress';
+            const isDone = targetStatus === 'Done';
+
+            const updatedPhase = {
+                ...currentPhase,
+                name: phaseName,
+                status: targetStatus,
+                user: currentPhase.user || currentUser,
+                start: isStarting ? (currentPhase.start || safeDateFull) : (currentPhase.start || safeDateFull),
+                endTime: isDone ? safeDateFull : (currentPhase.endTime || ''),
+                photo: photoUrl || currentPhase.photo || '',
+                date: safeDateFull.split('T')[0]
+            };
+
+            const updatedItem = {
+                ...item,
+                phases: {
+                    ...(item.phases || {}),
+                    [phaseKey]: updatedPhase
+                }
+            };
+
+            // Đồng bộ sang flat columns để tương thích 100% CSDL sheet Production
+            if (phaseKey === 'phase1') {
+                updatedItem.p1_name = phaseName;
+                updatedItem.p1_status = targetStatus;
+                updatedItem.p1_user = updatedPhase.user;
+                updatedItem.p1_start = updatedPhase.start;
+                updatedItem.p1_endTime = updatedPhase.endTime;
+                if (photoUrl) updatedItem.p1_photo = photoUrl;
             } else {
-                // Còn lại (đang làm dở khâu 1, chờ khâu 2, hoặc yêu cầu làm lại) -> Bắt buộc ở CHỜ SẢN XUẤT
-                curSt = 'CHỜ SẢN XUẤT';
+                updatedItem.p2_name = phaseName;
+                updatedItem.p2_status = targetStatus;
+                updatedItem.p2_user = updatedPhase.user;
+                updatedItem.p2_start = updatedPhase.start;
+                updatedItem.p2_endTime = updatedPhase.endTime;
+                if (photoUrl) updatedItem.p2_photo = photoUrl;
             }
 
-            return { ...i, _computedStatus: curSt, _parentOrder: parentOrder };
-        });
+            // Kiểm tra nếu cả 2 khâu đã hoàn thành -> Tự động chuyển status lệnh sang 'In_Progress' hoặc 'Done'
+            const otherPhaseKey = phaseKey === 'phase1' ? 'phase2' : 'phase1';
+            const otherStatus = item.phases?.[otherPhaseKey]?.status || (phaseKey === 'phase1' ? item.p2_status : item.p1_status);
+            if (isDone && (otherStatus === 'Done' || String(otherStatus).toUpperCase() === 'ĐÃ XONG')) {
+                updatedItem.status = 'In_Progress'; // Chờ nghiệm thu KCS
+            }
 
-        const workerTodayKPI = React.useMemo(() => {
+            await pushDeltas({ prodItems: [updatedItem] }, `Đã cập nhật ${phaseName}: ${targetStatus}`, 'fa-hammer');
+            if (triggerToast) triggerToast(`Đã ghi nhận công đoạn ${phaseName}!`, 'fa-check', 'success');
+        };
+
+        // 3. Nghiệm thu KCS 2 góc chụp (Mặt trước & Mặt hông)
+        const handleSubmitQC = async (item, qcDecision, qcNoteText, frontPhotoUrl, sidePhotoUrl) => {
+            const isPassed = qcDecision === 'PASSED';
             const safeDateFull = typeof getLocalISODate === 'function' ? getLocalISODate() : new Date().toISOString();
-            const today = safeDateFull.split('T')[0];
-            let framesCount = 0;
-            let layoutCount = 0;
-            let kpiVND = 0;
 
-            listWithStatus.forEach(i => {
-                ['phase1', 'phase2'].forEach(pk => {
-                    if (i.phases && i.phases[pk] && i.phases[pk].status === 'Done' && isStaffMatch(i.phases[pk].user, currentUser) && i.phases[pk].date === today) {
-                        if (String(i.type || '').toLowerCase().includes('bể')) framesCount++;
-                        else layoutCount++;
-                        kpiVND += (i.phases[pk].reward_vnd || 0);
-                    }
-                });
-            });
-            return { framesCount, layoutCount, kpiVND };
-        }, [listWithStatus, currentUser]);
+            const updatedItem = {
+                ...item,
+                qc_status: isPassed ? 'ĐẠT' : 'Từ Chối',
+                qc_note: qcNoteText || '',
+                qc_front_photo: frontPhotoUrl || item.qc_front_photo || '',
+                qc_side_photo: sidePhotoUrl || item.qc_side_photo || '',
+                status: isPassed ? 'QC_Passed' : 'In_Progress',
+                updatedAt: safeDateFull
+            };
 
-        const workerFilteredStats = React.useMemo(() => {
-            if (!prodItems || !currentUser) return { beKinhP1: 0, beKinhP2: 0, layoutP1: 0, layoutP2: 0 };
+            let payload = { prodItems: [updatedItem] };
 
-            let beKinhP1 = 0;
-            let beKinhP2 = 0;
-            let layoutP1 = 0;
-            let layoutP2 = 0;
-
-            (prodItems || []).forEach(item => {
-                const searchStr = (String(item.type || '') + ' ' + String(item.name || '')).toLowerCase();
-                const isBeKinh = searchStr.includes('bể');
-
-                // Phase 1 (Cắt Dán / Dựng Khung)
-                const p1Status = item?.phases?.phase1?.status || item.p1_status;
-                const p1User = item?.phases?.phase1?.user || item.p1_user;
-                const p1Date = item?.phases?.phase1?.endTime || item?.phases?.phase1?.start || item?.phases?.phase1?.date || item.p1_endTime || item.p1_start || item.createdAt;
-
-                if ((p1Status === 'Done' || p1Status === 'ĐÃ XONG') && isStaffMatch(p1User, currentUser)) {
-                    if (checkTimeFilter(p1Date, filterTime, customMonth)) {
-                        if (isBeKinh) beKinhP1++;
-                        else layoutP1++;
-                    }
+            // Nếu duyệt KCS Đạt Chuẩn và quản lý chọn tự động nhập kho thành phẩm
+            if (isPassed) {
+                const matchProd = (erpProducts || []).find(p => String(p.name).trim() === String(item.name).trim());
+                if (matchProd) {
+                    payload.Products = [{
+                        ...matchProd,
+                        quantity: Number(matchProd.quantity || 0) + 1,
+                        _diff: 1
+                    }];
+                    payload.ImportExport = [{
+                        id: 'IE_QC_' + Date.now(),
+                        type: 'Nhập',
+                        target: 'Thành Phẩm KCS Đạt Chuẩn',
+                        totalAmount: Number(matchProd.costPrice || 0),
+                        date: safeDateFull.replace('T', ' ').slice(0, 19),
+                        note: `Nhập kho từ KCS Đạt Chuẩn Serial: ${item._serial || item.id}`,
+                        itemsData: JSON.stringify([{ name: item.name, qty: 1, price: matchProd.costPrice || 0 }])
+                    }];
+                    updatedItem.status = 'Done';
+                    updatedItem.fulfilledFromStock = true;
                 }
+            }
 
-                // Phase 2 (Gọt Keo / Gia Cố)
-                const p2Status = item?.phases?.phase2?.status || item.p2_status;
-                const p2User = item?.phases?.phase2?.user || item.p2_user;
-                const p2Date = item?.phases?.phase2?.endTime || item?.phases?.phase2?.start || item?.phases?.phase2?.date || item.p2_endTime || item.p2_start || item.createdAt;
+            await pushDeltas(payload, isPassed ? `✅ KCS Đạt Chuẩn Serial ${item._serial}!` : `❌ Đã từ chối KCS Serial ${item._serial}, yêu cầu làm lại!`, isPassed ? 'fa-check-double' : 'fa-rotate-left');
+            if (triggerToast) triggerToast(isPassed ? 'KCS Đạt Chuẩn & Đã Vào Kho!' : 'Đã báo lỗi KCS cho thợ làm lại!', isPassed ? 'fa-circle-check' : 'fa-triangle-exclamation', isPassed ? 'success' : 'warning');
+            setActiveDrawerItem(null);
+        };
 
-                if ((p2Status === 'Done' || p2Status === 'ĐÃ XONG') && isStaffMatch(p2User, currentUser)) {
-                    if (checkTimeFilter(p2Date, filterTime, customMonth)) {
-                        if (isBeKinh) beKinhP2++;
-                        else layoutP2++;
-                    }
-                }
-            });
-
-            return { beKinhP1, beKinhP2, layoutP1, layoutP2 };
-        }, [prodItems, currentUser, filterTime, customMonth]);
-
+        // 4. Báo cáo tổng hợp sản lượng thợ & In A4
         const allWorkersReport = React.useMemo(() => {
             if (!prodItems) return [];
-
             const statsMap = {};
             const EXCLUDED_USERS = ['Nguyễn Thị Huyền Trang', 'Trung Kiên', 'Nguyễn Thị Diệu Hương', 'Huyền Trang', 'Diệu Hương'];
 
-            // 1. Khởi tạo danh sách thợ từ userConfigs (Config_NhanSu)
             const rawUserList = [
                 ...(Array.isArray(userConfigs?.users) ? userConfigs.users : []),
                 ...Object.values(userConfigs?.pins || {}).map(u => u?.name).filter(Boolean)
@@ -4856,15 +5020,12 @@
 
                 const p1 = item?.phases?.phase1 || {};
                 const p2 = item?.phases?.phase2 || {};
-
                 const p1User = String(p1.user || item.p1_user || '').trim();
                 const p2User = String(p2.user || item.p2_user || '').trim();
-
                 const p1Status = p1.status || item.p1_status;
                 const p2Status = p2.status || item.p2_status;
-
-                const p1Date = p1.endTime || p1.start || item.p1_endTime || item.p1_start || item.deadline || item.createdAt || item.date;
-                const p2Date = p2.endTime || p2.start || item.p2_endTime || item.p2_start || item.deadline || item.createdAt || item.date;
+                const p1Date = p1.endTime || p1.start || item.p1_endTime || item.p1_start || item.deadline || item.createdAt;
+                const p2Date = p2.endTime || p2.start || item.p2_endTime || item.p2_start || item.deadline || item.createdAt;
                 const itemDate = item.updatedAt || item.createdAt || p1Date || p2Date;
 
                 const getWorkerEntry = (userName) => {
@@ -4879,192 +5040,30 @@
                 const w1 = getWorkerEntry(p1User);
                 const w2 = getWorkerEntry(p2User);
 
-                // --- KHÂU 1 (DỰNG KHUNG / CẮT DÁN) ---
                 if (w1) {
                     const matchTime = checkTimeFilter(p1Date, filterTime, customMonth) || checkTimeFilter(itemDate, filterTime, customMonth);
                     if ((p1Status === 'Done' || String(p1Status).toUpperCase() === 'ĐÃ XONG') && matchTime) {
                         if (isBeKinh) w1.catDan++;
                         else w1.dungKhung++;
                     }
-                    if (matchTime) {
-                        const p1NoteStr = String(p1.note || item.p1_note || '').toLowerCase();
-                        if (p1NoteStr.includes('trễ') || p1NoteStr.includes('quá hạn') || (p1.reward_vnd === 0 && p1Status === 'Done' && p1NoteStr.includes('kpi'))) {
-                            w1.overdueCount++;
-                        }
-                    }
                 }
 
-                // --- KHÂU 2 (GIA CỐ / GỌT KEO) ---
                 if (w2) {
                     const matchTime = checkTimeFilter(p2Date, filterTime, customMonth) || checkTimeFilter(itemDate, filterTime, customMonth);
                     if ((p2Status === 'Done' || String(p2Status).toUpperCase() === 'ĐÃ XONG') && matchTime) {
                         if (isBeKinh) w2.gotKeo++;
                         else w2.giaCo++;
                     }
-                    if (matchTime) {
-                        const p2NoteStr = String(p2.note || item.p2_note || '').toLowerCase();
-                        if (p2NoteStr.includes('trễ') || p2NoteStr.includes('quá hạn') || (p2.reward_vnd === 0 && p2Status === 'Done' && p2NoteStr.includes('kpi'))) {
-                            w2.overdueCount++;
-                        }
-                    }
-                }
-
-                // --- ĐẾM SỐ LẦN BỊ LÀM LẠI (REWORK) ---
-                const itemNote = String(item.note || '').toLowerCase();
-                const qcNote = String(item.qc_note || '').toLowerCase();
-                const qcStatus = String(item.qc_status || '').toLowerCase();
-                const combinedNote = itemNote + ' ' + qcNote + ' ' + qcStatus;
-
-                const isRework = combinedNote.includes('làm lại') || combinedNote.includes('từ chối') || combinedNote.includes('báo lỗi') || qcStatus === 'từ chối';
-
-                if (isRework) {
-                    const matchTime = checkTimeFilter(itemDate, filterTime, customMonth) || checkTimeFilter(p1Date, filterTime, customMonth) || checkTimeFilter(p2Date, filterTime, customMonth);
-                    if (matchTime) {
-                        if (combinedNote.includes('gia cố') || combinedNote.includes('gọt keo') || combinedNote.includes('khâu 2') || combinedNote.includes('phase2')) {
-                            if (w2) w2.reworkCount++;
-                            else if (w1) w1.reworkCount++;
-                        } else {
-                            if (w1) w1.reworkCount++;
-                            else if (w2) w2.reworkCount++;
-                        }
-                    }
                 }
             });
 
-            return Object.values(statsMap)
-                .filter(w => !EXCLUDED_USERS.includes(w.fullName))
-                .sort((a, b) => {
-                    const totalA = a.dungKhung + a.giaCo + a.catDan + a.gotKeo;
-                    const totalB = b.dungKhung + b.giaCo + b.catDan + b.gotKeo;
-                    return totalB - totalA;
-                });
+            return Object.values(statsMap).filter(w => !EXCLUDED_USERS.includes(w.fullName)).sort((a, b) => {
+                const totalA = a.dungKhung + a.giaCo + a.catDan + a.gotKeo;
+                const totalB = b.dungKhung + b.giaCo + b.catDan + b.gotKeo;
+                return totalB - totalA;
+            });
         }, [prodItems, userConfigs, filterTime, customMonth]);
 
-        const completedPhasesThisMonth = React.useMemo(() => {
-            if (!prodItems || !currentUser) return 0;
-            const now = new Date();
-            const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-            let count = 0;
-
-            (prodItems || []).forEach(item => {
-                // Phase 1 (Cắt Dán Bể / Dựng Khung Layout)
-                const p1Status = item?.phases?.phase1?.status || item.p1_status;
-                const p1User = item?.phases?.phase1?.user || item.p1_user;
-                const p1Date = item?.phases?.phase1?.endTime || item?.phases?.phase1?.start || item.p1_endTime || item.p1_start || item.deadline || item.createdAt;
-                if ((p1Status === 'Done' || p1Status === 'ĐÃ XONG') && isStaffMatch(p1User, currentUser)) {
-                    if (p1Date && String(p1Date).startsWith(currentMonthStr)) {
-                        count++;
-                    }
-                }
-
-                // Phase 2 (Gọt Keo Bể / Gia Cố Layout)
-                const p2Status = item?.phases?.phase2?.status || item.p2_status;
-                const p2User = item?.phases?.phase2?.user || item.p2_user;
-                const p2Date = item?.phases?.phase2?.endTime || item?.phases?.phase2?.start || item.p2_endTime || item.p2_start || item.deadline || item.createdAt;
-                if ((p2Status === 'Done' || p2Status === 'ĐÃ XONG') && isStaffMatch(p2User, currentUser)) {
-                    if (p2Date && String(p2Date).startsWith(currentMonthStr)) {
-                        count++;
-                    }
-                }
-            });
-            return count;
-        }, [prodItems, currentUser]);
-
-        const counts = { 'CHỜ SẢN XUẤT': 0, 'KIỂM ĐỊNH': 0, 'ĐÃ XONG': 0, 'ĐÃ HUỶ': 0, 'TẤT CẢ': typeFiltered.length };
-        let countChoKhau1 = 0;
-        let countChoKhau2 = 0;
-        listWithStatus.forEach(i => {
-            counts[i._computedStatus] = (counts[i._computedStatus] || 0) + 1;
-            if (i._computedStatus === 'CHỜ SẢN XUẤT') {
-                const p1 = i.phases?.phase1?.status || 'Pending';
-                const p2 = i.phases?.phase2?.status || 'Pending';
-                const p1Done = p1 === 'Done' || String(p1).toUpperCase() === 'ĐÃ XONG';
-                const p2Done = p2 === 'Done' || String(p2).toUpperCase() === 'ĐÃ XONG';
-                if (!p1Done) countChoKhau1++;
-                else if (p1Done && !p2Done) countChoKhau2++;
-            }
-        });
-
-        const list = listWithStatus.filter(i => {
-            if (statusTab !== 'TẤT CẢ' && statusTab !== i._computedStatus) return false;
-            if (statusTab === 'CHỜ SẢN XUẤT' && prodPhaseSubFilter !== 'ALL') {
-                const p1 = i.phases?.phase1?.status || 'Pending';
-                const p2 = i.phases?.phase2?.status || 'Pending';
-                const p1Done = p1 === 'Done' || String(p1).toUpperCase() === 'ĐÃ XONG';
-                const p2Done = p2 === 'Done' || String(p2).toUpperCase() === 'ĐÃ XONG';
-                if (prodPhaseSubFilter === 'PHASE1' && p1Done) return false;
-                if (prodPhaseSubFilter === 'PHASE2' && (!p1Done || p2Done)) return false;
-            }
-            return true;
-        });
-
-        const role = localStorage.getItem('rf_role') || '';
-        const adminCheck = isBossRole || (typeof isAdmin !== 'undefined' && isAdmin) || (currentUser && (currentUser.includes('Vinh') || currentUser.includes('Long') || currentUser === 'Đỗ Tiến' || ['SẢN XUẤT', 'QUẢN LÝ SẢN XUẤT', 'QUẢN LÝ KHO', 'TỐI CAO', 'FOUNDER', 'ADMIN'].includes(String(role).toUpperCase())));
-
-        // ==========================================
-        // LOGIC ĐẾM NGƯỢC THỜI GIAN CA LÀM VIỆC REALTIME (LEAN SHIFT TIMER)
-        // ==========================================
-        const [shiftTimeText, setShiftTimeText] = React.useState('Chưa vào ca');
-        const [shiftTimeColor, setShiftTimeColor] = React.useState('text-zinc-500');
-
-        React.useEffect(() => {
-            const updateShiftTimer = () => {
-                if (!attendance || !currentUser) return;
-
-                // Tìm bản ghi check-in hôm nay của thợ hiện tại
-                const todayCheckin = attendance.find(a =>
-                    isStaffMatch(a.user, currentUser) && a.timeIn && !a.timeOut
-                );
-
-                if (!todayCheckin) {
-                    setShiftTimeText('Chưa vào ca');
-                    setShiftTimeColor('text-zinc-500 font-bold');
-                    return;
-                }
-
-                // Định mức ca làm việc tiêu chuẩn: 8 tiếng = 28,800,000 ms
-                const shiftDurationMs = 8 * 60 * 60 * 1000;
-
-                // Xử lý parse thời gian an toàn (hỗ trợ cả format 08:00 và datetime)
-                let inStr = String(todayCheckin.timeIn).trim();
-                let timeInMs = NaN;
-                if (inStr.length === 5 && inStr.includes(':')) {
-                    const datePart = todayCheckin.date || new Date().toISOString().split('T')[0];
-                    timeInMs = new Date(`${datePart}T${inStr}:00`).getTime();
-                } else {
-                    if (inStr.includes(' ') && !inStr.includes('T')) inStr = inStr.replace(' ', 'T');
-                    if (inStr.includes('T') && inStr.split(':').length === 2) inStr += ':00';
-                    timeInMs = new Date(inStr).getTime();
-                }
-
-                if (isNaN(timeInMs)) {
-                    setShiftTimeText('Đang làm việc');
-                    setShiftTimeColor('text-emerald-400');
-                    return;
-                }
-
-                const elapsedMs = Date.now() - timeInMs;
-                const remainingMs = shiftDurationMs - elapsedMs;
-
-                if (remainingMs <= 0) {
-                    setShiftTimeText('Hết ca tiêu chuẩn');
-                    setShiftTimeColor('text-rose-500 font-black animate-pulse');
-                } else {
-                    const remH = Math.floor(remainingMs / 3600000);
-                    const remM = Math.floor((remainingMs % 3600000) / 60000);
-                    const remS = Math.floor((remainingMs % 60000) / 1000);
-
-                    setShiftTimeText(`Ca: ${remH}h:${String(remM).padStart(2, '0')}m:${String(remS).padStart(2, '0')}s`);
-                    setShiftTimeColor(remainingMs < 30 * 60 * 1000 ? 'text-amber-500 font-black animate-pulse' : 'text-emerald-400 font-bold');
-                }
-            };
-
-            updateShiftTimer();
-            const shiftInterval = setInterval(updateShiftTimer, 1000);
-            return () => clearInterval(shiftInterval);
-        }, [attendance, currentUser]);
-
-        // HÀM IN BÁO CÁO SẢN LƯỢNG CHUẨN A4 SANG TRỌNG
         const handlePrintProductionReport = () => {
             const periodStr = filterTime === 'Chọn Tháng' ? (customMonth || 'Tháng Đã Chọn') : filterTime;
             const printDateStr = new Date().toLocaleString('vi-VN');
@@ -5072,13 +5071,11 @@
             const totalGiaCo = allWorkersReport.reduce((sum, x) => sum + (x.giaCo || 0), 0);
             const totalCatDan = allWorkersReport.reduce((sum, x) => sum + (x.catDan || 0), 0);
             const totalGotKeo = allWorkersReport.reduce((sum, x) => sum + (x.gotKeo || 0), 0);
-            const totalRework = allWorkersReport.reduce((sum, x) => sum + (x.reworkCount || 0), 0);
-            const totalOverdue = allWorkersReport.reduce((sum, x) => sum + (x.overdueCount || 0), 0);
             const grandTotal = totalDungKhung + totalGiaCo + totalCatDan + totalGotKeo;
 
             let rowsHtml = '';
             allWorkersReport.forEach((w, idx) => {
-                const totalWorkerKhau = (w.dungKhung || 0) + (w.giaCo || 0) + (w.catDan || 0) + (w.gotKeo || 0);
+                const total = (w.dungKhung || 0) + (w.giaCo || 0) + (w.catDan || 0) + (w.gotKeo || 0);
                 rowsHtml += `
                     <tr>
                         <td style="border: 1px solid #333; padding: 6px 8px; text-align: center;">${idx + 1}</td>
@@ -5087,9 +5084,7 @@
                         <td style="border: 1px solid #333; padding: 6px 8px; text-align: center; font-family: monospace; font-weight: bold; color: #047857;">${w.giaCo || 0}</td>
                         <td style="border: 1px solid #333; padding: 6px 8px; text-align: center; font-family: monospace; font-weight: bold; color: #1d4ed8;">${w.catDan || 0}</td>
                         <td style="border: 1px solid #333; padding: 6px 8px; text-align: center; font-family: monospace; font-weight: bold; color: #7e22ce;">${w.gotKeo || 0}</td>
-                        <td style="border: 1px solid #333; padding: 6px 8px; text-align: center; font-family: monospace; font-weight: bold; background-color: #f3f4f6;">${totalWorkerKhau}</td>
-                        <td style="border: 1px solid #333; padding: 6px 8px; text-align: center; font-family: monospace; color: #be123c;">${w.reworkCount || 0}</td>
-                        <td style="border: 1px solid #333; padding: 6px 8px; text-align: center; font-family: monospace; color: #b45309;">${w.overdueCount || 0}</td>
+                        <td style="border: 1px solid #333; padding: 6px 8px; text-align: center; font-family: monospace; font-weight: bold; background-color: #f3f4f6;">${total}</td>
                     </tr>
                 `;
             });
@@ -5101,24 +5096,19 @@
                         <div style="font-size: 20px; font-weight: 900; text-transform: uppercase; margin-top: 4px;">BÁO CÁO TỔNG HỢP SẢN LƯỢNG THỢ & CÔNG ĐOẠN</div>
                         <div style="font-size: 12px; margin-top: 4px; font-weight: bold;">Kỳ báo cáo: ${periodStr} | Ngày in: ${printDateStr}</div>
                     </div>
-
                     <table style="width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px;">
                         <thead>
                             <tr style="background-color: #e5e7eb; font-weight: 900; text-transform: uppercase;">
                                 <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; width: 5%;">STT</th>
-                                <th style="border: 1px solid #000; padding: 6px 8px; text-align: left; width: 25%;">Thợ / Nhân Sự</th>
-                                <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; width: 10%;">Dựng Khung</th>
-                                <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; width: 10%;">Gia Cố</th>
-                                <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; width: 10%;">Cắt Dán</th>
-                                <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; width: 10%;">Gọt Keo</th>
-                                <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; width: 12%;">Tổng Khâu</th>
-                                <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; width: 9%;">Làm Lại</th>
-                                <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; width: 9%;">Quá Hạn</th>
+                                <th style="border: 1px solid #000; padding: 6px 8px; text-align: left; width: 30%;">Thợ / Nhân Sự</th>
+                                <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; width: 12%;">Dựng Khung</th>
+                                <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; width: 12%;">Gia Cố</th>
+                                <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; width: 12%;">Cắt Dán</th>
+                                <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; width: 12%;">Gọt Keo</th>
+                                <th style="border: 1px solid #000; padding: 6px 4px; text-align: center; width: 17%;">Tổng Khâu</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            ${rowsHtml}
-                        </tbody>
+                        <tbody>${rowsHtml}</tbody>
                         <tfoot>
                             <tr style="background-color: #f3f4f6; font-weight: 900; border-top: 2px solid #000;">
                                 <td colspan="2" style="border: 1px solid #000; padding: 8px; text-align: center; text-transform: uppercase;">TỔNG CỘNG TOÀN XƯỞNG</td>
@@ -5127,29 +5117,9 @@
                                 <td style="border: 1px solid #000; padding: 8px; text-align: center; font-family: monospace;">${totalCatDan}</td>
                                 <td style="border: 1px solid #000; padding: 8px; text-align: center; font-family: monospace;">${totalGotKeo}</td>
                                 <td style="border: 1px solid #000; padding: 8px; text-align: center; font-family: monospace; background-color: #e5e7eb;">${grandTotal}</td>
-                                <td style="border: 1px solid #000; padding: 8px; text-align: center; font-family: monospace; color: #be123c;">${totalRework}</td>
-                                <td style="border: 1px solid #000; padding: 8px; text-align: center; font-family: monospace; color: #b45309;">${totalOverdue}</td>
                             </tr>
                         </tfoot>
                     </table>
-
-                    <div style="display: flex; justify-content: space-between; margin-top: 30px; font-size: 12px; font-weight: bold; page-break-inside: avoid;">
-                        <div style="width: 30%; text-align: center;">
-                            <div>Người Lập Báo Cáo</div>
-                            <div style="font-weight: normal; font-size: 10px; color: #666; margin-top: 2px;">(Ký & ghi rõ họ tên)</div>
-                            <div style="margin-top: 45px;">${currentUser || 'Nhân sự'}</div>
-                        </div>
-                        <div style="width: 30%; text-align: center;">
-                            <div>Quản Lý Sản Xuất</div>
-                            <div style="font-weight: normal; font-size: 10px; color: #666; margin-top: 2px;">(Ký & ghi rõ họ tên)</div>
-                            <div style="margin-top: 45px;">...........................</div>
-                        </div>
-                        <div style="width: 30%; text-align: center;">
-                            <div>Giám Đốc / Điều Hành</div>
-                            <div style="font-weight: normal; font-size: 10px; color: #666; margin-top: 2px;">(Phê duyệt)</div>
-                            <div style="margin-top: 45px;">...........................</div>
-                        </div>
-                    </div>
                 </div>
             `;
 
@@ -5163,7 +5133,6 @@
                     table { page-break-inside: auto; width: 100% !important; }
                     tr { page-break-inside: avoid; page-break-after: auto; }
                     thead { display: table-header-group; }
-                    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
                 }
             `;
             document.head.appendChild(style);
@@ -5176,254 +5145,111 @@
             document.head.removeChild(style);
         };
 
+        // --- RENDER COMPONENT CHÍNH ---
         return (
-            <div className="space-y-4 max-w-5xl mx-auto px-1 sm:px-0">
-                {/* BẢNG BÁO CÁO SẢN LƯỢNG NẰM TRÊN CÙNG (GỌN GÀNG - CLICK ĐỂ MỞ) */}
-                {!isCTV && (
-                    <div className="bg-[#121214] border border-white/[0.08] rounded-2xl mb-3 shadow-md overflow-hidden transition-all duration-300">
-                        {/* Header có thể click để toggle mở/đóng */}
-                        <div
-                            onClick={() => setShowReportTable(prev => !prev)}
-                            className="p-3.5 flex justify-between items-center cursor-pointer hover:bg-white/[0.02] transition-colors select-none flex-wrap gap-2"
-                        >
-                            <div className="flex items-center gap-2.5">
-                                <div className="w-2.5 h-2.5 rounded-full bg-[#d4af37] animate-pulse"></div>
-                                <span className="text-[13px] font-black text-white uppercase tracking-wider flex items-center gap-2">
-                                    BẢNG BÁO CÁO SẢN LƯỢNG
-                                </span>
-                                <span className="text-[10px] text-zinc-400 font-bold bg-[#121214] px-2.5 py-0.5 rounded-md border border-white/[0.08]">
-                                    {filterTime === 'Chọn Tháng' ? (customMonth || 'Tháng Đã Chọn') : filterTime}
-                                </span>
-                                {allWorkersReport.length > 0 && (
-                                    <span className="hidden sm:inline-flex text-[10px] text-[#d4af37] font-black bg-[#d4af37]/10 border border-[#d4af37]/20 px-2 py-0.5 rounded-md">
-                                        Tổng: {allWorkersReport.reduce((sum, x) => sum + x.dungKhung + x.giaCo + x.catDan + x.gotKeo, 0)} khâu
-                                    </span>
-                                )}
+            <div className="space-y-4 max-w-7xl mx-auto px-1 sm:px-2 pb-12 font-sans text-zinc-100">
+                {/* 1. TOP HEADER & BÁO CÁO NHANH */}
+                <div className="bg-[#121214] border border-white/[0.06] rounded-2xl p-3 shadow-md flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-[#d4af37]/15 border border-[#d4af37]/30 flex items-center justify-center text-[#d4af37]">
+                            <i className="fas fa-hammer text-sm"></i>
+                        </div>
+                        <div>
+                            <div className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-2">
+                                ĐIỀU HÀNH SẢN XUẤT & KCS
+                                <span className="text-[10px] text-zinc-400 font-mono font-normal">v3.0</span>
                             </div>
-
-                            <div className="flex items-center gap-2">
-                                <div className="text-[10px] text-zinc-400 font-bold hidden xs:block">
-                                    Tài khoản: <span className="text-[#d4af37] font-black">{currentUser}</span>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); handlePrintProductionReport(); }}
-                                    className="px-2.5 py-1 rounded-lg bg-[#d4af37]/15 hover:bg-[#d4af37] hover:text-black border border-[#d4af37]/30 text-[#d4af37] text-[11px] font-black flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
-                                    title="In Báo Cáo Sản Lượng Toàn Xưởng (Khổ A4)"
-                                >
-                                    <i className="fas fa-print text-[11px]"></i>
-                                    <span>In Báo Cáo</span>
-                                </button>
-                                {isBossRole && (
-                                    <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); setShowAuditModal(true); }}
-                                        className="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500 hover:text-white border border-rose-500/30 text-rose-400 text-[11px] font-black flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer"
-                                        title="Mở Hộp Đen đối soát log thao tác bấm nút của thợ (Chỉ phân quyền TỐI CAO)"
-                                    >
-                                        <i className="fas fa-shield-alt text-[11px]"></i>
-                                        <span className="hidden xs:inline">Hộp Đen Log Thợ</span>
-                                    </button>
-                                )}
-                                <button
-                                    type="button"
-                                    className="px-2.5 py-1 rounded-lg bg-[#121214] hover:bg-zinc-800 border border-white/[0.08] text-zinc-300 text-[11px] font-bold flex items-center gap-1.5 transition-all"
-                                >
-                                    <i className={`fas fa-chart-bar text-[#d4af37]`}></i>
-                                    <span>{showReportTable ? 'Thu gọn' : 'Xem chi tiết'}</span>
-                                    <i className={`fas fa-chevron-${showReportTable ? 'up' : 'down'} text-[10px] text-zinc-400 transition-transform`}></i>
-                                </button>
+                            <div className="text-[10px] text-zinc-400 flex items-center gap-2">
+                                <span>Thợ: <strong className="text-[#d4af37]">{currentUser}</strong> ({userRole})</span>
+                                <span>•</span>
+                                <span>Tổng lệnh: <strong>{filteredList.length}</strong></span>
                             </div>
                         </div>
+                    </div>
 
-                        {/* BẢNG DỮ LIỆU SẢN LƯỢNG THỢ (CHỈ MỞ KHI CẦN) */}
-                        {showReportTable && (
-                            <div className="p-3.5 pt-0 border-t border-white/[0.08] animate-fade-in">
-                                <div className="overflow-x-auto hide-scrollbar rounded-xl border border-white/[0.08] mt-3">
-                                    <table className="w-full text-left border-collapse min-w-[650px]">
-                                        <thead>
-                                            <tr className="bg-[#121214] text-zinc-300 text-[10px] uppercase font-black tracking-wider border-b border-white/[0.08]">
-                                                <th className="py-2.5 px-3">NHÂN SỰ</th>
-                                                <th className="py-2.5 px-2 text-center text-[#f59e0b]">Dựng Khung</th>
-                                                <th className="py-2.5 px-2 text-center text-[#10b981]">Gia Cố</th>
-                                                <th className="py-2.5 px-2 text-center text-[#3b82f6]">Cắt Dán</th>
-                                                <th className="py-2.5 px-2 text-center text-[#a855f7]">Gọt Keo</th>
-                                                <th className="py-2.5 px-2 text-center text-rose-400">LÀM LẠI</th>
-                                                <th className="py-2.5 px-2 text-center text-amber-400">QUÁ HẠN</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-white/[0.05] text-[11px] font-bold">
-                                            {allWorkersReport.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan="7" className="py-4 text-center text-zinc-500 italic">Chưa có dữ liệu sản lượng trong kỳ này</td>
-                                                </tr>
-                                            ) : (
-                                                allWorkersReport.map(w => {
-                                                    const isMe = String(w.name).trim() === String(currentUser).trim();
-                                                    return (
-                                                        <tr key={w.name} className={`hover:bg-white/[0.02] transition-colors ${isMe ? 'bg-[#d4af37]/10' : ''}`}>
-                                                            <td className="py-2 px-3 font-black text-white flex items-center gap-1.5">
-                                                                {isMe && <span className="w-1.5 h-1.5 rounded-full bg-[#d4af37]"></span>}
-                                                                <span className={isMe ? 'text-[#d4af37]' : 'text-zinc-200'}>{w.name}</span>
-                                                                {isMe && <span className="text-[8px] bg-[#d4af37]/20 text-[#d4af37] px-1 py-0.5 rounded font-black">Tôi</span>}
-                                                            </td>
-                                                            <td className="py-2 px-2 text-center font-mono text-[#f59e0b] font-black">{w.dungKhung || 0}</td>
-                                                            <td className="py-2 px-2 text-center font-mono text-[#10b981] font-black">{w.giaCo || 0}</td>
-                                                            <td className="py-2 px-2 text-center font-mono text-[#3b82f6] font-black">{w.catDan || 0}</td>
-                                                            <td className="py-2 px-2 text-center font-mono text-[#a855f7] font-black">{w.gotKeo || 0}</td>
-                                                            <td className="py-2 px-2 text-center font-mono">
-                                                                {w.reworkCount > 0 ? (
-                                                                    <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-400 font-black text-[10px]">{w.reworkCount}</span>
-                                                                ) : (
-                                                                    <span className="text-zinc-600">0</span>
-                                                                )}
-                                                            </td>
-                                                            <td className="py-2 px-2 text-center font-mono">
-                                                                {w.overdueCount > 0 ? (
-                                                                    <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-black text-[10px]">{w.overdueCount}</span>
-                                                                ) : (
-                                                                    <span className="text-zinc-600">0</span>
-                                                                )}
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })
-                                            )}
-                                        </tbody>
-                                        {allWorkersReport.length > 0 && (
-                                            <tfoot>
-                                                <tr className="bg-[#121214] text-white font-black text-[11px] border-t-2 border-white/[0.1]">
-                                                    <td className="py-2.5 px-3 uppercase text-[#d4af37]">TỔNG CỘNG</td>
-                                                    <td className="py-2.5 px-2 text-center text-[#f59e0b] font-mono">{allWorkersReport.reduce((sum, x) => sum + x.dungKhung, 0)}</td>
-                                                    <td className="py-2.5 px-2 text-center text-[#10b981] font-mono">{allWorkersReport.reduce((sum, x) => sum + x.giaCo, 0)}</td>
-                                                    <td className="py-2.5 px-2 text-center text-[#3b82f6] font-mono">{allWorkersReport.reduce((sum, x) => sum + x.catDan, 0)}</td>
-                                                    <td className="py-2.5 px-2 text-center text-[#a855f7] font-mono">{allWorkersReport.reduce((sum, x) => sum + x.gotKeo, 0)}</td>
-                                                    <td className="py-2.5 px-2 text-center text-rose-400 font-mono">{allWorkersReport.reduce((sum, x) => sum + x.reworkCount, 0)}</td>
-                                                    <td className="py-2.5 px-2 text-center text-amber-400 font-mono">{allWorkersReport.reduce((sum, x) => sum + x.overdueCount, 0)}</td>
-                                                </tr>
-                                            </tfoot>
-                                        )}
-                                    </table>
-                                </div>
-                            </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Toggle Bảng vs Thẻ */}
+                        <div className="flex items-center bg-[#09090b] p-0.5 rounded-xl border border-white/[0.06]">
+                            <button
+                                onClick={() => setViewMode('TABLE')}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${viewMode === 'TABLE' ? 'bg-[#d4af37] text-black shadow-sm' : 'text-zinc-400 hover:text-white'}`}
+                                title="Chế độ Bảng Nén (Linear UX)"
+                            >
+                                <i className="fas fa-table-list text-[10px]"></i>
+                                <span className="hidden sm:inline">Bảng Nén</span>
+                            </button>
+                            <button
+                                onClick={() => setViewMode('CARDS')}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${viewMode === 'CARDS' ? 'bg-[#d4af37] text-black shadow-sm' : 'text-zinc-400 hover:text-white'}`}
+                                title="Chế độ Thẻ Kênh"
+                            >
+                                <i className="fas fa-grip text-[10px]"></i>
+                                <span className="hidden sm:inline">Thẻ Kênh</span>
+                            </button>
+                        </div>
+
+                        {/* Nút Tạo Lệnh SX Tồn */}
+                        {isAdmin && !isCTV && (
+                            <button
+                                onClick={() => setShowAddSXTModal(true)}
+                                className="px-3 py-1.5 bg-[#d4af37]/15 hover:bg-[#d4af37] hover:text-black border border-[#d4af37]/30 text-[#d4af37] text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                            >
+                                <i className="fas fa-plus text-[10px]"></i>
+                                <span className="hidden sm:inline">Tạo Lệnh SX</span>
+                            </button>
                         )}
-                    </div>
-                )}
 
-                {/* BỘ CHUYỂN PHÂN HỆ: BỂ KÍNH VS KHUNG LAYOUT (CHUẨN DRIBBLE SEGMENTED PILL) */}
-                <div className="flex gap-2 w-full mb-3 bg-[#121214] p-1.5 rounded-2xl shadow-sm">
-                    {[
-                        { id: 'Bể Kính', label: 'BỂ KÍNH', count: countBeKinh, icon: 'fa-fish' },
-                        { id: 'Layout', label: 'LAYOUT', count: countLayout, icon: 'fa-cubes' }
-                    ].map(t => (
+                        {/* Nút Kho Thiếu/Hết */}
+                        {!isCTV && (
+                            <button
+                                onClick={() => setShowOutOfStockModal(true)}
+                                className="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/25 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 relative cursor-pointer"
+                                title="Sản phẩm thiếu/hết kho"
+                            >
+                                <i className="fas fa-boxes-stacked text-[10px]"></i>
+                                {outOfStockCount > 0 && (
+                                    <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-mono text-[9px] font-black">
+                                        {outOfStockCount}
+                                    </span>
+                                )}
+                            </button>
+                        )}
+
+                        {/* Nút Ghi Chú Nhanh */}
+                        {!isCTV && (
+                            <button
+                                onClick={() => setShowQuickNotes(prev => !prev)}
+                                className={`px-2.5 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${showQuickNotes ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-white/[0.04] text-zinc-300 border-white/[0.08] hover:bg-white/[0.08]'}`}
+                                title="Ghi chú xưởng"
+                            >
+                                <i className="fas fa-sticky-note text-[10px] text-amber-400"></i>
+                            </button>
+                        )}
+
+                        {/* Nút SOS Xưởng */}
+                        {!isCTV && (
+                            <button
+                                onClick={() => setShowSOSModal(true)}
+                                className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-black rounded-xl transition-all flex items-center gap-1 cursor-pointer animate-pulse"
+                                title="Phát tín hiệu SOS Khẩn Cấp"
+                            >
+                                <i className="fas fa-triangle-exclamation text-[10px]"></i>
+                                <span className="hidden md:inline">SOS</span>
+                            </button>
+                        )}
+
+                        {/* Nút In A4 Báo Cáo */}
                         <button
-                            key={t.id}
-                            onClick={() => {
-                                typeTab !== t.id && setTypeTab(t.id);
-                                if (typeof triggerToast === 'function') triggerToast(`Đã chuyển sang ${t.label}`, t.id === 'Bể Kính' ? 'fa-fish' : 'fa-cubes', 'info');
-                            }}
-                            className={`flex-1 py-2.5 font-black text-[13px] rounded-xl transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer ${typeTab === t.id
-                                    ? 'bg-amber-400 text-zinc-950 shadow-md scale-[1.005]'
-                                    : 'bg-transparent text-zinc-400 hover:text-white hover:bg-white/[0.04]'
-                                }`}
+                            onClick={handlePrintProductionReport}
+                            className="px-2.5 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] text-xs font-bold rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                            title="In Báo Cáo Sản Lượng (A4)"
                         >
-                            <i className={`fas ${t.icon} text-[12px] opacity-80`}></i>
-                            <span>{t.label}</span>
-                            <span className={`px-2.5 py-0.5 rounded-lg text-[11px] font-mono ${typeTab === t.id ? 'bg-black text-amber-400 font-black' : 'bg-white/10 text-zinc-300'
-                                }`}>
-                                {t.count}
-                            </span>
+                            <i className="fas fa-print text-[10px] text-zinc-400"></i>
                         </button>
-                    ))}
+                    </div>
                 </div>
 
-                {/* THANH TÌM KIẾM & BỘ LỌC THỜI GIAN (ĐỒNG BỘ 100% TAB ĐƠN HÀNG) */}
-                <div className="flex gap-2 w-full shrink-0 items-center mb-3">
-                    {adminCheck && !isCTV && (
-                        <button
-                            type="button"
-                            onClick={() => setShowAddSXTModal(true)}
-                            className="w-[42px] h-[42px] shrink-0 bg-gradient-to-r from-amber-500/20 to-yellow-500/20 hover:from-amber-500/30 hover:to-yellow-500/30 text-amber-300 font-black rounded-xl flex items-center justify-center border border-amber-500/40 active:scale-95 transition-all shadow-sm cursor-pointer"
-                            title="Tạo Lệnh SX Tồn"
-                        >
-                            <i className="fas fa-plus text-amber-400 text-base"></i>
-                        </button>
-                    )}
-
-                    {/* NÚT MỞ KHUNG THÔNG BÁO TRA CỨU BỂ KÍNH & LAYOUT HẾT TRONG KHO */}
-                    {!isCTV && (
-                        <button
-                            type="button"
-                            onClick={() => setShowOutOfStockModal(true)}
-                            className="w-[42px] h-[42px] shrink-0 bg-amber-950/40 hover:bg-amber-900/50 text-amber-300 border border-amber-500/40 rounded-xl flex items-center justify-center active:scale-95 transition-all shadow-sm relative cursor-pointer"
-                            title="Xem danh sách Bể Kính & Layout hết/thiếu trong kho để tạo lệnh sản xuất"
-                        >
-                            <i className="fas fa-boxes-stacked text-base text-amber-400"></i>
-                            {outOfStockCount > 0 && (
-                                <span className="absolute -top-1.5 -right-1.5 px-1.5 py-0.5 rounded-full bg-rose-600 text-white font-mono text-[9px] font-black shadow">
-                                    {outOfStockCount}
-                                </span>
-                            )}
-                        </button>
-                    )}
-
-                    {/* NÚT GHI CHÚ NHANH SẢN XUẤT */}
-                    {!isCTV && (
-                        <button
-                            type="button"
-                            onClick={() => setShowQuickNotes(prev => !prev)}
-                            className={`w-[42px] h-[42px] shrink-0 border rounded-xl flex items-center justify-center active:scale-95 transition-all shadow-sm cursor-pointer ${showQuickNotes ? 'bg-amber-500/20 text-amber-300 border-amber-500/50' : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'}`}
-                            title="Ghi chú & nhắc việc xưởng sản xuất"
-                        >
-                            <i className="fas fa-sticky-note text-base text-amber-400"></i>
-                        </button>
-                    )}
-
-                    {/* NÚT PHÁT TÍN HIỆU SOS XƯỞNG SẢN XUẤT */}
-                    {!isCTV && (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                if (typeof window.triggerHaptic === 'function') window.triggerHaptic('heavy');
-                                setShowSOSModal(true);
-                            }}
-                            className="w-[42px] h-[42px] shrink-0 bg-rose-950/50 hover:bg-rose-900/60 text-rose-300 border border-rose-500/50 shadow-[0_0_12px_rgba(244,63,94,0.25)] rounded-xl flex items-center justify-center active:scale-95 transition-all shadow-sm cursor-pointer relative"
-                            title="Báo cáo sự cố khẩn cấp (Phát tín hiệu SOS xưởng)"
-                        >
-                            <i className="fas fa-triangle-exclamation text-base text-rose-400 animate-pulse"></i>
-                        </button>
-                    )}
-
-                    <div className="flex-1">
-                        <RFInput
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            placeholder="Tìm tên hàng, mã đơn..."
-                            icon="fa-search"
-                        />
-                    </div>
-
-                    <select
-                        value={filterTime}
-                        onChange={e => { setFilterTime(e.target.value); if (e.target.value !== 'Chọn Tháng') setCustomMonth(''); }}
-                        className="h-[42px] px-3 bg-[#0a0a0a] border border-[#333] rounded-xl text-[10px] font-bold text-gray-300 outline-none focus:border-[#d4af37] cursor-pointer"
-                    >
-                        <option value="Tháng Này">Tháng Này</option>
-                        <option value="Tháng Trước">Tháng Trước</option>
-                        <option value="Chọn Tháng">Chọn Tháng</option>
-                    </select>
-
-                    {filterTime === 'Chọn Tháng' && (
-                        <input
-                            type="month"
-                            value={customMonth}
-                            onChange={e => setCustomMonth(e.target.value)}
-                            className="h-[42px] w-[110px] bg-[#0a0a0a] border border-[#333] rounded-xl px-2 text-[10px] font-bold text-gray-300 outline-none focus:border-[#d4af37]"
-                        />
-                    )}
-                </div>
-
-                {/* KHUNG GHI CHÚ NHANH SẢN XUẤT */}
+                {/* GHI CHÚ NHANH PANEL */}
                 {showQuickNotes && (
                     <window.QuickNotesPanel
                         targetTab="SAN_XUAT"
@@ -5435,443 +5261,654 @@
                     />
                 )}
 
-                {/* BỘ LỌC KÊNH BÁN NHANH (CHUẨN DRIBBLE COLOR ACCENT ĐỒNG BỘ TAB ĐƠN HÀNG) */}
-                <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar no-scrollbar mb-3 pb-1">
-                    {[
-                        {
-                            id: 'ALL',
-                            label: 'Tất Cả',
-                            icon: 'fa-store',
-                            activeClass: 'bg-white text-zinc-950 shadow-md font-black',
-                            inactiveClass: 'bg-white/5 text-zinc-300 border border-white/10 hover:bg-white/10 hover:text-white',
-                            activeIconClass: 'text-zinc-950',
-                            inactiveIconClass: 'text-zinc-300'
-                        },
-                        {
-                            id: 'SHOPEE',
-                            label: 'Shopee',
-                            icon: 'fa-shopping-bag',
-                            activeClass: 'bg-[#f97316] text-white shadow-md font-black',
-                            inactiveClass: 'bg-orange-500/10 text-orange-400 border border-orange-500/20 hover:bg-orange-500/20 hover:text-orange-300',
-                            activeIconClass: 'text-white',
-                            inactiveIconClass: 'text-orange-400'
-                        },
-                        {
-                            id: 'EXPORT',
-                            label: 'Xuất Khẩu',
-                            icon: 'fa-globe-asia',
-                            activeClass: 'bg-[#10b981] text-zinc-950 shadow-md font-black',
-                            inactiveClass: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 hover:text-emerald-300',
-                            activeIconClass: 'text-zinc-950',
-                            inactiveIconClass: 'text-emerald-400'
-                        },
-                        {
-                            id: 'TIKTOK',
-                            label: 'TikTok',
-                            icon: 'fa-video',
-                            activeClass: 'bg-[#ec4899] text-white shadow-md font-black',
-                            inactiveClass: 'bg-pink-500/10 text-pink-400 border border-pink-500/20 hover:bg-pink-500/20 hover:text-pink-300',
-                            activeIconClass: 'text-white',
-                            inactiveIconClass: 'text-pink-400'
-                        },
-                        {
-                            id: 'BÁN LẺ',
-                            label: 'Bán Lẻ',
-                            icon: 'fa-box',
-                            activeClass: 'bg-[#60a5fa] text-zinc-950 shadow-md font-black',
-                            inactiveClass: 'bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:text-blue-300',
-                            activeIconClass: 'text-zinc-950',
-                            inactiveIconClass: 'text-blue-400'
-                        },
-                        {
-                            id: 'CTV',
-                            label: 'CTV',
-                            icon: 'fa-handshake',
-                            activeClass: 'bg-[#c084fc] text-zinc-950 shadow-md font-black',
-                            inactiveClass: 'bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 hover:text-purple-300',
-                            activeIconClass: 'text-zinc-950',
-                            inactiveIconClass: 'text-purple-400'
-                        }
-                    ].map(ch => {
-                        const isActive = filterChannel === ch.id;
-                        return (
-                            <button
-                                key={ch.id}
-                                onClick={() => setFilterChannel(ch.id)}
-                                className={`shrink-0 px-3.5 py-2 rounded-xl text-[11px] transition-all duration-200 flex items-center gap-2 active:scale-95 cursor-pointer ${isActive ? ch.activeClass : ch.inactiveClass}`}
-                            >
-                                <i className={`fas ${ch.icon} ${isActive ? ch.activeIconClass : ch.inactiveIconClass}`}></i>
-                                <span>{ch.label}</span>
-                            </button>
-                        );
-                    })}
-                </div>
+                {/* 2. LINEAR TOOLBAR & SEGMENTED CONTROL */}
+                <div className="bg-[#121214] border border-white/[0.06] rounded-2xl p-3 shadow-md space-y-2.5">
+                    {/* Hàng 1: Bộ lọc Loại Sản Phẩm & Tìm Kiếm & Thời Gian */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                        {/* Segmented Loại Hàng */}
+                        <div className="flex items-center bg-[#09090b] p-0.5 rounded-xl border border-white/[0.06]">
+                            {[
+                                { id: 'ALL', label: 'Tất Cả', count: listWithComputed.length, icon: 'fa-cubes' },
+                                { id: 'Bể Kính', label: 'Bể Kính', count: countBeKinh, icon: 'fa-fish' },
+                                { id: 'Layout', label: 'Layout', count: countLayout, icon: 'fa-mountain' }
+                            ].map(t => (
+                                <button
+                                    key={t.id}
+                                    onClick={() => setTypeTab(t.id)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${typeTab === t.id ? 'bg-white text-black shadow-sm font-black' : 'text-zinc-400 hover:text-white'}`}
+                                >
+                                    <i className={`fas ${t.icon} text-[10px]`}></i>
+                                    <span>{t.label}</span>
+                                    <span className={`px-1.5 py-0.2 rounded-md text-[9px] font-mono ${typeTab === t.id ? 'bg-black text-white' : 'bg-white/[0.08] text-zinc-300'}`}>
+                                        {t.count}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
 
-                {/* BỘ LỌC TRẠNG THÁI SẢN XUẤT (CHUẨN DRIBBLE ACCENT ĐỒNG BỘ TAB ĐƠN HÀNG) */}
-                <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar no-scrollbar mb-4 pb-1">
-                    {[
-                        {
-                            id: 'CHỜ SẢN XUẤT',
-                            label: 'Chờ Sản Xuất',
-                            count: counts['CHỜ SẢN XUẤT'],
-                            icon: 'fa-tools',
-                            activeClass: 'bg-amber-400 text-zinc-950 shadow-md font-black',
-                            inactiveClass: 'bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20 hover:text-amber-300',
-                            activeIconClass: 'text-zinc-950',
-                            inactiveIconClass: 'text-amber-400',
-                            activeBadgeClass: 'bg-black text-amber-400 font-black',
-                            inactiveBadgeClass: 'bg-amber-500/20 text-amber-300 font-bold'
-                        },
-                        {
-                            id: 'KIỂM ĐỊNH',
-                            label: 'Kiểm Định',
-                            count: counts['KIỂM ĐỊNH'],
-                            icon: 'fa-clipboard-check',
-                            activeClass: 'bg-purple-500 text-white shadow-md font-black',
-                            inactiveClass: 'bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 hover:text-purple-300',
-                            activeIconClass: 'text-white',
-                            inactiveIconClass: 'text-purple-400',
-                            activeBadgeClass: 'bg-black/30 text-white font-black',
-                            inactiveBadgeClass: 'bg-purple-500/20 text-purple-300 font-bold'
-                        },
-                        {
-                            id: 'ĐÃ XONG',
-                            label: 'Đã Xong',
-                            count: counts['ĐÃ XONG'],
-                            icon: 'fa-check-double',
-                            activeClass: 'bg-emerald-500 text-zinc-950 shadow-md font-black',
-                            inactiveClass: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 hover:text-emerald-300',
-                            activeIconClass: 'text-zinc-950',
-                            inactiveIconClass: 'text-emerald-400',
-                            activeBadgeClass: 'bg-black text-emerald-300 font-black',
-                            inactiveBadgeClass: 'bg-emerald-500/20 text-emerald-300 font-bold'
-                        },
-                        {
-                            id: 'ĐÃ HUỶ',
-                            label: 'Đã Huỷ',
-                            count: counts['ĐÃ HUỶ'],
-                            icon: 'fa-ban',
-                            activeClass: 'bg-rose-500 text-white shadow-md font-black',
-                            inactiveClass: 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 hover:text-rose-300',
-                            activeIconClass: 'text-white',
-                            inactiveIconClass: 'text-rose-400',
-                            activeBadgeClass: 'bg-black/30 text-white font-black',
-                            inactiveBadgeClass: 'bg-rose-500/20 text-rose-300 font-bold'
-                        },
-                        {
-                            id: 'TẤT CẢ',
-                            label: 'Tất Cả',
-                            count: counts['TẤT CẢ'],
-                            icon: 'fa-layer-group',
-                            activeClass: 'bg-zinc-200 text-zinc-950 shadow-md font-black',
-                            inactiveClass: 'bg-white/5 text-zinc-300 border border-white/10 hover:bg-white/10 hover:text-white',
-                            activeIconClass: 'text-zinc-950',
-                            inactiveIconClass: 'text-zinc-300',
-                            activeBadgeClass: 'bg-zinc-400 text-zinc-950 font-black',
-                            inactiveBadgeClass: 'bg-zinc-800 text-zinc-300 font-bold'
-                        }
-                    ].map(t => {
-                        const isActive = statusTab === t.id;
-                        return (
-                            <button
-                                key={t.id}
-                                onClick={() => setStatusTab(t.id)}
-                                className={`shrink-0 px-3.5 py-2 rounded-xl text-[11px] transition-all duration-200 flex items-center gap-2 active:scale-95 cursor-pointer ${isActive ? t.activeClass : t.inactiveClass}`}
-                            >
-                                <i className={`fas ${t.icon} ${isActive ? t.activeIconClass : t.inactiveIconClass}`}></i>
-                                <span>{t.label}</span>
-                                <span className={`px-1.5 py-0.5 rounded-md text-[9px] min-w-[20px] text-center ${isActive ? t.activeBadgeClass : t.inactiveBadgeClass}`}>
-                                    {t.count}
-                                </span>
-                            </button>
-                        );
-                    })}
-                </div>
+                        {/* Ô Tìm Kiếm Nén */}
+                        <div className="flex-1 min-w-[200px] relative">
+                            <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-xs"></i>
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                placeholder="Tìm theo Serial, tên sản phẩm, mã đơn..."
+                                className="w-full bg-[#09090b] border border-white/[0.06] rounded-xl pl-8 pr-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#d4af37]/60"
+                            />
+                            {searchQuery && (
+                                <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white text-xs">
+                                    <i className="fas fa-times"></i>
+                                </button>
+                            )}
+                        </div>
 
-                {/* SUB-FILTER KANBAN THEO KHÂU: CHO PHÉP THỢ BẤM 1 CHẠM ĐỂ KÉO VIỆC (LEAN PULL FLOW) */}
-                {statusTab === 'CHỜ SẢN XUẤT' && (
-                    <div className="flex items-center gap-2 mb-3.5 px-1 animate-fade-in flex-wrap">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider flex items-center gap-1 mr-1">
-                            <i className="fas fa-filter text-amber-400 text-[9px]"></i> Phân Khâu:
-                        </span>
+                        {/* Bộ Lọc Thời Gian */}
+                        <div className="flex items-center gap-1">
+                            <select
+                                value={filterTime}
+                                onChange={e => { setFilterTime(e.target.value); if (e.target.value !== 'Chọn Tháng') setCustomMonth(''); }}
+                                className="h-8 px-2 bg-[#09090b] border border-white/[0.06] rounded-xl text-xs font-bold text-zinc-300 focus:outline-none focus:border-[#d4af37]/60 cursor-pointer"
+                            >
+                                <option value="Tháng Này">Tháng Này</option>
+                                <option value="Tháng Trước">Tháng Trước</option>
+                                <option value="Chọn Tháng">Chọn Tháng</option>
+                            </select>
+                            {filterTime === 'Chọn Tháng' && (
+                                <input
+                                    type="month"
+                                    value={customMonth}
+                                    onChange={e => setCustomMonth(e.target.value)}
+                                    className="h-8 px-2 bg-[#09090b] border border-white/[0.06] rounded-xl text-xs font-bold text-zinc-300 focus:outline-none focus:border-[#d4af37]/60"
+                                />
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Hàng 2: Segmented Control Công Đoạn KCS */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar no-scrollbar pt-1">
                         {[
-                            { id: 'ALL', label: 'Tất Cả Khâu', count: counts['CHỜ SẢN XUẤT'] || 0, icon: 'fa-stream' },
-                            { id: 'PHASE1', label: typeTab === 'Bể Kính' ? 'Cắt Dán Kính' : 'Dựng Khung Phôi', count: countChoKhau1, icon: 'fa-cube', highlight: 'text-amber-300' },
-                            { id: 'PHASE2', label: typeTab === 'Bể Kính' ? 'Gọt Keo Bể' : 'Gia Cố / Gọt Keo', count: countChoKhau2, icon: 'fa-shield-alt', highlight: 'text-emerald-300' }
-                        ].map(sub => {
-                            const isSubActive = prodPhaseSubFilter === sub.id;
+                            { id: 'ALL', label: 'Tất Cả', count: stageCounts.all, icon: 'fa-layer-group' },
+                            { id: 'PHASE1', label: typeTab === 'Bể Kính' ? 'Cắt Kính / Dán Đáy' : 'Dựng Khung', count: stageCounts.phase1, icon: 'fa-cube' },
+                            { id: 'PHASE2', label: typeTab === 'Bể Kính' ? 'Gọt Keo Bể' : 'Gia Cố / Gọt Keo', count: stageCounts.phase2, icon: 'fa-shield-halved' },
+                            { id: 'QC', label: 'Chờ KCS Nghiệm Thu', count: stageCounts.qc, icon: 'fa-clipboard-check' },
+                            { id: 'DONE', label: 'Đã Hoàn Thành / Vào Kho', count: stageCounts.done, icon: 'fa-circle-check' },
+                            { id: 'CANCEL', label: 'Đã Huỷ', count: stageCounts.cancel, icon: 'fa-ban' }
+                        ].map(st => {
+                            const isActive = stageFilter === st.id;
                             return (
                                 <button
-                                    key={sub.id}
-                                    onClick={() => setProdPhaseSubFilter(sub.id)}
-                                    className={`px-3 py-1.5 rounded-lg text-[10.5px] font-black flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer ${
-                                        isSubActive
-                                            ? 'bg-amber-500 text-zinc-950 shadow-md ring-1 ring-amber-400'
-                                            : 'bg-white/[0.04] text-zinc-300 border border-white/[0.08] hover:bg-white/[0.08] hover:text-white'
-                                    }`}
+                                    key={st.id}
+                                    onClick={() => setStageFilter(st.id)}
+                                    className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 active:scale-95 cursor-pointer ${isActive ? 'bg-white text-black shadow-md' : 'bg-[#09090b] text-zinc-400 hover:text-zinc-200 border border-white/[0.06] hover:bg-white/[0.04]'}`}
                                 >
-                                    <i className={`fas ${sub.icon} text-[9px] ${isSubActive ? 'text-zinc-950' : (sub.highlight || 'text-zinc-400')}`}></i>
-                                    <span>{sub.label}</span>
-                                    <span className={`px-1.5 py-0.2 rounded text-[9px] min-w-[18px] text-center font-black ${
-                                        isSubActive ? 'bg-black/30 text-amber-200' : 'bg-black/40 text-zinc-400 border border-white/5'
-                                    }`}>
-                                        {sub.count}
+                                    <i className={`fas ${st.icon} text-[10px] ${isActive ? 'text-black' : 'text-zinc-400'}`}></i>
+                                    <span>{st.label}</span>
+                                    <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono min-w-[20px] text-center ${isActive ? 'bg-black text-white' : 'bg-white/[0.08] text-zinc-300'}`}>
+                                        {st.count}
                                     </span>
                                 </button>
                             );
                         })}
                     </div>
+
+                    {/* Hàng 3: Segmented Kênh Bán */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar no-scrollbar pt-1">
+                        {[
+                            { id: 'ALL', label: 'Tất Cả Kênh', icon: 'fa-store' },
+                            { id: 'SHOPEE', label: 'Shopee VN', icon: 'fa-shopping-bag' },
+                            { id: 'EXPORT', label: 'Shopee MY / Xuất Khẩu', icon: 'fa-globe-asia' },
+                            { id: 'TIKTOK', label: 'TikTok Shop', icon: 'fa-video' },
+                            { id: 'BÁN LẺ', label: 'Trực Tiếp / Bán Lẻ', icon: 'fa-store' },
+                            { id: 'CTV', label: 'Cộng Tác Viên', icon: 'fa-handshake' }
+                        ].map(ch => {
+                            const isActive = filterChannel === ch.id;
+                            return (
+                                <button
+                                    key={ch.id}
+                                    onClick={() => setFilterChannel(ch.id)}
+                                    className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer ${isActive ? 'bg-[#d4af37] text-black shadow-sm font-black' : 'bg-[#09090b] text-zinc-400 hover:text-zinc-200 border border-white/[0.06]'}`}
+                                >
+                                    <i className={`fas ${ch.icon} text-[9px]`}></i>
+                                    <span>{ch.label}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* 3. DANH SÁCH LỆNH SẢN XUẤT (BẢNG NÉN H-14 HOẶC THẺ KÊNH) */}
+                {filteredList.length === 0 ? (
+                    <div className="bg-[#121214] border border-white/[0.06] rounded-2xl p-12 text-center text-zinc-500 font-bold text-xs flex flex-col items-center justify-center gap-2">
+                        <i className="fas fa-clipboard-list text-3xl opacity-40 mb-1"></i>
+                        <span>Không có lệnh sản xuất nào phù hợp với bộ lọc hiện tại</span>
+                    </div>
+                ) : viewMode === 'TABLE' ? (
+                    /* CHUẨN LINEAR UX: HIGH-DENSITY PRODUCTION ROWS (H-14 = 56px) */
+                    <div className="bg-[#121214] border border-white/[0.06] rounded-2xl overflow-hidden shadow-xl">
+                        <div className="overflow-x-auto custom-scrollbar">
+                            <table className="w-full text-left border-collapse min-w-[900px]">
+                                <thead>
+                                    <tr className="bg-[#09090b] text-zinc-400 text-[10px] uppercase font-mono tracking-wider border-b border-white/[0.06]">
+                                        <th className="py-2.5 px-3 w-10 text-center">#</th>
+                                        <th className="py-2.5 px-3">SERIAL & TÊN SẢN PHẨM</th>
+                                        <th className="py-2.5 px-2 text-center w-24">LOẠI</th>
+                                        <th className="py-2.5 px-3">CÔNG ĐOẠN 1 (P1)</th>
+                                        <th className="py-2.5 px-3">CÔNG ĐOẠN 2 (P2)</th>
+                                        <th className="py-2.5 px-3 text-center w-28">KCS</th>
+                                        <th className="py-2.5 px-3 w-28 text-center">HẠN SLA</th>
+                                        <th className="py-2.5 px-3 w-24 text-right">THƯỞNG</th>
+                                        <th className="py-2.5 px-3 w-16 text-center">XEM</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/[0.04] text-xs">
+                                    {filteredList.map((item, idx) => {
+                                        const isUrgent = item._isItemUrgent;
+                                        const dims = item._dimensions;
+                                        const orderCode = item._parentOrder?.orderCode || item.orderId || '';
+
+                                        // Tính mức thưởng hiển thị
+                                        let myReward = 0;
+                                        if (isAdmin || isBossRole) {
+                                            myReward = (item._p1Reward || 0) + (item._p2Reward || 0);
+                                        } else {
+                                            if (isStaffMatch(item._p1User, currentUser)) myReward += (item._p1Reward || 0);
+                                            if (isStaffMatch(item._p2User, currentUser)) myReward += (item._p2Reward || 0);
+                                        }
+
+                                        return (
+                                            <tr
+                                                key={item.id || idx}
+                                                onClick={() => setActiveDrawerItem(item)}
+                                                className={`h-14 hover:bg-white/[0.03] transition-colors cursor-pointer group select-none ${isUrgent ? 'bg-amber-500/[0.03]' : ''}`}
+                                            >
+                                                {/* STT / Checkbox */}
+                                                <td className="py-2 px-3 text-center text-zinc-500 font-mono text-[11px]" onClick={e => e.stopPropagation()}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedProdIds.includes(item.id)}
+                                                        onChange={() => toggleSelectProd(item.id)}
+                                                        className="rounded border-zinc-700 bg-zinc-900 text-[#d4af37] focus:ring-0 cursor-pointer"
+                                                    />
+                                                </td>
+
+                                                {/* Serial & Quy cách */}
+                                                <td className="py-2 px-3">
+                                                    <div className="flex items-center gap-2">
+                                                        {isUrgent && (
+                                                            <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" title="Đơn HỎA TỐC"></span>
+                                                        )}
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-mono font-black text-[#d4af37] text-xs tracking-tight">
+                                                                    {item._serial}
+                                                                </span>
+                                                                {orderCode && (
+                                                                    <span className="text-[10px] text-zinc-400 font-mono truncate max-w-[130px] hidden sm:inline" title={orderCode}>
+                                                                        {orderCode.split(' | ')[0]}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="text-zinc-200 font-medium text-xs truncate max-w-[280px]" title={item.name}>
+                                                                {item.name}
+                                                            </div>
+                                                            {dims && (
+                                                                <div className="text-[10px] text-zinc-400 font-mono">
+                                                                    {dims.d}x{dims.r}x{dims.c}cm • <span className="text-emerald-400">{dims.areaM2}m²</span> (5%)
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </td>
+
+                                                {/* Loại */}
+                                                <td className="py-2 px-2 text-center">
+                                                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${item._computedType === 'Bể Kính' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
+                                                        {item._computedType}
+                                                    </span>
+                                                </td>
+
+                                                {/* Công đoạn 1 */}
+                                                <td className="py-2 px-3">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className={`w-2 h-2 rounded-full shrink-0 ${item._isP1Done ? 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : item._p1Status === 'In_Progress' ? 'bg-amber-400 animate-pulse' : 'bg-zinc-600'}`}></span>
+                                                        <div className="min-w-0">
+                                                            <div className="font-bold text-[11px] truncate text-zinc-200">
+                                                                {item._p1User || <span className="text-zinc-500 italic">Chưa nhận</span>}
+                                                            </div>
+                                                            <div className="text-[9px] text-zinc-400 font-mono">
+                                                                {item._isP1Done ? 'Hoàn thành' : item._p1Status === 'In_Progress' ? 'Đang làm' : 'Chờ làm'}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+
+                                                {/* Công đoạn 2 */}
+                                                <td className="py-2 px-3">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className={`w-2 h-2 rounded-full shrink-0 ${item._isP2Done ? 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : item._p2Status === 'In_Progress' ? 'bg-amber-400 animate-pulse' : 'bg-zinc-600'}`}></span>
+                                                        <div className="min-w-0">
+                                                            <div className="font-bold text-[11px] truncate text-zinc-200">
+                                                                {item._p2User || <span className="text-zinc-500 italic">Chưa nhận</span>}
+                                                            </div>
+                                                            <div className="text-[9px] text-zinc-400 font-mono">
+                                                                {item._isP2Done ? 'Hoàn thành' : item._p2Status === 'In_Progress' ? 'Đang làm' : 'Chờ làm'}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+
+                                                {/* Trạng thái KCS */}
+                                                <td className="py-2 px-3 text-center">
+                                                    {item._isFinalQcPassed ? (
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1">
+                                                            <i className="fas fa-check text-[9px]"></i> Đạt Chuẩn
+                                                        </span>
+                                                    ) : item.qc_status === 'Từ Chối' ? (
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center justify-center gap-1">
+                                                            <i className="fas fa-xmark text-[9px]"></i> Trả Về
+                                                        </span>
+                                                    ) : item._isBothDone ? (
+                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center justify-center gap-1 animate-pulse">
+                                                            <i className="fas fa-clock text-[9px]"></i> Chờ KCS
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[10px] text-zinc-500 font-mono">—</span>
+                                                    )}
+                                                </td>
+
+                                                {/* Hạn SLA */}
+                                                <td className="py-2 px-3 text-center font-mono text-[11px] text-zinc-400">
+                                                    {item.deadline ? (
+                                                        <span className={new Date(item.deadline) < new Date() && item._computedStatus !== 'ĐÃ XONG' ? 'text-rose-400 font-bold' : ''}>
+                                                            {String(item.deadline).slice(5, 16).replace('T', ' ')}
+                                                        </span>
+                                                    ) : '—'}
+                                                </td>
+
+                                                {/* Tiền Thưởng */}
+                                                <td className="py-2 px-3 text-right font-mono font-bold text-emerald-400 text-xs">
+                                                    {myReward > 0 ? `+${myReward.toLocaleString('vi-VN')}đ` : '—'}
+                                                </td>
+
+                                                {/* Thao tác Xem */}
+                                                <td className="py-2 px-3 text-center">
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setActiveDrawerItem(item); }}
+                                                        className="w-7 h-7 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] text-zinc-300 flex items-center justify-center transition-all"
+                                                        title="Mở Drawer chi tiết & KCS"
+                                                    >
+                                                        <i className="fas fa-chevron-right text-xs"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                ) : (
+                    /* CHẾ ĐỘ XEM THẺ KÊNH (KANBAN / GRID CARD VIEW) */
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
+                        {filteredList.map((item, idx) => {
+                            const order = item._parentOrder && item._parentOrder.id ? item._parentOrder : getParentOrder(item.orderId);
+                            return (
+                                <WorkerCardV2
+                                    key={item.id || idx}
+                                    item={item}
+                                    order={order}
+                                    prodItems={prodItems}
+                                    erpProducts={erpProducts}
+                                    currentUser={currentUser}
+                                    pushDeltas={pushDeltas}
+                                    userConfigs={userConfigs}
+                                    triggerToast={triggerToast}
+                                    kpiConfig={kpiConfig}
+                                    idx_num={idx + 1}
+                                    isAdmin={isAdmin}
+                                    orders={orders}
+                                    models3D={models3D}
+                                    attendance={attendance}
+                                    selectedProdIds={selectedProdIds}
+                                    toggleSelectProd={toggleSelectProd}
+                                    configs={item._computedType === 'Bể Kính' ? CONFIGS_BE_KINH : CONFIGS_KHUNG}
+                                    onEditItem={setEditingProdItem}
+                                    erpData={erpData}
+                                />
+                            );
+                        })}
+                    </div>
                 )}
 
+                {/* 4. SIDE DRAWER ĐIỀU PHỐI & NGHIỆM THU KCS (SLIDE-OVER PANEL W-FULL MAX-W-LG) */}
+                {activeDrawerItem && (() => {
+                    const item = activeDrawerItem;
+                    const dims = item._dimensions;
+                    const order = item._parentOrder && item._parentOrder.id ? item._parentOrder : getParentOrder(item.orderId);
+                    const isUrgent = item._isItemUrgent;
 
-                {/* DANH SÁCH LỆNH SẢN XUẤT RESPONSIVE CHUẨN ĐỒNG BỘ MỌI THIẾT BỊ */}
-                <div className="w-full space-y-4 mt-1 pb-6">
-                    {list.length === 0 ? (
-                        <div className="text-center py-16 text-[#8a8a8a] font-bold text-[13px] bg-[#0f0f11] rounded-2xl border-2 border-dashed border-white/[0.07] flex flex-col items-center justify-center">
-                            <i className="fas fa-clipboard-check text-4xl block mb-3 opacity-50"></i> KHÔNG CÓ LỆNH THỢ
-                        </div>
-                    ) : (
-                        (() => {
-                            const normalizeProductionChannel = (rawChan) => {
-                                const ch = String(rawChan || '').toUpperCase().trim();
-
-                                // 1. TikTok Shop
-                                if (ch.includes('TIKTOK') || ch.includes('TIK TOK') || ch === 'TT') {
-                                    return 'TikTok Shop';
-                                }
-
-                                // 2. Shopee (VN, TH, SG, MA, PH, TW)
-                                if (ch.includes('SHOPEE') || ch.includes('SPX')) {
-                                    if (ch.includes('TH') || ch.includes('THÁI')) return 'Shopee TH';
-                                    if (ch.includes('SG') || ch.includes('SING')) return 'Shopee SG';
-                                    if (ch.includes('MA') || ch.includes('MY') || ch.includes('MALAY')) return 'Shopee MA';
-                                    if (ch.includes('PH') || ch.includes('PHILIP')) return 'Shopee PH';
-                                    if (ch.includes('TW') || ch.includes('ĐÀI')) return 'Shopee TW';
-                                    return 'Shopee VN';
-                                }
-
-                                // 3. Cộng Tác Viên
-                                if (ch.includes('CỘNG TÁC') || ch.includes('CỘNG TAC') || ch.includes('CTV') || ch === 'CTV') {
-                                    return 'Cộng Tác Viên';
-                                }
-
-                                // 4. Bán Sỉ
-                                if (ch.includes('BÁN SỈ') || ch.includes('BAN SI') || ch.includes('SỈ') || ch.includes('WHOLESALE') || ch.includes('ĐẠI LÝ')) {
-                                    return 'Bán Sỉ';
-                                }
-
-                                // 5. Bảo Hành
-                                if (ch.includes('BẢO HÀNH') || ch.includes('BAO HANH') || ch.includes('SỬA CHỮA') || ch.includes('LÀM LẠI')) {
-                                    return 'Bảo Hành';
-                                }
-
-                                // 6. Sản Xuất Tồn
-                                if (ch.includes('SẢN XUẤT TỒN') || ch.includes('SẢN XUẤT BÙ KHO') || ch.includes('TỒN XƯỞNG') || ch.includes('TỒN') || rawChan === 'SẢN XUẤT TỒN') {
-                                    return 'Sản Xuất Tồn';
-                                }
-
-                                // 7. Bán Lẻ
-                                return 'Bán Lẻ';
-                            };
-
-                            const channelPriority = {
-                                'BẢO HÀNH': 1,
-                                'TIKTOK SHOP': 2,
-                                'SHOPEE VN': 3,
-                                'SHOPEE TH': 4,
-                                'SHOPEE SG': 5,
-                                'SHOPEE MA': 6,
-                                'SHOPEE PH': 7,
-                                'SHOPEE TW': 8,
-                                'CỘNG TÁC VIÊN': 9,
-                                'BÁN LẺ': 10,
-                                'BÁN SỈ': 11,
-                                'SẢN XUẤT TỒN': 12
-                            };
-
-                            const getChannelPrio = (chan) => {
-                                const upper = String(chan || '').toUpperCase();
-                                return channelPriority[upper] || 99;
-                            };
-
-                            const getEffectiveDeadline = (item, order) => {
-                                if (item && item.deadline) {
-                                    const t = new Date(item.deadline).getTime();
-                                    if (!isNaN(t)) return t;
-                                }
-                                if (order && order.deadline) {
-                                    const t = new Date(order.deadline).getTime();
-                                    if (!isNaN(t)) return t;
-                                }
-                                if (typeof getAutoDeadline === 'function' && order) {
-                                    const auto = getAutoDeadline(order.channel, order.createdAt || order.date, order.shippingMethod);
-                                    if (auto) {
-                                        const t = new Date(auto).getTime();
-                                        if (!isNaN(t)) return t;
-                                    }
-                                }
-                                return Infinity;
-                            };
-
-                            const sortedList = [...list].sort((a, b) => {
-                                const oA = (orders || []).find(x => x.id === a.orderId || x.orderCode === a.orderId) || {};
-                                const oB = (orders || []).find(x => x.id === b.orderId || x.orderCode === b.orderId) || {};
-
-                                const aUrgent = a.isUrgent === true || String(a.isUrgent).toUpperCase() === 'TRUE' || oA.isUrgent === true || String(oA.isUrgent).toUpperCase() === 'TRUE';
-                                const bUrgent = b.isUrgent === true || String(b.isUrgent).toUpperCase() === 'TRUE' || oB.isUrgent === true || String(oB.isUrgent).toUpperCase() === 'TRUE';
-                                if (aUrgent !== bUrgent) return bUrgent ? 1 : -1;
-
-                                if (statusTab === 'ĐÃ XONG' || statusTab === 'KIỂM ĐỊNH') {
-                                    const getEnd = (i) => i.phases?.phase2?.endTime || i.phases?.phase1?.endTime || i.phases?.phase2?.date || i.phases?.phase1?.date || '0';
-                                    const comp = String(getEnd(b)).localeCompare(String(getEnd(a)));
-                                    if (comp !== 0) return comp;
-                                } else {
-                                    // ƯU TIÊN HẠN BÀN GIAO SỚM NHẤT (EARLIEST DEADLINE FIRST - BẢO VỆ SLA GIAO HÀNG TRÁNH NGHẼN CUỐI NGÀY)
-                                    const dlA = getEffectiveDeadline(a, oA);
-                                    const dlB = getEffectiveDeadline(b, oB);
-                                    if (dlA !== dlB) return dlA - dlB;
-                                }
-
-                                const pA = getChannelPrio(normalizeProductionChannel(oA.channel));
-                                const pB = getChannelPrio(normalizeProductionChannel(oB.channel));
-                                if (pA !== pB) return pA - pB;
-
-                                const dateA = oA.createdAt || oA.date || '0';
-                                const dateB = oB.createdAt || oB.date || '0';
-                                const dateComp = String(dateA).localeCompare(String(dateB));
-                                if (dateComp !== 0) return dateComp;
-
-                                return String(a.id).localeCompare(String(b.id));
-                            });
-
-                            const channelGroups = [];
-                            sortedList.forEach(item => {
-                                const order = item._parentOrder && item._parentOrder.id ? item._parentOrder : getParentOrder(item.orderId);
-                                const isItemUrgent = item.isUrgent === true || String(item.isUrgent).toUpperCase() === 'TRUE' || order.isUrgent === true || String(order.isUrgent).toUpperCase() === 'TRUE';
-                                const groupKey = normalizeProductionChannel(order.channel || (item.orderId === 'SẢN XUẤT TỒN' ? 'SẢN XUẤT TỒN' : ''));
-
-                                const pA = getChannelPrio(groupKey);
-                                let group = channelGroups.find(g => g.groupKey === groupKey);
-                                if (!group) {
-                                    group = { groupKey, items: [], priority: pA, hasUrgent: false };
-                                    channelGroups.push(group);
-                                }
-                                if (isItemUrgent) group.hasUrgent = true;
-                                group.items.push(item);
-                            });
-
-                            // Đưa nhóm kênh có chứa đơn hỏa tốc lên đầu tiên
-                            channelGroups.sort((a, b) => {
-                                if (a.hasUrgent !== b.hasUrgent) return b.hasUrgent ? 1 : -1;
-                                return a.priority - b.priority;
-                            });
-
-                            return channelGroups.map((channelGroup) => {
-                                const { groupKey, items } = channelGroup;
-                                let isGroupCollapsed = collapsedGroups[groupKey];
-                                if (isGroupCollapsed === undefined) {
-                                    isGroupCollapsed = statusTab === 'ĐÃ XONG';
-                                }
-
-                                if (filterChannel !== 'ALL') {
-                                    const uKey = groupKey.toUpperCase();
-                                    const isInterGroup = uKey.includes('XUẤT KHẨU') || uKey.includes('EXPORT') || uKey.includes('QUỐC TẾ') ||
-                                        uKey.includes('SHOPEE SG') || uKey.includes('SHOPEE TH') || uKey.includes('SHOPEE TW') ||
-                                        uKey.includes('SHOPEE PH') || uKey.includes('SHOPEE MA') || uKey.includes('SHOPEE MY');
-
-                                    if (filterChannel === 'EXPORT' && !isInterGroup) return null;
-                                    if (filterChannel === 'SHOPEE' && (isInterGroup || !uKey.includes('SHOPEE'))) return null;
-                                    if (filterChannel === 'TIKTOK' && !uKey.includes('TIKTOK')) return null;
-                                    if (filterChannel === 'BÁN LẺ' && !uKey.includes('BÁN LẺ')) return null;
-                                    if (filterChannel === 'CTV' && !uKey.includes('CỘNG TÁC') && !uKey.includes('CTV')) return null;
-                                }
-
-                                const groupHeader = (
-                                    <div
-                                        key={'hdr-' + groupKey}
-                                        onClick={() => setCollapsedGroups(prev => ({ ...prev, [groupKey]: !isGroupCollapsed }))}
-                                        style={getChannelInlineStyle(groupKey)}
-                                        className="w-full py-3 px-4 mt-4 mb-3 flex items-center justify-between gap-2 rounded-2xl uppercase tracking-wider shadow-lg select-none transition-all font-black cursor-pointer hover:border-white/20"
-                                    >
-                                        <div className="text-[13px] font-black flex items-center gap-2 truncate text-white">
-                                            <i className="fas fa-layer-group opacity-90 text-[12px]"></i>
-                                            <span className="truncate">{groupKey}</span>
+                    return (
+                        <div className="fixed inset-0 z-[9999] overflow-hidden bg-black/70 backdrop-blur-sm animate-fade-in flex justify-end" onClick={() => setActiveDrawerItem(null)}>
+                            <div
+                                className="w-full max-w-lg bg-[#18181b] border-l border-white/[0.06] h-full overflow-y-auto custom-scrollbar p-5 sm:p-6 shadow-2xl flex flex-col justify-between animate-slide-left text-zinc-100"
+                                onClick={e => e.stopPropagation()}
+                            >
+                                <div className="space-y-5">
+                                    {/* Drawer Header */}
+                                    <div className="flex items-start justify-between pb-4 border-b border-white/[0.06]">
+                                        <div className="min-w-0 pr-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-mono font-black text-[#d4af37] text-base tracking-tight">
+                                                    {item._serial}
+                                                </span>
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${item._computedType === 'Bể Kính' ? 'bg-blue-500/15 text-blue-400 border-blue-500/30' : 'bg-amber-500/15 text-amber-400 border-amber-500/30'}`}>
+                                                    {item._computedType}
+                                                </span>
+                                            </div>
+                                            <div className="font-bold text-white text-sm mt-1 leading-snug">
+                                                {item.name}
+                                            </div>
+                                            {item.note && (
+                                                <div className="text-xs text-amber-300/90 mt-1 bg-amber-500/10 border border-amber-500/20 p-2 rounded-lg">
+                                                    <i className="fas fa-info-circle mr-1"></i> {item.note}
+                                                </div>
+                                            )}
                                         </div>
-                                        <div className="flex items-center gap-2 shrink-0">
-                                            <div className="flex items-center gap-1.5 bg-black/40 text-gray-300 px-2.5 py-1 rounded-xl border border-white/5 font-black text-[11px]">
-                                                <span>{items.length} LỆNH</span>
-                                                <i className={`fas fa-chevron-${isGroupCollapsed ? 'down' : 'up'} text-[10px]`}></i>
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            <button
+                                                onClick={() => handleToggleUrgent(item)}
+                                                className={`p-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${isUrgent ? 'bg-rose-500/20 text-rose-400 border-rose-500/40 shadow-sm' : 'bg-white/[0.04] text-zinc-400 border-white/[0.06] hover:text-white'}`}
+                                                title={isUrgent ? 'Hủy Hỏa Tốc' : 'Bật HỎA TỐC'}
+                                            >
+                                                <i className="fas fa-bolt"></i>
+                                            </button>
+                                            <button
+                                                onClick={() => setActiveDrawerItem(null)}
+                                                className="w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.1] text-zinc-400 hover:text-white flex items-center justify-center transition-all cursor-pointer"
+                                            >
+                                                <i className="fas fa-times"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Thông Số Kỹ Thuật & Công Thức Tiêu Hao UOM (5% Hao Hụt) */}
+                                    {dims && (
+                                        <div className="bg-[#121214] border border-white/[0.06] rounded-2xl p-4 space-y-3">
+                                            <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold flex items-center justify-between">
+                                                <span>ĐỊNH MỨC TIÊU HAO VẬT TƯ (UOM)</span>
+                                                <span className="text-emerald-400 font-bold">Hao hụt chuẩn 5%</span>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-2 text-center">
+                                                <div className="bg-[#18181b] border border-white/[0.04] p-2.5 rounded-xl">
+                                                    <div className="text-[10px] text-zinc-400 uppercase font-mono">Quy Cách</div>
+                                                    <div className="font-mono font-black text-white text-xs mt-0.5">
+                                                        {dims.d}x{dims.r}x{dims.c} cm
+                                                    </div>
+                                                </div>
+                                                <div className="bg-[#18181b] border border-white/[0.04] p-2.5 rounded-xl">
+                                                    <div className="text-[10px] text-zinc-400 uppercase font-mono">Diện Tích Kính</div>
+                                                    <div className="font-mono font-black text-emerald-400 text-xs mt-0.5">
+                                                        {dims.areaM2} m²
+                                                    </div>
+                                                </div>
+                                                <div className="bg-[#18181b] border border-white/[0.04] p-2.5 rounded-xl">
+                                                    <div className="text-[10px] text-zinc-400 uppercase font-mono">Keo Silicone</div>
+                                                    <div className="font-mono font-black text-amber-400 text-xs mt-0.5">
+                                                        {dims.glueMl} ml <span className="text-[9px] font-normal text-zinc-400">({dims.glueBottles} chai)</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Đơn Hàng Liên Kết */}
+                                    <div className="bg-[#121214] border border-white/[0.06] rounded-2xl p-4 space-y-2">
+                                        <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold">
+                                            ĐƠN HÀNG LIÊN KẾT
+                                        </div>
+                                        {order && order.id ? (
+                                            <div className="space-y-1.5 text-xs">
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-zinc-400">Mã Đơn:</span>
+                                                    <span className="font-mono font-bold text-white">{order.orderCode}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-zinc-400">Kênh Bán:</span>
+                                                    <span className="font-bold text-[#d4af37]">{order.channel || 'Bán Lẻ'}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-zinc-400">Khách Hàng:</span>
+                                                    <span className="font-medium text-zinc-200">{order.customer || 'Khách vãng lai'}</span>
+                                                </div>
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-zinc-400">Hạn Bàn Giao:</span>
+                                                    <span className="font-mono font-bold text-rose-400">{order.deadline || 'Chưa set'}</span>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-xs text-zinc-500 italic">
+                                                Lệnh sản xuất tồn xưởng (SXT) / Chưa gắn đơn liên kết.
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Khu Vực Thao Tác Thợ (1 Chạm Theo Ca) */}
+                                    <div className="bg-[#121214] border border-white/[0.06] rounded-2xl p-4 space-y-3">
+                                        <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold flex justify-between items-center">
+                                            <span>THAO TÁC CÔNG ĐOẠN (THỢ XƯỞNG)</span>
+                                            <span className="text-[#d4af37] font-bold">{currentUser}</span>
+                                        </div>
+
+                                        {/* Công đoạn 1 */}
+                                        <div className="bg-[#18181b] border border-white/[0.04] p-3 rounded-xl space-y-2">
+                                            <div className="flex justify-between items-center text-xs">
+                                                <span className="font-bold text-zinc-200">
+                                                    {item._computedType === 'Bể Kính' ? 'Khâu 1: Cắt Kính / Dán Đáy' : 'Khâu 1: Dựng Khung Phôi'}
+                                                </span>
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item._isP1Done ? 'bg-emerald-500/15 text-emerald-400' : item._p1Status === 'In_Progress' ? 'bg-amber-500/15 text-amber-400' : 'bg-zinc-800 text-zinc-400'}`}>
+                                                    {item._isP1Done ? 'Đã Xong' : item._p1Status === 'In_Progress' ? 'Đang làm' : 'Chờ làm'}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-2 pt-1">
+                                                <div className="text-[11px] text-zinc-400 font-mono">
+                                                    Thợ: <strong className="text-white">{item._p1User || '—'}</strong>
+                                                </div>
+                                                {!item._isP1Done && (
+                                                    <button
+                                                        onClick={() => handleUpdateStageStatus(item, 'phase1', item._p1Status === 'In_Progress' ? 'Done' : 'In_Progress')}
+                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 cursor-pointer ${item._p1Status === 'In_Progress' ? 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-sm' : 'bg-[#d4af37] hover:bg-yellow-400 text-black'}`}
+                                                    >
+                                                        {item._p1Status === 'In_Progress' ? '📸 Nộp & Hoàn Thành P1' : '🚀 Bắt Đầu P1'}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Công đoạn 2 */}
+                                        <div className="bg-[#18181b] border border-white/[0.04] p-3 rounded-xl space-y-2">
+                                            <div className="flex justify-between items-center text-xs">
+                                                <span className="font-bold text-zinc-200">
+                                                    {item._computedType === 'Bể Kính' ? 'Khâu 2: Gọt Keo Bể' : 'Khâu 2: Gia Cố / Gọt Keo'}
+                                                </span>
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item._isP2Done ? 'bg-emerald-500/15 text-emerald-400' : item._p2Status === 'In_Progress' ? 'bg-amber-500/15 text-amber-400' : 'bg-zinc-800 text-zinc-400'}`}>
+                                                    {item._isP2Done ? 'Đã Xong' : item._p2Status === 'In_Progress' ? 'Đang làm' : 'Chờ làm'}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center justify-between gap-2 pt-1">
+                                                <div className="text-[11px] text-zinc-400 font-mono">
+                                                    Thợ: <strong className="text-white">{item._p2User || '—'}</strong>
+                                                </div>
+                                                {!item._isP2Done && (
+                                                    <button
+                                                        onClick={() => handleUpdateStageStatus(item, 'phase2', item._p2Status === 'In_Progress' ? 'Done' : 'In_Progress')}
+                                                        disabled={!item._isP1Done}
+                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${item._p2Status === 'In_Progress' ? 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-sm' : 'bg-[#d4af37] hover:bg-yellow-400 text-black'}`}
+                                                    >
+                                                        {item._p2Status === 'In_Progress' ? '📸 Nộp & Hoàn Thành P2' : '🚀 Bắt Đầu P2'}
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
-                                );
 
-                                if (isGroupCollapsed) {
-                                    return <React.Fragment key={groupKey}>{groupHeader}</React.Fragment>;
-                                }
-
-                                // Render items inside this channel
-                                let content = items.map((item, idx) => {
-                                    const order = item._parentOrder && item._parentOrder.id ? item._parentOrder : getParentOrder(item.orderId);
-                                    return (
-                                        <WorkerCardV2
-                                            key={item.id}
-                                            item={item}
-                                            order={order}
-                                            prodItems={prodItems}
-                                            erpProducts={erpProducts}
-                                            currentUser={currentUser}
-                                            pushDeltas={pushDeltas}
-                                            userConfigs={userConfigs}
-                                            triggerToast={triggerToast}
-                                            kpiConfig={kpiConfig}
-                                            idx_num={idx + 1}
-                                            isAdmin={adminCheck}
-                                            orders={orders}
-                                            models3D={models3D}
-                                            attendance={attendance}
-                                            selectedProdIds={selectedProdIds}
-                                            toggleSelectProd={toggleSelectProd}
-                                            configs={typeTab === 'Bể Kính' ? CONFIGS_BE_KINH : CONFIGS_KHUNG}
-                                            onEditItem={setEditingProdItem}
-                                            erpData={erpData}
-                                        />
-                                    );
-                                });
-
-                                return (
-                                    <React.Fragment key={groupKey}>
-                                        {groupHeader}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
-                                            {content}
+                                    {/* Khu Vực Kiểm Định KCS (Quản Lý / Lead KCS) */}
+                                    <div className="bg-[#121214] border border-white/[0.06] rounded-2xl p-4 space-y-3">
+                                        <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold flex justify-between items-center">
+                                            <span>KIỂM ĐỊNH KCS 2 GÓC CHỤP</span>
+                                            <span className="text-emerald-400 font-bold">{item.qc_status || 'Chưa duyệt'}</span>
                                         </div>
-                                    </React.Fragment>
-                                );
-                            });
-                        })()
-                    )}
-                </div>
 
-                {/* THA BARS CHO BULK ACTION */}
-                {selectedProdIds.length > 0 && (
-                    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] bg-[#1a1a1a] border border-[#d4af37]/50 shadow-[0_10px_40px_rgba(0,0,0,0.8)] rounded-2xl px-5 py-3 flex items-center gap-4 animate-slide-up">
-                        <div className="flex items-center gap-2">
-                            <span className="w-6 h-6 rounded-full bg-[#d4af37] text-black font-black flex items-center justify-center text-[12px]">{selectedProdIds.length}</span>
-                            <span className="text-[#d4af37] font-black uppercase text-[12px] tracking-wider">Đã Chọn</span>
+                                        {/* 2 Khung Ảnh: Mặt Trước & Mặt Hông */}
+                                        <div className="grid grid-cols-2 gap-2.5">
+                                            {/* Mặt Trước */}
+                                            <div className="space-y-1.5">
+                                                <div className="text-[10px] text-zinc-400 uppercase font-mono font-bold flex justify-between">
+                                                    <span>Ảnh Mặt Trước</span>
+                                                    {item.qc_front_photo && (
+                                                        <button onClick={() => setGlobalPreview(getDriveThumbnailSafe(item.qc_front_photo))} className="text-[#d4af37] hover:underline">Xem</button>
+                                                    )}
+                                                </div>
+                                                <div
+                                                    onClick={() => item.qc_front_photo && setGlobalPreview(getDriveThumbnailSafe(item.qc_front_photo))}
+                                                    className="w-full h-32 rounded-xl border border-white/[0.06] bg-[#09090b] flex flex-col items-center justify-center overflow-hidden cursor-pointer relative hover:border-[#d4af37]/40 transition-all"
+                                                >
+                                                    {item.qc_front_photo ? (
+                                                        <img src={getDriveThumbnailSafe(item.qc_front_photo)} alt="Ảnh mặt trước" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="text-center p-2 text-zinc-500 text-xs">
+                                                            <i className="fas fa-camera text-xl block mb-1 opacity-40"></i>
+                                                            <span>Chưa có ảnh mặt trước</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {isAdmin && (
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Dán link ảnh Drive mặt trước..."
+                                                        defaultValue={item.qc_front_photo || ''}
+                                                        onBlur={e => {
+                                                            if (e.target.value !== item.qc_front_photo) {
+                                                                pushDeltas({ prodItems: [{ ...item, qc_front_photo: e.target.value }] }, 'Cập nhật ảnh KCS mặt trước', 'fa-image');
+                                                            }
+                                                        }}
+                                                        className="w-full bg-[#09090b] border border-white/[0.06] rounded-lg px-2 py-1 text-[10px] text-zinc-300 focus:outline-none focus:border-[#d4af37]/60"
+                                                    />
+                                                )}
+                                            </div>
+
+                                            {/* Mặt Hông */}
+                                            <div className="space-y-1.5">
+                                                <div className="text-[10px] text-zinc-400 uppercase font-mono font-bold flex justify-between">
+                                                    <span>Ảnh Mặt Hông</span>
+                                                    {item.qc_side_photo && (
+                                                        <button onClick={() => setGlobalPreview(getDriveThumbnailSafe(item.qc_side_photo))} className="text-[#d4af37] hover:underline">Xem</button>
+                                                    )}
+                                                </div>
+                                                <div
+                                                    onClick={() => item.qc_side_photo && setGlobalPreview(getDriveThumbnailSafe(item.qc_side_photo))}
+                                                    className="w-full h-32 rounded-xl border border-white/[0.06] bg-[#09090b] flex flex-col items-center justify-center overflow-hidden cursor-pointer relative hover:border-[#d4af37]/40 transition-all"
+                                                >
+                                                    {item.qc_side_photo ? (
+                                                        <img src={getDriveThumbnailSafe(item.qc_side_photo)} alt="Ảnh mặt hông" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="text-center p-2 text-zinc-500 text-xs">
+                                                            <i className="fas fa-camera text-xl block mb-1 opacity-40"></i>
+                                                            <span>Chưa có ảnh mặt hông</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {isAdmin && (
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Dán link ảnh Drive mặt hông..."
+                                                        defaultValue={item.qc_side_photo || ''}
+                                                        onBlur={e => {
+                                                            if (e.target.value !== item.qc_side_photo) {
+                                                                pushDeltas({ prodItems: [{ ...item, qc_side_photo: e.target.value }] }, 'Cập nhật ảnh KCS mặt hông', 'fa-image');
+                                                            }
+                                                        }}
+                                                        className="w-full bg-[#09090b] border border-white/[0.06] rounded-lg px-2 py-1 text-[10px] text-zinc-300 focus:outline-none focus:border-[#d4af37]/60"
+                                                    />
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Ghi chú KCS */}
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] text-zinc-400 uppercase font-mono font-bold">Ghi Chú KCS</label>
+                                            <textarea
+                                                id="drawer_qc_note"
+                                                defaultValue={item.qc_note || ''}
+                                                rows={2}
+                                                placeholder="Ghi chú độ trong, bọt khí, đường keo..."
+                                                className="w-full bg-[#09090b] border border-white/[0.06] rounded-xl p-2.5 text-xs text-zinc-200 focus:outline-none focus:border-[#d4af37]/60 resize-none"
+                                            ></textarea>
+                                        </div>
+
+                                        {/* 2 Nút Quyết Định Nghiệm Thu KCS */}
+                                        {isAdmin && (
+                                            <div className="grid grid-cols-2 gap-2 pt-2">
+                                                <button
+                                                    onClick={() => {
+                                                        const noteVal = document.getElementById('drawer_qc_note')?.value || '';
+                                                        handleSubmitQC(item, 'REJECTED', noteVal);
+                                                    }}
+                                                    className="py-2.5 px-3 bg-rose-500/15 hover:bg-rose-500 hover:text-white border border-rose-500/30 text-rose-400 font-black text-xs uppercase rounded-xl transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                                                >
+                                                    <i className="fas fa-rotate-left text-xs"></i>
+                                                    <span>Trả Về Làm Lại</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        const noteVal = document.getElementById('drawer_qc_note')?.value || '';
+                                                        handleSubmitQC(item, 'PASSED', noteVal);
+                                                    }}
+                                                    className="py-2.5 px-3 bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs uppercase rounded-xl transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-1.5"
+                                                >
+                                                    <i className="fas fa-circle-check text-xs"></i>
+                                                    <span>Duyệt KCS & Vào Kho</span>
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Drawer Footer */}
+                                <div className="pt-4 border-t border-white/[0.06] flex items-center justify-between text-xs text-zinc-500 font-mono">
+                                    <span>ID: {item.id}</span>
+                                    <button
+                                        onClick={() => setActiveDrawerItem(null)}
+                                        className="text-zinc-400 hover:text-white"
+                                    >
+                                        Đóng Drawer
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                        <div className="h-6 w-px bg-white/20"></div>
-                        <button onClick={handleBulkDelete} className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg font-black text-[12px] uppercase flex items-center gap-1.5 shadow-md active:scale-95 transition-all">
-                            <i className="fas fa-trash"></i> Xoá Hàng Loạt
+                    );
+                })()}
+
+                {/* BULK ACTION BAR */}
+                {selectedProdIds.length > 0 && (
+                    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] bg-[#18181b] border border-[#d4af37]/40 shadow-2xl rounded-2xl px-5 py-3 flex items-center gap-4 animate-slide-up">
+                        <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 rounded-full bg-[#d4af37] text-black font-black flex items-center justify-center text-xs">{selectedProdIds.length}</span>
+                            <span className="text-[#d4af37] font-black uppercase text-xs tracking-wider">Lệnh Đã Chọn</span>
+                        </div>
+                        <div className="h-5 w-px bg-white/20"></div>
+                        <button onClick={handleBulkDelete} className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-bold text-xs uppercase flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer">
+                            <i className="fas fa-trash text-xs"></i> Xoá Đã Chọn
                         </button>
-                        <button onClick={() => setSelectedProdIds([])} className="px-4 py-1.5 bg-gray-600 hover:bg-gray-500 text-white rounded-lg font-black text-[12px] uppercase flex items-center gap-1.5 shadow-md active:scale-95 transition-all">
+                        <button onClick={() => setSelectedProdIds([])} className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl font-bold text-xs transition-all cursor-pointer">
                             Bỏ Chọn
                         </button>
                     </div>
                 )}
 
+                {/* GLOBAL FULLSCREEN IMAGE PREVIEW */}
                 {globalPreview && (
                     <div className="fixed inset-0 z-[99999] bg-black/95 flex flex-col items-center justify-center p-4 backdrop-blur-md animate-fade-in select-none" onClick={() => setGlobalPreview(null)}>
-                        {/* Nút Đóng Luôn Hiển Thị Cố Định Ở Góc Trên Phải */}
                         <button
                             onClick={() => setGlobalPreview(null)}
                             className="fixed top-4 right-4 z-[100000] text-white hover:text-rose-400 text-lg w-10 h-10 flex items-center justify-center bg-black/70 hover:bg-rose-600 border border-white/20 rounded-full transition-all shadow-xl backdrop-blur-md active:scale-95"
@@ -5879,30 +5916,27 @@
                         >
                             <i className="fas fa-times"></i>
                         </button>
-
-                        <div className="relative max-w-lg w-full flex flex-col items-center animate-slide-up my-auto" onClick={e => e.stopPropagation()}>
-                            <img src={globalPreview} alt="Ảnh nghiệm thu" className="w-full h-auto max-h-[75vh] object-contain rounded-2xl shadow-[0_0_30px_rgba(16,185,129,0.3)] border border-white/10 bg-black cursor-pointer" onClick={() => setGlobalPreview(null)} />
-                            <div className="mt-4 flex items-center justify-center gap-3 flex-wrap">
-                                <div className="flex items-center gap-2 text-[#10b981] text-[11px] font-black uppercase tracking-[0.15em] bg-[#141414] px-4 py-2 rounded-full border border-[#10b981]/30 shadow-md">
-                                    <i className="fas fa-check-circle"></i> ẢNH KẾT QUẢ SẢN XUẤT CHÍNH XÁC
-                                </div>
+                        <div className="relative max-w-2xl w-full flex flex-col items-center animate-slide-up my-auto" onClick={e => e.stopPropagation()}>
+                            <img src={globalPreview} alt="Ảnh nghiệm thu" className="w-full h-auto max-h-[80vh] object-contain rounded-2xl shadow-2xl border border-white/10 bg-black cursor-pointer" onClick={() => setGlobalPreview(null)} />
+                            <div className="mt-4 flex items-center gap-3">
+                                <span className="text-emerald-400 text-xs font-black uppercase tracking-wider bg-black/80 px-4 py-2 rounded-full border border-emerald-500/30">
+                                    <i className="fas fa-circle-check mr-1.5"></i> Ảnh Nghiệm Thu Sắc Nét
+                                </span>
                                 <button
                                     onClick={() => setGlobalPreview(null)}
-                                    className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-black text-[11px] uppercase tracking-wider rounded-full shadow-lg flex items-center gap-1.5 active:scale-95 transition-all"
+                                    className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs uppercase rounded-full shadow-lg active:scale-95 transition-all"
                                 >
-                                    <i className="fas fa-times"></i> ĐÓNG LẠI
+                                    Đóng Lại
                                 </button>
                             </div>
                         </div>
                     </div>
                 )}
 
+                {/* MODAL TẠO LỆNH SXT */}
                 {showAddSXTModal && (() => {
                     const AddModalComp = window.AddModal || (typeof AddModal !== 'undefined' ? AddModal : null);
-                    if (!AddModalComp) {
-                        console.warn('AddModal chưa sẵn sàng');
-                        return null;
-                    }
+                    if (!AddModalComp) return null;
                     return (
                         <AddModalComp
                             onClose={() => {
@@ -5922,29 +5956,34 @@
                     );
                 })()}
 
+                {/* MODAL CHỈNH SỬA LỆNH SẢN XUẤT */}
                 {editingProdItem && (
                     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm animate-fade-in" onClick={() => setEditingProdItem(null)}>
-                        <div className="bg-[#141414] border border-[#333] w-full max-w-sm rounded-[24px] p-5 shadow-2xl flex flex-col relative animate-slide-up" onClick={e => e.stopPropagation()}>
-                            <button onClick={() => setEditingProdItem(null)} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-[#222] text-gray-400 hover:text-rose-500 flex items-center justify-center transition-all z-20"><i className="fas fa-times text-sm"></i></button>
-                            <h3 className="text-white font-black text-[16px] uppercase tracking-widest mb-4 flex items-center gap-2"><i className="fas fa-edit text-[#d4af37]"></i> CHỈNH SỬA LỆNH</h3>
+                        <div className="bg-[#121214] border border-white/[0.08] w-full max-w-sm rounded-2xl p-5 shadow-2xl flex flex-col relative animate-slide-up" onClick={e => e.stopPropagation()}>
+                            <button onClick={() => setEditingProdItem(null)} className="absolute top-4 right-4 w-8 h-8 rounded-xl bg-white/[0.04] text-zinc-400 hover:text-white flex items-center justify-center transition-all">
+                                <i className="fas fa-times text-xs"></i>
+                            </button>
+                            <h3 className="text-white font-black text-sm uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <i className="fas fa-edit text-[#d4af37]"></i> CHỈNH SỬA LỆNH
+                            </h3>
 
-                            <div className="space-y-4">
+                            <div className="space-y-3.5">
                                 <div>
-                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1.5">Ghi chú Lệnh</label>
+                                    <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1">Ghi Chú</label>
                                     <textarea
                                         value={editingProdItem.note || ''}
                                         onChange={e => setEditingProdItem({ ...editingProdItem, note: e.target.value })}
-                                        className="w-full bg-[#0a0a0a] border border-[#333] rounded-xl p-3 text-[12px] font-bold text-white outline-none focus:border-[#d4af37] min-h-[80px]"
-                                        placeholder="Nhập ghi chú hoặc cảnh báo cho thợ..."
+                                        className="w-full bg-[#09090b] border border-white/[0.06] rounded-xl p-2.5 text-xs text-white outline-none focus:border-[#d4af37]/60 min-h-[70px] resize-none"
+                                        placeholder="Nhập ghi chú kỹ thuật..."
                                     ></textarea>
                                 </div>
 
                                 <div>
-                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1.5">Giao đích danh (Bỏ trống = Ai cũng nhận được)</label>
+                                    <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1">Giao Đích Danh</label>
                                     <select
                                         value={editingProdItem.assignee || ''}
                                         onChange={e => setEditingProdItem({ ...editingProdItem, assignee: e.target.value })}
-                                        className="w-full bg-[#0a0a0a] border border-[#333] rounded-xl px-3 py-3 text-[12px] font-bold text-[#d4af37] outline-none focus:border-[#d4af37]"
+                                        className="w-full bg-[#09090b] border border-white/[0.06] rounded-xl px-2.5 py-2 text-xs font-bold text-[#d4af37] outline-none focus:border-[#d4af37]/60 cursor-pointer"
                                     >
                                         <option value="">-- KHÔNG GIAO ĐÍCH DANH --</option>
                                         {(Array.from(new Set([
@@ -5957,23 +5996,22 @@
                                 </div>
 
                                 <div>
-                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1.5">Hạn bàn giao</label>
+                                    <label className="text-[10px] font-mono font-bold text-zinc-400 uppercase block mb-1">Hạn Bàn Giao</label>
                                     <input
                                         type="datetime-local"
                                         value={editingProdItem.deadline ? String(editingProdItem.deadline).replace(' ', 'T').substring(0, 16) : ''}
                                         onChange={e => setEditingProdItem({ ...editingProdItem, deadline: e.target.value })}
-                                        className="w-full bg-[#0a0a0a] border border-[#333] rounded-xl px-3 py-3 text-[12px] font-bold text-white outline-none focus:border-[#d4af37]"
+                                        className="w-full bg-[#09090b] border border-white/[0.06] rounded-xl px-2.5 py-2 text-xs font-mono text-white outline-none focus:border-[#d4af37]/60"
                                     />
                                 </div>
                             </div>
 
                             <button
                                 onClick={() => {
-                                    const upd = { ...editingProdItem };
-                                    pushDeltas({ prodItems: [upd] }, 'Đã lưu thay đổi', 'fa-save');
+                                    pushDeltas({ prodItems: [editingProdItem] }, 'Đã lưu thay đổi', 'fa-save');
                                     setEditingProdItem(null);
                                 }}
-                                className="w-full mt-6 py-3.5 bg-[#d4af37] hover:bg-yellow-500 text-black font-black rounded-xl text-[12px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
+                                className="w-full mt-5 py-2.5 bg-[#d4af37] hover:bg-yellow-400 text-black font-black rounded-xl text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
                             >
                                 <i className="fas fa-check-circle"></i> LƯU THAY ĐỔI
                             </button>

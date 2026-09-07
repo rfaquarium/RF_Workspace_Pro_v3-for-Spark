@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-07T17:05:11.092Z",
+  "generatedAt": "2026-09-07T17:14:15.797Z",
   "coreFiles": [
     "Config.html",
     "Components.html",
@@ -32,7 +32,7 @@
     "Tab_Dashboard.html": "9bf5ef952d831b595ff18028650eba193813e893d7b90ef908c8ad25c1c23b9b",
     "Tab_Orders.html": "625a9a1f8eaa8fde9e9f4d9d83841f26f1ebe17b30b658c37b0b69efeaf57456",
     "App_Main.html": "7e346adb9033f17bb16973a43dcbada3855b02a50f8839a32aa03b9727d97c2b",
-    "Tab_Production.html": "543bb6c0c31156d40d16c5a554c16027b5b3ca275f12e96dabcd7695adb8c7c7",
+    "Tab_Production.html": "95c1fc8329d99071f339729cf60d1bd7ebbb008dfd95a151b0124c45df5e0c36",
     "Tab_Inventory.html": "5e52f36a81e370e54eae115b5042d2358ceeb981d1b27920f6ccda92297cde3d",
     "Tab_ImportExport.html": "c3a86f8b7a35bc3bd3d590e384f88738592d2b7143789856e05d80b170c310e5",
     "Tab_Suppliers.html": "8b9afb55999fa69239b1061c16b192a2236bdb1171e50ad6088b78c9a117bd3d",
@@ -48,6 +48,6 @@
   },
   "bundleHashes": {
     "Compiled_Core.html": "31cdeb41adff21e81bba2d4697a945c6881b0905853459f3f1ef395772d4f721",
-    "Compiled_Deferred.html": "393fff03ffb14aecb4bee55fd11d5e3d5b517c363e25f98d4076cf12c616e7d9"
+    "Compiled_Deferred.html": "1c6356af0341c4ca1b7485ac9427e4efc30afe1e6f8f9b566232ccefe1895f27"
   }
 }
