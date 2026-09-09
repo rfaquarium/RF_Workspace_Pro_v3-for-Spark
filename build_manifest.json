@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-09T00:23:51.416Z",
+  "generatedAt": "2026-09-09T16:11:18.941Z",
   "coreFiles": [
     "Config.html",
     "Components.html",
@@ -31,7 +31,7 @@
     "Modals_Orders.html": "a049798aeec702035674679da72e9380b76a89c3a625130e896e8f6c3425cf12",
     "Tab_Dashboard.html": "f85503f41f7fa833df8ff3c678f0c8777ebd5cafd0327e706d88887335045125",
     "Tab_Orders.html": "a4412df8a6efdae456d6250cd344b1bf45a3994464161a3a8c232409d6152e53",
-    "App_Main.html": "c5df71426ef9173a467d3b13c6b67c632fa5a3aa6a78f452dd72587efdf695b3",
+    "App_Main.html": "83b64c89077fd06a64df95ac42b1551e307008c0e8e3f021ef83e05f11c3a194",
     "Tab_Production.html": "55cdc1ca85d689a3fc9b826ccd1e648d94b4554be8b2c3f7298d8ba35d6ba4b5",
     "Tab_Inventory.html": "6aeed1113be370529496edbfa5c3b9371beb94c0ce1f6f5cbc7f18b0e0659925",
     "Tab_ImportExport.html": "7a03519cb12d6e32c0a56fff24dcd1cb716471acc3fad8096af2c050fc054f48",
@@ -47,7 +47,7 @@
     "ShopeeGlobalTab.html": "d931cbc6779f93c4e8584548bc0b20adef711a6d8face1b2ad73147332b334d0"
   },
   "bundleHashes": {
-    "Compiled_Core.html": "7375a16440b0642b1d03b85b0b7234ee8977aae8002fd692d296ff05d1a474df",
+    "Compiled_Core.html": "fd55db69a8d3e20b4907980c696ccf1a00681da15c5d084425a90057b2a61254",
     "Compiled_Deferred.html": "448f011b015b60c992c575a2e6e543a056c3cf58f8bfbcecd95f3d005c32418e"
   }
 }

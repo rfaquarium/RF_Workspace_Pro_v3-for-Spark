@@ -35,25 +35,57 @@
               1: 'var(--bg-surface-1)',
               2: 'var(--bg-surface-2)'
             },
+            /* --- PALETTE PASTEL TRUNG TÍNH (ZERO NEON) & ALIASES --- */
+            sage: {
+              300: '#a5c4a9',
+              400: '#88ab8e',
+              500: '#75997b',
+              600: '#5e8064'
+            },
+            sand: {
+              300: '#e8d8c8',
+              400: '#d8c4b6',
+              500: '#c5b0a1',
+              600: '#ab9687'
+            },
+            terracotta: {
+              300: '#d49d8b',
+              400: '#c88a75',
+              500: '#b57662',
+              600: '#9d614f'
+            },
+            mauve: {
+              300: '#b8a2b0',
+              400: '#a88e9f',
+              500: '#93788a',
+              600: '#7c6273'
+            },
+            slate: {
+              300: '#9cb1c2',
+              400: '#8294a5',
+              500: '#6d7f90',
+              600: '#556575'
+            },
+            /* Aliases tương thích ngược mượt mà không vỡ class cũ */
             teal: {
-              400: '#2E9599',
-              500: '#2E9599',
-              600: '#237377'
+              400: '#88ab8e',
+              500: '#88ab8e',
+              600: '#75997b'
             },
             yellow: {
-              400: '#F7DC68',
-              500: '#F7DC68',
-              600: '#d1b849'
+              400: '#d8c4b6',
+              500: '#d8c4b6',
+              600: '#c5b0a1'
             },
             orange: {
-              400: '#F46C3F',
-              500: '#F46C3F',
-              600: '#cf5228'
+              400: '#c88a75',
+              500: '#c88a75',
+              600: '#b57662'
             },
             berry: {
-              400: '#A7226F',
-              500: '#A7226F',
-              600: '#861957'
+              400: '#a88e9f',
+              500: '#a88e9f',
+              600: '#93788a'
             },
             border: {
               hairline: 'var(--border-hairline)'
@@ -188,19 +220,32 @@
   </script>
   <style>
     /* =========================================================================
-       🎨 FOUR SEASONS PALETTE & PLUS JAKARTA SANS
-       Palette: #2E9599 (Teal) · #F7DC68 (Yellow) · #F46C3F (Orange) · #A7226F (Berry)
+       🌿 NEUTRAL PASTEL PALETTE & FROSTED GLASS (GLASSMORPHISM)
+       Palette: #88AB8E (Sage) · #D8C4B6 (Warm Sand) · #C88A75 (Terracotta) · #A88E9F (Mauve)
+       Canvas & Surfaces: Deep Charcoal Acrylic with Backdrop Blur (No Neon)
        ========================================================================= */
 
     :root {
-      --bg-canvas: #18191d;
-      --bg-surface-1: #202228;
-      --bg-surface-2: #282b33;
+      --bg-canvas: #12141a;
+      --bg-surface-1: rgba(24, 27, 35, 0.72);
+      --bg-surface-2: rgba(30, 34, 44, 0.78);
+      --bg-glass-card: rgba(24, 27, 35, 0.72);
+      --bg-glass-modal: rgba(18, 20, 26, 0.86);
       --border-hairline: rgba(255, 255, 255, 0.08);
-      --color-teal: #2E9599;
-      --color-yellow: #F7DC68;
-      --color-orange: #F46C3F;
-      --color-berry: #A7226F;
+      --border-glass-shine: rgba(255, 255, 255, 0.12);
+      
+      /* Neutral Pastel Accent Tokens */
+      --color-sage: #88ab8e;
+      --color-sand: #d8c4b6;
+      --color-terracotta: #c88a75;
+      --color-mauve: #a88e9f;
+      --color-slate: #8294a5;
+
+      /* Aliases ánh xạ sang Pastel dịu mắt */
+      --color-teal: #88ab8e;
+      --color-yellow: #d8c4b6;
+      --color-orange: #c88a75;
+      --color-berry: #a88e9f;
     }
 
     /* --- BASE RESET & MOBILE SCREEN LOCK (100DVH + SAFE AREA INSETS) --- */
@@ -213,7 +258,11 @@
       padding: 0;
       padding-bottom: env(safe-area-inset-bottom, 0px);
       background-color: var(--bg-canvas);
-      color: #fafafa;
+      background-image: 
+        radial-gradient(at 15% 15%, rgba(136, 171, 142, 0.04) 0px, transparent 50%),
+        radial-gradient(at 85% 85%, rgba(200, 138, 117, 0.03) 0px, transparent 50%);
+      background-attachment: fixed;
+      color: #edeef2;
       font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
       text-rendering: optimizeLegibility;
       -webkit-font-smoothing: antialiased;
@@ -223,86 +272,107 @@
       touch-action: pan-y pinch-zoom;
     }
 
-    /* --- MATTE FOUR SEASONS CARDS & PANELS --- */
+    /* --- FROSTED GLASS ACRYLIC CARDS & PANELS --- */
     .vision-card,
-    .spatial-glass {
-      background: #202228 !important;
-      border: 1px solid rgba(255, 255, 255, 0.04) !important;
+    .spatial-glass,
+    .hm-card,
+    .rf-card {
+      background: var(--bg-glass-card) !important;
+      backdrop-filter: blur(20px) saturate(135%) !important;
+      -webkit-backdrop-filter: blur(20px) saturate(135%) !important;
+      border: 1px solid var(--border-hairline) !important;
       border-radius: 1.25rem !important; /* 20px */
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35), inset 0 1px 0 0 rgba(255, 255, 255, 0.06) !important;
+      transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
     }
 
     .spatial-glass-interactive {
-      background: #202228;
-      border: none;
+      background: rgba(28, 32, 42, 0.65);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: 1rem;
-      transition: all 0.2s ease-out;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
     .spatial-glass-interactive:hover {
-      background: #282b33;
-      transform: translateY(-1px);
+      background: rgba(36, 42, 54, 0.75);
+      border-color: rgba(255, 255, 255, 0.12);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
     }
 
-    /* Floating Matte Bottom Dock */
+    /* Floating Frosted Bottom Dock */
     .vision-dock {
-      background: #202228 !important;
-      border: 1px solid rgba(255, 255, 255, 0.06) !important;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+      background: rgba(18, 20, 27, 0.82) !important;
+      backdrop-filter: blur(24px) saturate(150%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(150%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.1) !important;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.12) !important;
       border-radius: 9999px !important;
     }
 
-    /* FOUR SEASONS STATUS PILLS */
+    /* --- TINTED FROSTED STATUS PILLS (NEUTRAL PASTEL, ZERO NEON) --- */
     .pill-ongoing,
     .pill-orange {
-      background: #F46C3F !important;
-      color: #ffffff !important;
-      font-weight: 700 !important;
+      background: rgba(200, 138, 117, 0.18) !important;
+      color: #e5ab99 !important;
+      border: 1px solid rgba(200, 138, 117, 0.35) !important;
+      backdrop-filter: blur(8px) !important;
+      -webkit-backdrop-filter: blur(8px) !important;
+      font-weight: 600 !important;
       font-size: 11px !important;
       padding: 3px 10px !important;
       border-radius: 9999px !important;
-      border: none !important;
       box-shadow: none !important;
     }
     .pill-complete,
     .pill-teal {
-      background: #2E9599 !important;
-      color: #ffffff !important;
-      font-weight: 700 !important;
+      background: rgba(136, 171, 142, 0.18) !important;
+      color: #aed1b4 !important;
+      border: 1px solid rgba(136, 171, 142, 0.35) !important;
+      backdrop-filter: blur(8px) !important;
+      -webkit-backdrop-filter: blur(8px) !important;
+      font-weight: 600 !important;
       font-size: 11px !important;
       padding: 3px 10px !important;
       border-radius: 9999px !important;
-      border: none !important;
       box-shadow: none !important;
     }
     .pill-yellow {
-      background: #F7DC68 !important;
-      color: #1e2026 !important;
-      font-weight: 700 !important;
+      background: rgba(216, 196, 182, 0.18) !important;
+      color: #ebe0d6 !important;
+      border: 1px solid rgba(216, 196, 182, 0.35) !important;
+      backdrop-filter: blur(8px) !important;
+      -webkit-backdrop-filter: blur(8px) !important;
+      font-weight: 600 !important;
       font-size: 11px !important;
       padding: 3px 10px !important;
       border-radius: 9999px !important;
-      border: none !important;
       box-shadow: none !important;
     }
     .pill-berry,
     .pill-danger {
-      background: #A7226F !important;
-      color: #ffffff !important;
-      font-weight: 700 !important;
+      background: rgba(168, 142, 159, 0.18) !important;
+      color: #cdb9c6 !important;
+      border: 1px solid rgba(168, 142, 159, 0.35) !important;
+      backdrop-filter: blur(8px) !important;
+      -webkit-backdrop-filter: blur(8px) !important;
+      font-weight: 600 !important;
       font-size: 11px !important;
       padding: 3px 10px !important;
       border-radius: 9999px !important;
-      border: none !important;
       box-shadow: none !important;
     }
     .pill-cream {
-      background: #FAE0C7 !important;
-      color: #26201b !important;
-      font-weight: 700 !important;
+      background: rgba(222, 203, 183, 0.16) !important;
+      color: #ded0c3 !important;
+      border: 1px solid rgba(222, 203, 183, 0.3) !important;
+      backdrop-filter: blur(8px) !important;
+      -webkit-backdrop-filter: blur(8px) !important;
+      font-weight: 600 !important;
       font-size: 11px !important;
       padding: 3px 10px !important;
       border-radius: 9999px !important;
-      border: none !important;
       box-shadow: none !important;
     }
 

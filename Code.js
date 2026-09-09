@@ -14129,4 +14129,182 @@ function api_applyAiQcResult(productionId, updatePayload) {
   }
 }
 
+// =========================================================================
+// 🤖 AI AGENT DEFENSIVE RESPONSE PARSER & SMART AUTOFILL ENGINE
+// =========================================================================
+
+/**
+ * Lấy cấu hình OmniRoute Gateway từ Script Properties
+ */
+function getOmniRouteConfig() {
+  var props = PropertiesService.getScriptProperties();
+  return {
+    GATEWAY_URL: props.getProperty("OMNIROUTE_URL") || "http://localhost:20128/v1/chat/completions",
+    API_KEY: props.getProperty("OMNIROUTE_API_KEY") || "",
+    MODEL: props.getProperty("OMNIROUTE_MODEL") || "groq/openai/gpt-oss-120b"
+  };
+}
+
+/**
+ * Bóc tách và parse an toàn kết quả JSON từ AI Agent
+ * Phòng thủ triệt để: loại bỏ markdown ```json ... ```, tìm { ... } hoặc [ ... ], trả về fallback an toàn không làm sập luồng.
+ * @param {string} rawText - Chuỗi phản hồi thô từ AI
+ * @param {Object} fallbackData - Dữ liệu mặc định nếu parse thất bại
+ * @return {Object} Object JSON hợp lệ hoặc Fallback Object
+ */
+function safeParseAIResponse(rawText, fallbackData) {
+  var fallback = fallbackData || { isParsed: false, rawContent: String(rawText || "") };
+
+  if (!rawText || typeof rawText !== "string") {
+    Logger.log("⚠️ safeParseAIResponse: Đầu vào rỗng hoặc không phải string.");
+    return fallback;
+  }
+
+  var cleanText = rawText.trim();
+
+  // 1. Loại bỏ markdown code fences: ```json ... ``` hoặc ``` ... ```
+  var codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/i;
+  var match = codeBlockRegex.exec(cleanText);
+  if (match && match[1]) {
+    cleanText = match[1].trim();
+  }
+
+  // 2. Dò tìm cặp dấu ngoặc bao ngoài { ... } hoặc [ ... ]
+  var firstBrace = cleanText.indexOf("{");
+  var lastBrace = cleanText.lastIndexOf("}");
+  var firstBracket = cleanText.indexOf("[");
+  var lastBracket = cleanText.lastIndexOf("]");
+
+  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+    cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+  } else if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+    cleanText = cleanText.substring(firstBracket, lastBracket + 1);
+  }
+
+  // 3. Tiến hành Parse phòng thủ
+  try {
+    var parsed = JSON.parse(cleanText);
+    return parsed;
+  } catch (error) {
+    Logger.log("❌ Lỗi JSON.parse AI Response: " + error.message + " | Chuỗi thô: " + rawText);
+    return Object.assign({}, fallback, {
+      isParsed: false,
+      rawContent: rawText,
+      parseError: error.message
+    });
+  }
+}
+
+/**
+ * Endpoint xử lý yêu cầu phân tích & tự động tính toán điền form từ Frontend
+ * @param {Object} requestPayload - { orderName, dimensions, currentFormData }
+ * @return {Object} { success: boolean, autoFillData: Object, message: string }
+ */
+function apiAISmartFormAutofill(requestPayload) {
+  try {
+    var config = getOmniRouteConfig();
+    var compressedInventory = getCompressedMaterialContext();
+
+    var systemPrompt = "Bạn là Trợ Lý Kỹ Thuật Dự Toán của Rich Fish Aquarium (xưởng sản xuất bể cá thủy sinh & layout).\n" +
+      "Nhiệm vụ của bạn là nhận thông tin quy cách sản phẩm/kích thước bể và:\n" +
+      "1. Tự động tính toán định mức vật tư:\n" +
+      "   - Thể tích bể: V = (L * W * H) / 1000 (Lít).\n" +
+      "   - Lượng keo silicone dán bể: (L*2 + W*2 + H*4) * 0.45 ml (ước lượng theo chu vi đường dán).\n" +
+      "   - Diện tích kính 5 mặt: S = (L*W + 2*L*H + 2*W*H) * 1.1 / 10000 (m², đã tính 10% hao hụt).\n" +
+      "2. Trả về cấu trúc JSON thuần túy (không bọc mã markdown) khớp chính xác với ID DOM form:\n" +
+      "{\n" +
+      "  \"autoFillData\": {\n" +
+      "    \"product_name\": \"Tên sản phẩm chuẩn hóa\",\n" +
+      "    \"glass_area_m2\": 0.00,\n" +
+      "    \"glue_volume_ml\": 0,\n" +
+      "    \"estimated_cogs\": 0,\n" +
+      "    \"production_note\": \"Ghi chú kỹ thuật cho thợ\",\n" +
+      "    \"stock_warning\": \"Cảnh báo vật tư nếu thiếu, hoặc để trống\"\n" +
+      "  },\n" +
+      "  \"summary\": \"Tóm tắt ngắn gọn lý do tính toán (1 câu)\"\n" +
+      "}";
+
+    var userPrompt = "Yêu cầu dự toán và điền thông số:\n" +
+      "- Tên/Quy cách nhập vào: \"" + (requestPayload.orderName || "") + "\"\n" +
+      "- Kích thước (DxRxC cm): \"" + (requestPayload.dimensions || "Tự bóc tách từ tên") + "\"\n" +
+      "- Dữ liệu kho vật tư hiện hành: " + JSON.stringify(compressedInventory);
+
+    var payload = {
+      model: config.MODEL || "groq/openai/gpt-oss-120b",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: 0.1
+    };
+
+    var options = {
+      method: "post",
+      contentType: "application/json",
+      headers: { "Authorization": "Bearer " + config.API_KEY },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+
+    var response = UrlFetchApp.fetch(config.GATEWAY_URL, options);
+    var responseBody = response.getContentText();
+
+    if (response.getResponseCode() !== 200) {
+      throw new Error("Gateway Error (" + response.getResponseCode() + "): " + responseBody);
+    }
+
+    var parsedData = safeParseAIResponse(responseBody, {
+      autoFillData: {},
+      summary: "Không thể phân tích kết quả"
+    });
+
+    return {
+      success: true,
+      autoFillData: parsedData.autoFillData || {},
+      summary: parsedData.summary || "Đã dự toán xong thông số."
+    };
+  } catch (error) {
+    Logger.log("❌ Lỗi apiAISmartFormAutofill: " + error.toString());
+    return {
+      success: false,
+      autoFillData: {},
+      message: "Lỗi xử lý AI: " + error.message
+    };
+  }
+}
+
+/**
+ * Nén dữ liệu bảng Products thành mảng tinh gọn tiết kiệm token
+ */
+function getCompressedMaterialContext() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var prodSheet = ss.getSheetByName("Products");
+  if (!prodSheet) return [];
+
+  var values = prodSheet.getDataRange().getValues();
+  if (values.length <= 1) return [];
+
+  var headers = values[0];
+  var colSku = headers.indexOf("sku");
+  var colName = headers.indexOf("name");
+  var colUnit = headers.indexOf("unit");
+  var colQty = headers.indexOf("quantity");
+  var colCat = headers.indexOf("category");
+
+  var compactList = [];
+  for (var i = 1; i < values.length; i++) {
+    var row = values[i];
+    var cat = String(row[colCat] || "").toLowerCase();
+    if (cat.indexOf("kính") !== -1 || cat.indexOf("keo") !== -1 || cat.indexOf("vật tư") !== -1 || cat.indexOf("sản xuất") !== -1) {
+      compactList.push({
+        s: row[colSku],
+        n: row[colName],
+        u: row[colUnit],
+        q: row[colQty]
+      });
+    }
+  }
+  return compactList.slice(0, 30);
+}
+
 // Cache buster: 1788366000000

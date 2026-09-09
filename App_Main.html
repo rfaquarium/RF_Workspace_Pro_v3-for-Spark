@@ -43,6 +43,133 @@
         }
     };
 
+    // HÀM PARSE PHÒNG THỦ KẾT QUẢ AI AGENT (LOẠI BỎ MARKDOWN ```JSON VÀ DỰ PHÒNG AN TOÀN)
+    window.safeParseAIResponse = function (rawText, defaultSchema) {
+        var fallback = defaultSchema || { success: false, raw: String(rawText || '') };
+        if (!rawText || typeof rawText !== 'string') return fallback;
+
+        var text = rawText.trim();
+        // 1. Loại bỏ các khối markdown ```json ... ```
+        var markdownRegex = /```(?:json)?\s*([\s\S]*?)\s*```/i;
+        var match = markdownRegex.exec(text);
+        if (match && match[1]) {
+            text = match[1].trim();
+        }
+
+        // 2. Tìm điểm đầu và cuối của JSON object hoặc array
+        var firstBrace = text.indexOf('{');
+        var lastBrace = text.lastIndexOf('}');
+        var firstBracket = text.indexOf('[');
+        var lastBracket = text.lastIndexOf(']');
+
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+            text = text.slice(firstBrace, lastBrace + 1);
+        } else if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+            text = text.slice(firstBracket, lastBracket + 1);
+        }
+
+        try {
+            var parsed = JSON.parse(text);
+            if (defaultSchema && typeof defaultSchema === 'object' && !Array.isArray(defaultSchema)) {
+                return Object.assign({}, defaultSchema, parsed, { success: true });
+            }
+            return Object.assign({ success: true }, parsed);
+        } catch (err) {
+            console.warn('⚠️ safeParseAIResponse fallback activated:', err.message, rawText);
+            return Object.assign({}, fallback, {
+                success: false,
+                raw: rawText,
+                errorMsg: err.message
+            });
+        }
+    };
+
+    // CONTROLLER TỰ ĐỘNG ĐIỀN THÔNG SỐ VÀ DỰ TOÁN BẰNG AI (TWO-WAY VALIDATION)
+    window.triggerAISmartAutofill = async function (orderName, onProgress) {
+        if (!orderName || !orderName.trim()) {
+            if (typeof window.showToast === 'function') window.showToast('Vui lòng nhập tên hoặc quy cách sản phẩm!', 'warning');
+            return;
+        }
+
+        if (typeof onProgress === 'function') onProgress(true);
+
+        try {
+            var result = await new Promise(function (resolve, reject) {
+                if (typeof google !== 'undefined' && google.script && google.script.run) {
+                    google.script.run
+                        .withSuccessHandler(resolve)
+                        .withFailureHandler(reject)
+                        .apiAISmartFormAutofill({ orderName: orderName.trim() });
+                } else {
+                    // Môi trường Dev/Simulation
+                    setTimeout(function () {
+                        resolve({
+                            success: true,
+                            autoFillData: {
+                                product_name: orderName.trim(),
+                                glass_area_m2: 0.35,
+                                glue_volume_ml: 45,
+                                production_note: 'Tự động tính từ quy cách'
+                            },
+                            summary: 'Dự toán mô phỏng thành công.'
+                        });
+                    }, 500);
+                }
+            });
+
+            if (!result || !result.success || !result.autoFillData) {
+                throw new Error(result ? result.message : 'Không nhận được dữ liệu tự điền hợp lệ.');
+            }
+
+            var autoFillData = result.autoFillData;
+            var appliedCount = 0;
+            var missingElements = [];
+
+            Object.keys(autoFillData).forEach(function (elementId) {
+                var el = document.getElementById(elementId);
+                var val = autoFillData[elementId];
+
+                if (el && val !== undefined && val !== null) {
+                    if ('value' in el) {
+                        var nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+                            window.HTMLInputElement.prototype,
+                            'value'
+                        );
+                        if (nativeInputValueSetter && nativeInputValueSetter.set && (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) {
+                            nativeInputValueSetter.set.call(el, val);
+                        } else {
+                            el.value = val;
+                        }
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    } else {
+                        el.innerText = String(val);
+                    }
+
+                    el.classList.add('ring-2', 'ring-emerald-400/50', 'transition-all', 'duration-500');
+                    setTimeout(function () {
+                        el.classList.remove('ring-2', 'ring-emerald-400/50');
+                    }, 1500);
+
+                    appliedCount++;
+                } else {
+                    missingElements.push(elementId);
+                }
+            });
+
+            if (typeof window.showToast === 'function') {
+                window.showToast('Đã tự động tính và điền ' + appliedCount + ' thông số!', 'success');
+            }
+        } catch (err) {
+            console.error('❌ Lỗi triggerAISmartAutofill:', err);
+            if (typeof window.showToast === 'function') {
+                window.showToast('Lỗi tự điền AI: ' + err.message, 'error');
+            }
+        } finally {
+            if (typeof onProgress === 'function') onProgress(false);
+        }
+    };
+
     // KHAI BÁO HÀM ĐỒNG BỘ DỮ LIỆU TỪ SERVER (APP SCRIPT) XUỐNG CLIENT
     window.runGAS = function (serverFunctionName, ...args) {
         return new Promise((resolve, reject) => {
