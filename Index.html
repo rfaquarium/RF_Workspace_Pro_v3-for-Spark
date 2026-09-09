@@ -272,7 +272,7 @@
       touch-action: pan-y pinch-zoom;
     }
 
-    /* --- FROSTED GLASS ACRYLIC CARDS & PANELS --- */
+    /* --- FROSTED GLASS ACRYLIC CARDS & PANELS (GPU OPTIMIZED) --- */
     .vision-card,
     .spatial-glass,
     .hm-card,
@@ -284,6 +284,8 @@
       border-radius: 1.25rem !important; /* 20px */
       box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35), inset 0 1px 0 0 rgba(255, 255, 255, 0.06) !important;
       transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+      transform: translateZ(0); /* Kích hoạt tăng tốc phần cứng GPU, chống drop FPS khi cuộn */
+      will-change: transform;
     }
 
     .spatial-glass-interactive {
@@ -293,6 +295,7 @@
       border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: 1rem;
       transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      transform: translateZ(0);
     }
     .spatial-glass-interactive:hover {
       background: rgba(36, 42, 54, 0.75);
@@ -309,71 +312,94 @@
       border: 1px solid rgba(255, 255, 255, 0.1) !important;
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.12) !important;
       border-radius: 9999px !important;
+      transform: translateZ(0);
     }
 
-    /* --- TINTED FROSTED STATUS PILLS (NEUTRAL PASTEL, ZERO NEON) --- */
+    /* --- TINTED FROSTED STATUS PILLS (WCAG AA HIGH CONTRAST CHO ÁNH ĐÈN XƯỞNG) --- */
     .pill-ongoing,
     .pill-orange {
-      background: rgba(200, 138, 117, 0.18) !important;
-      color: #e5ab99 !important;
-      border: 1px solid rgba(200, 138, 117, 0.35) !important;
+      background: rgba(200, 138, 117, 0.24) !important;
+      color: #ffd2c4 !important; /* Tăng sáng rõ nét, tương phản > 7:1 */
+      border: 1px solid rgba(200, 138, 117, 0.45) !important;
       backdrop-filter: blur(8px) !important;
       -webkit-backdrop-filter: blur(8px) !important;
-      font-weight: 600 !important;
+      font-weight: 700 !important;
       font-size: 11px !important;
       padding: 3px 10px !important;
       border-radius: 9999px !important;
       box-shadow: none !important;
+      letter-spacing: 0.02em;
     }
     .pill-complete,
     .pill-teal {
-      background: rgba(136, 171, 142, 0.18) !important;
-      color: #aed1b4 !important;
-      border: 1px solid rgba(136, 171, 142, 0.35) !important;
+      background: rgba(136, 171, 142, 0.24) !important;
+      color: #c4f0cb !important;
+      border: 1px solid rgba(136, 171, 142, 0.45) !important;
       backdrop-filter: blur(8px) !important;
       -webkit-backdrop-filter: blur(8px) !important;
-      font-weight: 600 !important;
+      font-weight: 700 !important;
       font-size: 11px !important;
       padding: 3px 10px !important;
       border-radius: 9999px !important;
       box-shadow: none !important;
+      letter-spacing: 0.02em;
     }
     .pill-yellow {
-      background: rgba(216, 196, 182, 0.18) !important;
-      color: #ebe0d6 !important;
-      border: 1px solid rgba(216, 196, 182, 0.35) !important;
+      background: rgba(216, 196, 182, 0.26) !important;
+      color: #ffffff !important; /* Chuẩn trắng tinh khiết trên nền cát ấm, chống mờ dưới đèn huỳnh quang */
+      border: 1px solid rgba(216, 196, 182, 0.52) !important;
       backdrop-filter: blur(8px) !important;
       -webkit-backdrop-filter: blur(8px) !important;
-      font-weight: 600 !important;
+      font-weight: 700 !important;
       font-size: 11px !important;
       padding: 3px 10px !important;
       border-radius: 9999px !important;
       box-shadow: none !important;
+      letter-spacing: 0.02em;
     }
     .pill-berry,
     .pill-danger {
-      background: rgba(168, 142, 159, 0.18) !important;
-      color: #cdb9c6 !important;
-      border: 1px solid rgba(168, 142, 159, 0.35) !important;
+      background: rgba(168, 142, 159, 0.24) !important;
+      color: #f0def0 !important;
+      border: 1px solid rgba(168, 142, 159, 0.45) !important;
       backdrop-filter: blur(8px) !important;
       -webkit-backdrop-filter: blur(8px) !important;
-      font-weight: 600 !important;
+      font-weight: 700 !important;
       font-size: 11px !important;
       padding: 3px 10px !important;
       border-radius: 9999px !important;
       box-shadow: none !important;
+      letter-spacing: 0.02em;
     }
     .pill-cream {
-      background: rgba(222, 203, 183, 0.16) !important;
-      color: #ded0c3 !important;
-      border: 1px solid rgba(222, 203, 183, 0.3) !important;
+      background: rgba(222, 203, 183, 0.24) !important;
+      color: #ffffff !important;
+      border: 1px solid rgba(222, 203, 183, 0.48) !important;
       backdrop-filter: blur(8px) !important;
       -webkit-backdrop-filter: blur(8px) !important;
-      font-weight: 600 !important;
+      font-weight: 700 !important;
       font-size: 11px !important;
       padding: 3px 10px !important;
       border-radius: 9999px !important;
       box-shadow: none !important;
+      letter-spacing: 0.02em;
+    }
+
+    /* --- MOBILE & LOW-SPEC FACTORY TABLET ADAPTIVE RENDER --- */
+    @media (max-width: 768px) {
+      .vision-card,
+      .spatial-glass,
+      .hm-card,
+      .rf-card {
+        backdrop-filter: blur(12px) saturate(125%) !important;
+        -webkit-backdrop-filter: blur(12px) saturate(125%) !important;
+        background: rgba(22, 25, 32, 0.88) !important; /* Đậm hơn 1 chút để cuộn 60FPS mượt mà */
+      }
+      .vision-dock {
+        backdrop-filter: blur(16px) saturate(135%) !important;
+        -webkit-backdrop-filter: blur(16px) saturate(135%) !important;
+        background: rgba(18, 20, 27, 0.92) !important;
+      }
     }
 
     /* Container chính của ứng dụng (#root và wrapper ngoài cùng) */
