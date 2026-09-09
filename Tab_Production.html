@@ -12,27 +12,27 @@
     const getChannelBadgeInfo = (chan) => {
         const k = String(chan || '').toUpperCase().trim();
         if (k.includes('SHOPEE')) {
-            return { bg: 'bg-orange-500/15', text: 'text-orange-400', border: 'border-orange-500/30', icon: 'fa-shopping-bag' };
+            return { bg: 'bg-[#F46C3F]', text: 'text-white', border: 'border-0', icon: 'fa-shopping-bag' };
         }
         if (k.includes('TIKTOK')) {
-            return { bg: 'bg-pink-500/15', text: 'text-pink-400', border: 'border-pink-500/30', icon: 'fab fa-tiktok' };
+            return { bg: 'bg-[#A7226F]', text: 'text-white', border: 'border-0', icon: 'fab fa-tiktok' };
         }
         if (k.includes('XUẤT KHẨU') || k.includes('EXPORT') || k.includes('QUỐC TẾ')) {
-            return { bg: 'bg-amber-500/15', text: 'text-amber-400', border: 'border-amber-500/30', icon: 'fa-globe-asia' };
+            return { bg: 'bg-[#F7DC68]', text: 'text-zinc-950', border: 'border-0', icon: 'fa-globe-asia' };
         }
         if (k.includes('CỘNG TÁC VIÊN') || k.includes('CTV')) {
-            return { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30', icon: 'fa-users' };
+            return { bg: 'bg-[#2E9599]', text: 'text-white', border: 'border-0', icon: 'fa-users' };
         }
         if (k.includes('BÁN LẺ') || k.includes('OFFLINE') || k.includes('ZALO') || k.includes('FACEBOOK') || k.includes('MESSENGER')) {
-            return { bg: 'bg-sky-500/15', text: 'text-sky-400', border: 'border-sky-500/30', icon: 'fa-store' };
+            return { bg: 'bg-[#282b33]', text: 'text-zinc-200', border: 'border-0', icon: 'fa-store' };
         }
         if (k.includes('SẢN XUẤT TỒN') || k.includes('SẢN XUẤT BÙ KHO') || k.includes('TỒN XƯỞNG')) {
-            return { bg: 'bg-purple-500/15', text: 'text-purple-400', border: 'border-purple-500/30', icon: 'fa-warehouse' };
+            return { bg: 'bg-[#A7226F]', text: 'text-white', border: 'border-0', icon: 'fa-warehouse' };
         }
         if (k.includes('BẢO HÀNH') || k.includes('SỬA CHỮA')) {
-            return { bg: 'bg-rose-500/15', text: 'text-rose-400', border: 'border-rose-500/30', icon: 'fa-tools' };
+            return { bg: 'bg-[#F46C3F]', text: 'text-white', border: 'border-0', icon: 'fa-tools' };
         }
-        return { bg: 'bg-[#d4af37]/15', text: 'text-[#d4af37]', border: 'border-[#d4af37]/30', icon: 'fa-layer-group' };
+        return { bg: 'bg-[#2E9599]', text: 'text-white', border: 'border-0', icon: 'fa-layer-group' };
     };
 
     // Helper so khớp nhân sự thông minh (hỗ trợ cả Tên đầy đủ và Tên gọi ngắn: Trần Duy Tân <-> Tân)
@@ -2591,14 +2591,9 @@
                         {phaseAvatar}
                         <div className="flex flex-col min-w-0">
                             <div className="flex items-center gap-1.5">
-                                <span className={`font-black text-[10px] uppercase tracking-wider flex items-center gap-1 ${isDone
-                                        ? 'text-emerald-400'
-                                        : isInProgress
-                                            ? 'text-blue-400'
-                                            : 'text-zinc-400'
-                                    }`}>
-                                    {isDone && <i className="fas fa-check-circle text-[9px] text-emerald-400"></i>}
-                                    {isInProgress && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>}
+                                <span className="font-bold text-[10.5px] uppercase tracking-wider flex items-center gap-1 text-zinc-300">
+                                    {isDone && <i className="fas fa-check-circle text-[9px] text-[#2E9599]"></i>}
+                                    {isInProgress && <span className="w-1.5 h-1.5 rounded-full bg-[#2E9599] animate-pulse"></span>}
                                     {c.n}
                                 </span>
                             </div>
@@ -2606,7 +2601,7 @@
                                 {isEditingUser ? (
                                     <select
                                         autoFocus
-                                        className="bg-[#141414] text-amber-400 font-bold text-[12px] border border-[#d4af37] rounded outline-none py-0.5 px-1 max-w-[120px]"
+                                        className="bg-[#18191d] text-white font-bold text-[12px] border-0 rounded-lg outline-none py-0.5 px-1 max-w-[120px]"
                                         defaultValue={effectiveUser}
                                         onChange={(e) => {
                                             const newName = e.target.value;
@@ -2645,9 +2640,9 @@
                                     </select>
                                 ) : (
                                     <React.Fragment>
-                                        <span className={`font-black text-[13px] truncate ${isOwner && !isDone && isInProgress ? 'text-amber-300' : (isDone ? 'text-zinc-200' : 'text-zinc-400')}`}>{userName}</span>
+                                        <span className={`font-bold text-[13px] truncate ${isDone ? 'text-zinc-200' : 'text-zinc-400'}`}>{userName}</span>
                                         {isAdmin && !isDone && (
-                                            <button onClick={(e) => { e.stopPropagation(); setIsEditingUser(true); }} className="w-5 h-5 bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded flex items-center justify-center transition-colors" title="Giao thợ / Đổi người làm">
+                                            <button onClick={(e) => { e.stopPropagation(); setIsEditingUser(true); }} className="w-5 h-5 bg-[#18191d] hover:bg-[#282b33] text-zinc-400 hover:text-white rounded-md flex items-center justify-center transition-colors" title="Giao thợ / Đổi người làm">
                                                 <i className="fas fa-pencil-alt text-[8.5px]"></i>
                                             </button>
                                         )}
@@ -2655,12 +2650,12 @@
                                 )}
                             </div>
                             {isDone && completedDurationText && (
-                                <span className="text-[9px] text-zinc-400 font-bold leading-tight flex items-center flex-wrap gap-1 mt-0.5">
-                                    <i className="fas fa-clock text-[8px] text-zinc-500"></i> {completedDurationText}
+                                <span className="text-[9px] text-zinc-500 font-medium leading-tight flex items-center flex-wrap gap-1 mt-0.5">
+                                    <i className="fas fa-clock text-[8px] text-zinc-600"></i> {completedDurationText}
                                     {data.reward_vnd === 0 ? (
-                                        <span className="text-rose-400 font-black ml-1">(Trễ - Cắt Thưởng)</span>
+                                        <span className="text-rose-400 font-bold ml-1">(Trễ - Cắt Thưởng)</span>
                                     ) : (data.reward_vnd > 0 && (
-                                        <span className="text-emerald-400 font-black font-mono ml-0.5">
+                                        <span className="text-zinc-400 font-mono font-bold ml-0.5">
                                             (+{(localStorage.getItem('rf_role') === 'CTV') ? '***' : data.reward_vnd.toLocaleString()}đ {item.status === 'Done' || String(item.status).toUpperCase() === 'ĐÃ XONG' ? 'Đã duyệt' : 'Tạm tính'})
                                         </span>
                                     ))}
@@ -3054,7 +3049,8 @@
         const itemName = String(item.name || prodInfo.name || '').trim();
         const itemNameLower = itemName.toLowerCase();
         const itemTypeUpper = String(item.type || item.category || prodInfo.category || '').toUpperCase();
-        const isGlass = itemTypeUpper.includes('BỂ KÍNH') || itemNameLower.includes('bể kính') || itemNameLower.includes('bể');
+        const isLayout = itemTypeUpper.includes('LAYOUT') || /(layout|rừng|rung|bonsai|cầu vồng|cau vong|đảo bay|dao bay|cuội|cuoi|đá|da|lũa|lua|biotop|cover|tiểu cảnh|tieu canh|vách|vach|hẻm|hem|đảo|dao|nhất trụ|nhat tru|núi|nui|hang|cầu|cau|biotope)/i.test(itemNameLower);
+        const isGlass = !isLayout && (itemTypeUpper.includes('BỂ KÍNH') || itemTypeUpper.includes('BE KINH') || itemTypeUpper.includes('HỒ KÍNH') || itemNameLower.includes('bể kính') || itemNameLower.includes('be kinh') || itemNameLower.includes('hồ kính') || itemNameLower.startsWith('bể') || itemNameLower.startsWith('be '));
 
         let matchedBomRows = [];
 
@@ -3674,6 +3670,7 @@
         const isPhase2Pending = p1Status === 'Done' && p2Status === 'Pending' && _item.status !== 'Done' && _item.status !== 'Đã Huỷ' && _item.qc_status !== 'Yêu cầu làm lại' && _item.qc_status !== 'Need_Repair';
         const isReadyForInspection = _item.status === 'Kiểm Định' || (p1Status === 'Done' && p2Status === 'Done' && _item.status !== 'Done' && _item.status !== 'Đã Huỷ');
 
+        const hasAnyWorkerStarted = p1Status === 'In Progress' || p2Status === 'In Progress' || p1Status === 'Done' || p2Status === 'Done';
         const isBothDone = (p1Status === 'Done' && p2Status === 'Done');
         const isItemDone = (isBothDone && (_item.status === 'Done' || String(_item.status).toUpperCase() === 'ĐÃ XONG')) || ((_item.fulfilledFromStock === true || String(_item.fulfilledFromStock).toUpperCase() === 'TRUE') && !String(_item.note || '').toLowerCase().includes('kho âm'));
         const noteStr = String(_item.note || '').toUpperCase();
@@ -3798,39 +3795,36 @@
                                     const channelTag = resolveItemChannelTag();
                                     const chBadgeClass = typeof getChannelBadge === 'function' ? getChannelBadge(channelTag) : 'bg-[#f97316] text-black font-black border border-[#ea580c] shadow-sm';
                                     return (
-                                        <span className={`text-[8.5px] font-black px-2 py-0.5 rounded border uppercase tracking-wider shadow-sm truncate flex items-center gap-1 shrink-0 ${chBadgeClass}`}>
+                                        <span className={`text-[8.5px] font-bold px-2 py-0.5 rounded-lg border-0 uppercase tracking-wider shadow-sm truncate flex items-center gap-1 shrink-0 bg-[#18191d] text-zinc-300`}>
                                             {channelTag}
                                         </span>
                                     );
                                 })()}
-                                <span className="text-[10.5px] font-black text-gray-300 truncate uppercase font-mono">{oCode}</span>
+                                <span className="text-[10.5px] font-bold text-zinc-300 truncate uppercase font-mono">{oCode}</span>
 
                                 {/* HẠN BÀN GIAO NẰM CẠNH MÃ ĐƠN HÀNG */}
                                 {_item.deadline && (
-                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase shadow-sm flex items-center gap-1 shrink-0 ${new Date(_item.deadline) < new Date()
-                                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
-                                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                        }`}>
-                                        <i className="fas fa-clock text-[8px]"></i> HẠN: {String(_item.deadline).replace('T', ' ').slice(0, 16)}
+                                    <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-lg border-0 uppercase shadow-sm flex items-center gap-1 shrink-0 bg-[#18191d] ${new Date(_item.deadline) < new Date() ? 'text-rose-400' : 'text-zinc-300'}`}>
+                                        <i className="fas fa-clock text-[8px] text-zinc-500"></i> HẠN: {String(_item.deadline).replace('T', ' ').slice(0, 16)}
                                     </span>
                                 )}
 
-                                {/* TAG TRẠNG THÁI GIAI ĐOẠN TINH TẾ (LÀM NỔI BẬT KHÂU ĐANG LÀM GÌ) */}
+                                {/* TAG TRẠNG THÁI GIAI ĐOẠN TINH TẾ */}
                                 {isItemDone ? (
-                                    <span className="text-[8.5px] font-black px-2 py-0.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded-md uppercase tracking-wider flex items-center gap-1 shrink-0">
-                                        <i className="fas fa-check-circle text-[9px] text-emerald-400"></i> {(_item.fulfilledFromStock === true || String(_item.fulfilledFromStock).toUpperCase() === 'TRUE') ? 'ĐÃ LẤY TỪ KHO' : 'ĐẠT KCS'}
+                                    <span className="text-[8.5px] font-bold px-2 py-0.5 bg-[#18191d] text-zinc-300 border-0 rounded-lg uppercase tracking-wider flex items-center gap-1 shrink-0">
+                                        <i className="fas fa-check-circle text-[9px] text-[#2E9599]"></i> {(_item.fulfilledFromStock === true || String(_item.fulfilledFromStock).toUpperCase() === 'TRUE') ? 'ĐÃ LẤY TỪ KHO' : 'ĐẠT KCS'}
                                     </span>
                                 ) : isRejected ? (
-                                    <span className="text-[8.5px] font-black px-2 py-0.5 bg-rose-500/20 text-rose-300 border border-rose-500/40 rounded-md uppercase tracking-wider flex items-center gap-1 shrink-0">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse"></span> YÊU CẦU LÀM LẠI
+                                    <span className="text-[8.5px] font-bold px-2 py-0.5 bg-[#18191d] text-rose-400 border-0 rounded-lg uppercase tracking-wider flex items-center gap-1 shrink-0">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span> YÊU CẦU LÀM LẠI
                                     </span>
                                 ) : isAnyInProgress ? (
                                     (() => {
                                         const activeP = p1Status === 'In Progress' ? (configs[0]?.n || 'Khâu 1') : (configs[1]?.n || 'Khâu 2');
                                         const activeWorker = p1Status === 'In Progress' ? _item.phases?.phase1?.user : _item.phases?.phase2?.user;
                                         return (
-                                            <span className="text-[8.5px] font-black px-2 py-0.5 bg-blue-500/15 text-blue-300 border border-blue-500/30 rounded-md uppercase tracking-wider flex items-center gap-1 shrink-0">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span> ĐANG LÀM: {activeP.toUpperCase()}{activeWorker ? ` (${activeWorker.split(' ').pop().toUpperCase()})` : ''}
+                                            <span className="text-[8.5px] font-bold px-2 py-0.5 bg-[#18191d] text-zinc-200 border-0 rounded-lg uppercase tracking-wider flex items-center gap-1 shrink-0">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-[#2E9599]"></span> ĐANG LÀM: {activeP.toUpperCase()}{activeWorker ? ` (${activeWorker.split(' ').pop().toUpperCase()})` : ''}
                                             </span>
                                         );
                                     })()
@@ -3838,24 +3832,24 @@
                                     (() => {
                                         const p2Name = configs[1]?.n || 'Khâu 2';
                                         return (
-                                            <span className="text-[8.5px] font-black px-2 py-0.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded-md uppercase tracking-wider flex items-center gap-1 shrink-0">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> CHỜ {p2Name.toUpperCase()}
+                                            <span className="text-[8.5px] font-bold px-2 py-0.5 bg-[#18191d] text-zinc-300 border-0 rounded-lg uppercase tracking-wider flex items-center gap-1 shrink-0">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-zinc-400"></span> CHỜ {p2Name.toUpperCase()}
                                             </span>
                                         );
                                     })()
                                 ) : (_item.qc_status === 'Chờ duyệt khung' || _item.qc_status === 'Khung đã nộp') ? (
-                                    <span className="text-[8.5px] font-black px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 rounded-md uppercase tracking-wider flex items-center gap-1 shrink-0">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span> CHỜ DUYỆT KHÂU 1
+                                    <span className="text-[8.5px] font-bold px-2 py-0.5 bg-[#18191d] text-zinc-300 border-0 rounded-lg uppercase tracking-wider flex items-center gap-1 shrink-0">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-400"></span> CHỜ DUYỆT KHÂU 1
                                     </span>
                                 ) : (
-                                    <span className="text-[8.5px] font-bold px-2 py-0.5 bg-zinc-800 text-zinc-400 border border-zinc-700/60 rounded-md uppercase tracking-wider flex items-center gap-1 shrink-0">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-500"></span> CHỜ NHẬN VIỆC
+                                    <span className="text-[8.5px] font-bold px-2 py-0.5 bg-[#18191d] text-zinc-400 border-0 rounded-lg uppercase tracking-wider flex items-center gap-1 shrink-0">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-zinc-600"></span> CHỜ NHẬN VIỆC
                                     </span>
                                 )}
 
                                 {_item.assignee && (
-                                    <span className="text-[8.5px] font-black px-2 py-0.5 bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded-md uppercase tracking-wider flex items-center gap-1 shrink-0 shadow-sm" title={`Lệnh sản xuất chỉ định riêng cho ${_item.assignee}`}>
-                                        <i className="fas fa-lock text-[8.5px] text-amber-400"></i> CHỈ ĐỊNH: {_item.assignee}
+                                    <span className="text-[8.5px] font-bold px-2 py-0.5 bg-[#18191d] text-zinc-300 border-0 rounded-lg uppercase tracking-wider flex items-center gap-1 shrink-0 shadow-sm" title={`Lệnh sản xuất chỉ định riêng cho ${_item.assignee}`}>
+                                        <i className="fas fa-lock text-[8.5px] text-zinc-400"></i> CHỈ ĐỊNH: {_item.assignee}
                                     </span>
                                 )}
                             </div>
@@ -3866,10 +3860,10 @@
                                 <button
                                     type="button"
                                     onClick={handleToggleUrgent}
-                                    className={`w-6 h-6 rounded flex items-center justify-center transition-all shadow-sm active:scale-95 cursor-pointer border ${
+                                    className={`w-6 h-6 rounded-lg flex items-center justify-center transition-all shadow-sm active:scale-95 cursor-pointer border-0 ${
                                         isUrgent
-                                            ? 'text-amber-400 drop-shadow-[0_0_8px_rgba(251,191,36,0.6)] bg-amber-400/20 border-amber-400/40'
-                                            : 'text-zinc-500 hover:text-amber-400 bg-black/40 border-white/10'
+                                            ? 'text-[#F46C3F] bg-[#18191d]'
+                                            : 'text-zinc-500 hover:text-zinc-300 bg-[#18191d]'
                                     }`}
                                     title={isUrgent ? "Đang bật HỎA TỐC (Bấm để tắt)" : "Bật HỎA TỐC / Ưu tiên làm ngay"}
                                 >
@@ -3882,15 +3876,15 @@
                                         e.stopPropagation();
                                         setShowBOMDrawer(prev => !prev);
                                     }}
-                                    className={`h-6 px-2 rounded flex items-center justify-center gap-1 transition-all shadow-sm text-[9.5px] font-black uppercase tracking-wider active:scale-95 cursor-pointer border ${showBOMDrawer
-                                            ? 'bg-indigo-600 text-white border-indigo-400 shadow-md shadow-indigo-500/30'
-                                            : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30 hover:bg-indigo-500 hover:text-white'
+                                    className={`h-6 px-2 rounded-lg flex items-center justify-center gap-1 transition-all shadow-sm text-[9.5px] font-bold uppercase tracking-wider active:scale-95 cursor-pointer border-0 ${showBOMDrawer
+                                            ? 'bg-[#282b33] text-white'
+                                            : 'bg-[#18191d] text-zinc-300 hover:bg-[#282b33]'
                                         }`}
                                     title="Bấm để mở/đóng danh sách định mức vật tư và giá vốn"
                                 >
-                                    <i className="fas fa-layer-group text-[10px]"></i>
+                                    <i className="fas fa-layer-group text-[10px] text-zinc-400"></i>
                                     <span className="hidden sm:inline">Định Mức</span>
-                                    <i className={`fas fa-chevron-${showBOMDrawer ? 'up' : 'down'} text-[8px] ml-0.5`}></i>
+                                    <i className={`fas fa-chevron-${showBOMDrawer ? 'up' : 'down'} text-[8px] ml-0.5 text-zinc-500`}></i>
                                 </button>
 
                                 {realImage && (
@@ -3902,14 +3896,14 @@
                                         } else {
                                             setPreviewImg(realImage);
                                         }
-                                    }} className="w-6 h-6 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500 hover:text-black rounded flex items-center justify-center transition-colors shadow-sm active:scale-95 cursor-pointer" title="Xem ảnh thật/mẫu 3D">
-                                        <i className="fas fa-camera text-[10px]"></i>
+                                    }} className="w-6 h-6 bg-[#18191d] text-zinc-300 hover:bg-[#282b33] rounded-lg border-0 flex items-center justify-center transition-colors shadow-sm active:scale-95 cursor-pointer" title="Xem ảnh thật/mẫu 3D">
+                                        <i className="fas fa-camera text-[10px] text-zinc-400"></i>
                                     </button>
                                 )}
 
                                 {(localStorage.getItem('rf_role') === 'QUẢN LÝ SẢN XUẤT' || localStorage.getItem('rf_role') === 'QUẢN LÝ KHO VẬN' || localStorage.getItem('rf_role') === 'TỐI CAO') && onEditItem && (
-                                    <button onClick={(e) => { e.stopPropagation(); onEditItem(_item); }} className="w-6 h-6 bg-[#1a1a1a] text-[#d4af37] border border-[#333] hover:border-[#d4af37]/50 rounded flex items-center justify-center transition-colors shadow-sm active:scale-95 cursor-pointer" title="Sửa lệnh">
-                                        <i className="fas fa-edit text-[10px]"></i>
+                                    <button onClick={(e) => { e.stopPropagation(); onEditItem(_item); }} className="w-6 h-6 bg-[#18191d] text-zinc-300 hover:bg-[#282b33] rounded-lg border-0 flex items-center justify-center transition-colors shadow-sm active:scale-95 cursor-pointer" title="Sửa lệnh">
+                                        <i className="fas fa-edit text-[10px] text-zinc-400"></i>
                                     </button>
                                 )}
 
@@ -3942,7 +3936,7 @@
                                                 }
                                             }
                                         }}
-                                        className="w-6 h-6 bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500 hover:text-white rounded flex items-center justify-center transition-all shadow-sm active:scale-95 cursor-pointer"
+                                        className="w-6 h-6 bg-[#18191d] text-zinc-400 hover:text-rose-400 hover:bg-[#282b33] rounded-lg border-0 flex items-center justify-center transition-all shadow-sm active:scale-95 cursor-pointer"
                                         title="Huỷ/Xoá lệnh này"
                                     >
                                         <i className="fas fa-trash-alt text-[10px]"></i>
@@ -3955,7 +3949,7 @@
                                         e.stopPropagation();
                                         setIsExpanded(prev => !prev);
                                     }}
-                                    className="w-6 h-6 bg-zinc-800/60 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 border border-zinc-700/50 rounded flex items-center justify-center transition-all shadow-sm active:scale-95 cursor-pointer"
+                                    className="w-6 h-6 bg-[#18191d] hover:bg-[#282b33] text-zinc-400 hover:text-zinc-200 rounded-lg border-0 flex items-center justify-center transition-all shadow-sm active:scale-95 cursor-pointer"
                                     title={isExpanded ? 'Thu gọn thẻ' : 'Mở rộng thẻ'}
                                 >
                                     <i className={`fas fa-chevron-${isExpanded ? 'up' : 'down'} text-[9px]`}></i>
@@ -3966,9 +3960,9 @@
                         {/* === KHU VỰC 2: HÌNH ẢNH & THÔNG TIN SẢN PHẨM & GHI CHÚ === */}
                         <div className="flex gap-3 w-full relative">
                             <div className="w-[60px] h-[60px] shrink-0 relative z-10">
-                                <div className="w-full h-full bg-[#09090b] rounded-lg border border-white/[0.08] overflow-hidden flex items-center justify-center relative shadow-sm">
-                                    <div className="absolute top-0.5 left-0.5 w-3.5 h-3.5 bg-black/80 text-[#d4af37] font-black text-[8px] rounded-full flex items-center justify-center border border-[#333] z-10">{idx_num}</div>
-                                    {productImage ? <img src={productImage} loading="lazy" className="w-full h-full object-cover opacity-90" alt="img" /> : <i className="fas fa-image text-[#444] text-xl"></i>}
+                                <div className="w-full h-full bg-[#18191d] rounded-xl border border-white/[0.04] overflow-hidden flex items-center justify-center relative shadow-sm">
+                                    <div className="absolute top-0.5 left-0.5 w-3.5 h-3.5 bg-black/80 text-zinc-400 font-bold text-[8px] rounded-full flex items-center justify-center border border-zinc-800 z-10">{idx_num}</div>
+                                    {productImage ? <img src={productImage} loading="lazy" className="w-full h-full object-cover opacity-90" alt="img" /> : <i className="fas fa-image text-zinc-700 text-xl"></i>}
                                 </div>
                             </div>
 
@@ -3981,8 +3975,8 @@
                                     const isBacklog = !isFinished && deadlineStr && String(deadlineStr) < nowMonthStr;
                                     return (
                                         <div className="flex items-center gap-1.5 flex-wrap">
-                                            {isBacklog && <span className="bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm animate-pulse">TỒN ĐỌNG</span>}
-                                            <h4 className={`font-black text-[13px] break-words ${isItemDone ? 'text-[#34d399]' : 'text-[#d4af37]'}`} title={_item.name}>{_item.name}</h4>
+                                            {isBacklog && <span className="bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-sm">TỒN ĐỌNG</span>}
+                                            <h4 className="font-bold text-[13.5px] text-white break-words" title={_item.name}>{_item.name}</h4>
                                         </div>
                                     );
                                 })()}
@@ -4742,8 +4736,10 @@
         // Phân loại: Bể Kính vs Layout
         const listWithComputed = React.useMemo(() => {
             return baseFiltered.map(i => {
-                const searchStr = (String(i.type || '') + ' ' + String(i.name || '')).toLowerCase();
-                const isBeKinh = i.type === 'Bể Kính' || searchStr.includes('bể');
+                const typeStr = String(i.type || '').trim();
+                const nameLower = String(i.name || '').toLowerCase();
+                const isLayout = typeStr === 'Layout' || /(layout|rừng|rung|bonsai|cầu vồng|cau vong|đảo bay|dao bay|cuội|cuoi|đá|da|lũa|lua|biotop|cover|tiểu cảnh|tieu canh|vách|vach|hẻm|hem|đảo|dao|nhất trụ|nhat tru|núi|nui|hang|cầu|cau|biotope)/i.test(nameLower);
+                const isBeKinh = !isLayout && (typeStr === 'Bể Kính' || typeStr.toUpperCase().includes('BỂ') || /(bể kính|be kinh|hồ kính|ho kinh|bể siêu trong|dán bể|hồ cá|bể cá|hồ đúc|bể đúc|\bbể\b|\bhồ\b|\btank\b)/i.test(nameLower));
                 const computedType = isBeKinh ? 'Bể Kính' : 'Layout';
 
                 // Xác định trạng thái công đoạn P1, P2 và KCS
@@ -5159,20 +5155,20 @@
                                 ĐIỀU HÀNH SẢN XUẤT & KCS
                                 <span className="text-[10px] text-zinc-400 font-mono font-normal">v3.0</span>
                             </div>
-                            <div className="text-[10px] text-zinc-400 flex items-center gap-2">
-                                <span>Thợ: <strong className="text-[#d4af37]">{currentUser}</strong> ({userRole})</span>
+                            <div className="text-[11px] text-zinc-400 flex items-center gap-2">
+                                <span>Thợ: <strong className="text-zinc-200">{currentUser}</strong></span>
                                 <span>•</span>
                                 <span>Tổng lệnh: <strong>{filteredList.length}</strong></span>
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
                         {/* Toggle Bảng vs Thẻ */}
-                        <div className="flex items-center bg-[#09090b] p-0.5 rounded-xl border border-white/[0.06]">
+                        <div className="flex items-center bg-[#202228] p-1 rounded-xl gap-1">
                             <button
                                 onClick={() => setViewMode('TABLE')}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${viewMode === 'TABLE' ? 'bg-[#d4af37] text-black shadow-sm' : 'text-zinc-400 hover:text-white'}`}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer border-0 ${viewMode === 'TABLE' ? 'bg-[#282b33] text-white font-bold shadow-none' : 'text-zinc-400 hover:text-white'}`}
                                 title="Chế độ Bảng Nén (Linear UX)"
                             >
                                 <i className="fas fa-table-list text-[10px]"></i>
@@ -5180,7 +5176,7 @@
                             </button>
                             <button
                                 onClick={() => setViewMode('CARDS')}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${viewMode === 'CARDS' ? 'bg-[#d4af37] text-black shadow-sm' : 'text-zinc-400 hover:text-white'}`}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer border-0 ${viewMode === 'CARDS' ? 'bg-[#282b33] text-white font-bold shadow-none' : 'text-zinc-400 hover:text-white'}`}
                                 title="Chế độ Thẻ Kênh"
                             >
                                 <i className="fas fa-grip text-[10px]"></i>
@@ -5192,10 +5188,10 @@
                         {isAdmin && !isCTV && (
                             <button
                                 onClick={() => setShowAddSXTModal(true)}
-                                className="px-3 py-1.5 bg-[#d4af37]/15 hover:bg-[#d4af37] hover:text-black border border-[#d4af37]/30 text-[#d4af37] text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                                className="px-3.5 py-1.5 bg-[#F46C3F] hover:bg-[#e05b2f] text-white font-bold text-xs rounded-xl transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer shadow-none border-0"
                             >
                                 <i className="fas fa-plus text-[10px]"></i>
-                                <span className="hidden sm:inline">Tạo Lệnh SX</span>
+                                <span>Tạo Lệnh SX</span>
                             </button>
                         )}
 
@@ -5203,12 +5199,13 @@
                         {!isCTV && (
                             <button
                                 onClick={() => setShowOutOfStockModal(true)}
-                                className="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/25 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 relative cursor-pointer"
+                                className="px-2.5 py-1.5 bg-[#A7226F] hover:bg-[#911c5f] text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 relative cursor-pointer border-0 shadow-none"
                                 title="Sản phẩm thiếu/hết kho"
                             >
                                 <i className="fas fa-boxes-stacked text-[10px]"></i>
+                                <span className="hidden sm:inline">Thiếu Kho</span>
                                 {outOfStockCount > 0 && (
-                                    <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white font-mono text-[9px] font-black">
+                                    <span className="px-1.5 py-0.2 rounded-full bg-black/40 text-white font-mono text-[9px] font-black">
                                         {outOfStockCount}
                                     </span>
                                 )}
@@ -5219,29 +5216,17 @@
                         {!isCTV && (
                             <button
                                 onClick={() => setShowQuickNotes(prev => !prev)}
-                                className={`px-2.5 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${showQuickNotes ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-white/[0.04] text-zinc-300 border-white/[0.08] hover:bg-white/[0.08]'}`}
+                                className={`px-2.5 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer border-0 ${showQuickNotes ? 'bg-[#2E9599] text-white font-bold' : 'bg-[#202228] text-zinc-300 hover:bg-[#282b33]'}`}
                                 title="Ghi chú xưởng"
                             >
-                                <i className="fas fa-sticky-note text-[10px] text-amber-400"></i>
-                            </button>
-                        )}
-
-                        {/* Nút SOS Xưởng */}
-                        {!isCTV && (
-                            <button
-                                onClick={() => setShowSOSModal(true)}
-                                className="px-2.5 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-black rounded-xl transition-all flex items-center gap-1 cursor-pointer animate-pulse"
-                                title="Phát tín hiệu SOS Khẩn Cấp"
-                            >
-                                <i className="fas fa-triangle-exclamation text-[10px]"></i>
-                                <span className="hidden md:inline">SOS</span>
+                                <i className="fas fa-note-sticky text-[10px]"></i>
                             </button>
                         )}
 
                         {/* Nút In A4 Báo Cáo */}
                         <button
                             onClick={handlePrintProductionReport}
-                            className="px-2.5 py-1.5 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.08] text-xs font-bold rounded-xl transition-all flex items-center gap-1 cursor-pointer"
+                            className="px-2.5 py-1.5 bg-[#202228] hover:bg-[#282b33] text-zinc-300 text-xs font-semibold rounded-xl transition-all flex items-center gap-1 cursor-pointer border-0"
                             title="In Báo Cáo Sản Lượng (A4)"
                         >
                             <i className="fas fa-print text-[10px] text-zinc-400"></i>
@@ -5262,11 +5247,11 @@
                 )}
 
                 {/* 2. LINEAR TOOLBAR & SEGMENTED CONTROL */}
-                <div className="bg-[#121214] border border-white/[0.06] rounded-2xl p-3 shadow-md space-y-2.5">
+                <div className="bg-[#202228] rounded-2xl p-3 shadow-md space-y-2.5 border-0">
                     {/* Hàng 1: Bộ lọc Loại Sản Phẩm & Tìm Kiếm & Thời Gian */}
                     <div className="flex items-center gap-2 flex-wrap">
                         {/* Segmented Loại Hàng */}
-                        <div className="flex items-center bg-[#09090b] p-0.5 rounded-xl border border-white/[0.06]">
+                        <div className="flex items-center bg-[#18191d] p-1 rounded-xl gap-1">
                             {[
                                 { id: 'ALL', label: 'Tất Cả', count: listWithComputed.length, icon: 'fa-cubes' },
                                 { id: 'Bể Kính', label: 'Bể Kính', count: countBeKinh, icon: 'fa-fish' },
@@ -5275,11 +5260,11 @@
                                 <button
                                     key={t.id}
                                     onClick={() => setTypeTab(t.id)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${typeTab === t.id ? 'bg-white text-black shadow-sm font-black' : 'text-zinc-400 hover:text-white'}`}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer border-0 ${typeTab === t.id ? (t.id === 'Layout' ? 'bg-[#F46C3F] text-white font-bold' : t.id === 'Bể Kính' ? 'bg-[#2E9599] text-white font-bold' : 'bg-[#282b33] text-white font-bold') : 'text-zinc-400 hover:text-white'}`}
                                 >
                                     <i className={`fas ${t.icon} text-[10px]`}></i>
                                     <span>{t.label}</span>
-                                    <span className={`px-1.5 py-0.2 rounded-md text-[9px] font-mono ${typeTab === t.id ? 'bg-black text-white' : 'bg-white/[0.08] text-zinc-300'}`}>
+                                    <span className={`px-1.5 py-0.2 rounded-md text-[9px] font-mono ${typeTab === t.id ? 'bg-black/30 text-white font-bold' : 'bg-white/[0.08] text-zinc-400'}`}>
                                         {t.count}
                                     </span>
                                 </button>
@@ -5294,7 +5279,7 @@
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
                                 placeholder="Tìm theo Serial, tên sản phẩm, mã đơn..."
-                                className="w-full bg-[#09090b] border border-white/[0.06] rounded-xl pl-8 pr-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#d4af37]/60"
+                                className="w-full bg-[#18191d] rounded-xl pl-8 pr-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#2E9599] border-0"
                             />
                             {searchQuery && (
                                 <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white text-xs">
@@ -5308,7 +5293,7 @@
                             <select
                                 value={filterTime}
                                 onChange={e => { setFilterTime(e.target.value); if (e.target.value !== 'Chọn Tháng') setCustomMonth(''); }}
-                                className="h-8 px-2 bg-[#09090b] border border-white/[0.06] rounded-xl text-xs font-bold text-zinc-300 focus:outline-none focus:border-[#d4af37]/60 cursor-pointer"
+                                className="h-8 px-2.5 bg-[#18191d] rounded-xl text-xs font-medium text-zinc-300 focus:outline-none focus:ring-1 focus:ring-[#2E9599] cursor-pointer border-0"
                             >
                                 <option value="Tháng Này">Tháng Này</option>
                                 <option value="Tháng Trước">Tháng Trước</option>
@@ -5319,7 +5304,7 @@
                                     type="month"
                                     value={customMonth}
                                     onChange={e => setCustomMonth(e.target.value)}
-                                    className="h-8 px-2 bg-[#09090b] border border-white/[0.06] rounded-xl text-xs font-bold text-zinc-300 focus:outline-none focus:border-[#d4af37]/60"
+                                    className="h-8 px-2 bg-[#18191d] rounded-xl text-xs font-mono font-medium text-zinc-300 focus:outline-none focus:ring-1 focus:ring-[#2E9599] border-0"
                                 />
                             )}
                         </div>
@@ -5328,23 +5313,23 @@
                     {/* Hàng 2: Segmented Control Công Đoạn KCS */}
                     <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar no-scrollbar pt-1">
                         {[
-                            { id: 'ALL', label: 'Tất Cả', count: stageCounts.all, icon: 'fa-layer-group' },
-                            { id: 'PHASE1', label: typeTab === 'Bể Kính' ? 'Cắt Kính / Dán Đáy' : 'Dựng Khung', count: stageCounts.phase1, icon: 'fa-cube' },
-                            { id: 'PHASE2', label: typeTab === 'Bể Kính' ? 'Gọt Keo Bể' : 'Gia Cố / Gọt Keo', count: stageCounts.phase2, icon: 'fa-shield-halved' },
-                            { id: 'QC', label: 'Chờ KCS Nghiệm Thu', count: stageCounts.qc, icon: 'fa-clipboard-check' },
-                            { id: 'DONE', label: 'Đã Hoàn Thành / Vào Kho', count: stageCounts.done, icon: 'fa-circle-check' },
-                            { id: 'CANCEL', label: 'Đã Huỷ', count: stageCounts.cancel, icon: 'fa-ban' }
+                            { id: 'ALL', label: 'Tất Cả', count: stageCounts.all, icon: 'fa-layer-group', activeBg: 'bg-[#2E9599] text-white' },
+                            { id: 'PHASE1', label: typeTab === 'Bể Kính' ? 'Cắt Kính / Dán Đáy' : 'Dựng Khung', count: stageCounts.phase1, icon: 'fa-cube', activeBg: 'bg-[#F46C3F] text-white' },
+                            { id: 'PHASE2', label: typeTab === 'Bể Kính' ? 'Gọt Keo Bể' : 'Gia Cố / Gọt Keo', count: stageCounts.phase2, icon: 'fa-shield-halved', activeBg: 'bg-[#2E9599] text-white' },
+                            { id: 'QC', label: 'Chờ KCS Nghiệm Thu', count: stageCounts.qc, icon: 'fa-clipboard-check', activeBg: 'bg-[#F7DC68] text-zinc-950' },
+                            { id: 'DONE', label: 'Đã Hoàn Thành / Vào Kho', count: stageCounts.done, icon: 'fa-circle-check', activeBg: 'bg-[#2E9599] text-white' },
+                            { id: 'CANCEL', label: 'Đã Huỷ', count: stageCounts.cancel, icon: 'fa-ban', activeBg: 'bg-[#A7226F] text-white' }
                         ].map(st => {
                             const isActive = stageFilter === st.id;
                             return (
                                 <button
                                     key={st.id}
                                     onClick={() => setStageFilter(st.id)}
-                                    className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 active:scale-95 cursor-pointer ${isActive ? 'bg-white text-black shadow-md' : 'bg-[#09090b] text-zinc-400 hover:text-zinc-200 border border-white/[0.06] hover:bg-white/[0.04]'}`}
+                                    className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 active:scale-95 cursor-pointer border-0 ${isActive ? `${st.activeBg} font-bold shadow-none` : 'bg-[#18191d] text-zinc-400 hover:text-zinc-200 hover:bg-[#252830]'}`}
                                 >
-                                    <i className={`fas ${st.icon} text-[10px] ${isActive ? 'text-black' : 'text-zinc-400'}`}></i>
+                                    <i className={`fas ${st.icon} text-[10px] ${isActive ? (st.activeBg.includes('zinc-950') ? 'text-zinc-950' : 'text-white') : 'text-zinc-500'}`}></i>
                                     <span>{st.label}</span>
-                                    <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono min-w-[20px] text-center ${isActive ? 'bg-black text-white' : 'bg-white/[0.08] text-zinc-300'}`}>
+                                    <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono min-w-[20px] text-center ${isActive ? 'bg-black/25 font-bold' : 'bg-white/[0.08] text-zinc-400'}`}>
                                         {st.count}
                                     </span>
                                 </button>
@@ -5355,21 +5340,21 @@
                     {/* Hàng 3: Segmented Kênh Bán */}
                     <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar no-scrollbar pt-1">
                         {[
-                            { id: 'ALL', label: 'Tất Cả Kênh', icon: 'fa-store' },
-                            { id: 'SHOPEE', label: 'Shopee VN', icon: 'fa-shopping-bag' },
-                            { id: 'EXPORT', label: 'Shopee MY / Xuất Khẩu', icon: 'fa-globe-asia' },
-                            { id: 'TIKTOK', label: 'TikTok Shop', icon: 'fa-video' },
-                            { id: 'BÁN LẺ', label: 'Trực Tiếp / Bán Lẻ', icon: 'fa-store' },
-                            { id: 'CTV', label: 'Cộng Tác Viên', icon: 'fa-handshake' }
+                            { id: 'ALL', label: 'Tất Cả Kênh', icon: 'fa-store', activeBg: 'bg-[#2E9599] text-white' },
+                            { id: 'SHOPEE', label: 'Shopee VN', icon: 'fa-shopping-bag', activeBg: 'bg-[#F46C3F] text-white' },
+                            { id: 'EXPORT', label: 'Xuất Khẩu', icon: 'fa-globe-asia', activeBg: 'bg-[#F7DC68] text-zinc-950' },
+                            { id: 'TIKTOK', label: 'TikTok Shop', icon: 'fa-video', activeBg: 'bg-[#A7226F] text-white' },
+                            { id: 'BÁN LẺ', label: 'Trực Tiếp / Bán Lẻ', icon: 'fa-store', activeBg: 'bg-[#282b33] text-white' },
+                            { id: 'CTV', label: 'Cộng Tác Viên', icon: 'fa-handshake', activeBg: 'bg-[#2E9599] text-white' }
                         ].map(ch => {
                             const isActive = filterChannel === ch.id;
                             return (
                                 <button
                                     key={ch.id}
                                     onClick={() => setFilterChannel(ch.id)}
-                                    className={`shrink-0 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer ${isActive ? 'bg-[#d4af37] text-black shadow-sm font-black' : 'bg-[#09090b] text-zinc-400 hover:text-zinc-200 border border-white/[0.06]'}`}
+                                    className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 cursor-pointer border-0 ${isActive ? `${ch.activeBg} font-bold shadow-none` : 'bg-[#18191d] text-zinc-400 hover:text-zinc-200 hover:bg-[#252830]'}`}
                                 >
-                                    <i className={`fas ${ch.icon} text-[9px]`}></i>
+                                    <i className={`fas ${ch.icon} text-[9px] ${isActive ? (ch.activeBg.includes('zinc-950') ? 'text-zinc-950' : 'text-white') : 'text-zinc-500'}`}></i>
                                     <span>{ch.label}</span>
                                 </button>
                             );
@@ -5379,17 +5364,17 @@
 
                 {/* 3. DANH SÁCH LỆNH SẢN XUẤT (BẢNG NÉN H-14 HOẶC THẺ KÊNH) */}
                 {filteredList.length === 0 ? (
-                    <div className="bg-[#121214] border border-white/[0.06] rounded-2xl p-12 text-center text-zinc-500 font-bold text-xs flex flex-col items-center justify-center gap-2">
+                    <div className="bg-[#202228] rounded-2xl p-12 text-center text-zinc-500 font-bold text-xs flex flex-col items-center justify-center gap-2 border-0">
                         <i className="fas fa-clipboard-list text-3xl opacity-40 mb-1"></i>
                         <span>Không có lệnh sản xuất nào phù hợp với bộ lọc hiện tại</span>
                     </div>
                 ) : viewMode === 'TABLE' ? (
                     /* CHUẨN LINEAR UX: HIGH-DENSITY PRODUCTION ROWS (H-14 = 56px) */
-                    <div className="bg-[#121214] border border-white/[0.06] rounded-2xl overflow-hidden shadow-xl">
+                    <div className="bg-[#202228] rounded-2xl overflow-hidden shadow-lg border-0">
                         <div className="overflow-x-auto custom-scrollbar">
                             <table className="w-full text-left border-collapse min-w-[900px]">
                                 <thead>
-                                    <tr className="bg-[#09090b] text-zinc-400 text-[10px] uppercase font-mono tracking-wider border-b border-white/[0.06]">
+                                    <tr className="bg-[#18191d] text-zinc-400 text-[10px] uppercase font-mono tracking-wider">
                                         <th className="py-2.5 px-3 w-10 text-center">#</th>
                                         <th className="py-2.5 px-3">SERIAL & TÊN SẢN PHẨM</th>
                                         <th className="py-2.5 px-2 text-center w-24">LOẠI</th>
@@ -5428,7 +5413,7 @@
                                                         type="checkbox"
                                                         checked={selectedProdIds.includes(item.id)}
                                                         onChange={() => toggleSelectProd(item.id)}
-                                                        className="rounded border-zinc-700 bg-zinc-900 text-[#d4af37] focus:ring-0 cursor-pointer"
+                                                        className="rounded border-0 bg-[#18191d] text-[#F46C3F] focus:ring-0 cursor-pointer"
                                                     />
                                                 </td>
 
@@ -5436,11 +5421,11 @@
                                                 <td className="py-2 px-3">
                                                     <div className="flex items-center gap-2">
                                                         {isUrgent && (
-                                                            <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" title="Đơn HỎA TỐC"></span>
+                                                            <span className="w-2 h-2 rounded-full bg-[#F46C3F] shrink-0" title="Đơn HỎA TỐC"></span>
                                                         )}
                                                         <div className="min-w-0">
                                                             <div className="flex items-center gap-2">
-                                                                <span className="font-mono font-black text-[#d4af37] text-xs tracking-tight">
+                                                                <span className="font-mono font-black text-[#F7DC68] text-xs tracking-tight">
                                                                     {item._serial}
                                                                 </span>
                                                                 {orderCode && (
@@ -5454,7 +5439,7 @@
                                                             </div>
                                                             {dims && (
                                                                 <div className="text-[10px] text-zinc-400 font-mono">
-                                                                    {dims.d}x{dims.r}x{dims.c}cm • <span className="text-emerald-400">{dims.areaM2}m²</span> (5%)
+                                                                    {dims.d}x{dims.r}x{dims.c}cm {item._computedType === 'Bể Kính' && <>• <span className="text-[#2E9599] font-semibold">{dims.areaM2}m²</span> (5%)</>}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -5463,7 +5448,7 @@
 
                                                 {/* Loại */}
                                                 <td className="py-2 px-2 text-center">
-                                                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${item._computedType === 'Bể Kính' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'}`}>
+                                                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border-0 ${item._computedType === 'Bể Kính' ? 'bg-[#2E9599] text-white' : 'bg-[#F46C3F] text-white'}`}>
                                                         {item._computedType}
                                                     </span>
                                                 </td>
@@ -5471,7 +5456,7 @@
                                                 {/* Công đoạn 1 */}
                                                 <td className="py-2 px-3">
                                                     <div className="flex items-center gap-1.5">
-                                                        <span className={`w-2 h-2 rounded-full shrink-0 ${item._isP1Done ? 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : item._p1Status === 'In_Progress' ? 'bg-amber-400 animate-pulse' : 'bg-zinc-600'}`}></span>
+                                                        <span className={`w-2 h-2 rounded-full shrink-0 ${item._isP1Done ? 'bg-[#2E9599]' : item._p1Status === 'In_Progress' ? 'bg-[#F7DC68]' : 'bg-zinc-600'}`}></span>
                                                         <div className="min-w-0">
                                                             <div className="font-bold text-[11px] truncate text-zinc-200">
                                                                 {item._p1User || <span className="text-zinc-500 italic">Chưa nhận</span>}
@@ -5486,7 +5471,7 @@
                                                 {/* Công đoạn 2 */}
                                                 <td className="py-2 px-3">
                                                     <div className="flex items-center gap-1.5">
-                                                        <span className={`w-2 h-2 rounded-full shrink-0 ${item._isP2Done ? 'bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : item._p2Status === 'In_Progress' ? 'bg-amber-400 animate-pulse' : 'bg-zinc-600'}`}></span>
+                                                        <span className={`w-2 h-2 rounded-full shrink-0 ${item._isP2Done ? 'bg-[#2E9599]' : item._p2Status === 'In_Progress' ? 'bg-[#F7DC68]' : 'bg-zinc-600'}`}></span>
                                                         <div className="min-w-0">
                                                             <div className="font-bold text-[11px] truncate text-zinc-200">
                                                                 {item._p2User || <span className="text-zinc-500 italic">Chưa nhận</span>}
@@ -5501,15 +5486,15 @@
                                                 {/* Trạng thái KCS */}
                                                 <td className="py-2 px-3 text-center">
                                                     {item._isFinalQcPassed ? (
-                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center justify-center gap-1">
+                                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#2E9599] text-white border-0 flex items-center justify-center gap-1">
                                                             <i className="fas fa-check text-[9px]"></i> Đạt Chuẩn
                                                         </span>
                                                     ) : item.qc_status === 'Từ Chối' ? (
-                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center justify-center gap-1">
+                                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#A7226F] text-white border-0 flex items-center justify-center gap-1">
                                                             <i className="fas fa-xmark text-[9px]"></i> Trả Về
                                                         </span>
                                                     ) : item._isBothDone ? (
-                                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center justify-center gap-1 animate-pulse">
+                                                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#F7DC68] text-zinc-950 border-0 flex items-center justify-center gap-1">
                                                             <i className="fas fa-clock text-[9px]"></i> Chờ KCS
                                                         </span>
                                                     ) : (
@@ -5520,14 +5505,14 @@
                                                 {/* Hạn SLA */}
                                                 <td className="py-2 px-3 text-center font-mono text-[11px] text-zinc-400">
                                                     {item.deadline ? (
-                                                        <span className={new Date(item.deadline) < new Date() && item._computedStatus !== 'ĐÃ XONG' ? 'text-rose-400 font-bold' : ''}>
+                                                        <span className={new Date(item.deadline) < new Date() && item._computedStatus !== 'ĐÃ XONG' ? 'text-[#F46C3F] font-bold' : ''}>
                                                             {String(item.deadline).slice(5, 16).replace('T', ' ')}
                                                         </span>
                                                     ) : '—'}
                                                 </td>
 
                                                 {/* Tiền Thưởng */}
-                                                <td className="py-2 px-3 text-right font-mono font-bold text-emerald-400 text-xs">
+                                                <td className="py-2 px-3 text-right font-mono font-bold text-[#2E9599] text-xs">
                                                     {myReward > 0 ? `+${myReward.toLocaleString('vi-VN')}đ` : '—'}
                                                 </td>
 
@@ -5535,7 +5520,7 @@
                                                 <td className="py-2 px-3 text-center">
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); setActiveDrawerItem(item); }}
-                                                        className="w-7 h-7 rounded-lg bg-white/[0.04] hover:bg-white/[0.1] text-zinc-300 flex items-center justify-center transition-all"
+                                                        className="w-7 h-7 rounded-lg bg-[#18191d] hover:bg-[#282b33] text-zinc-300 flex items-center justify-center transition-all border-0"
                                                         title="Mở Drawer chi tiết & KCS"
                                                     >
                                                         <i className="fas fa-chevron-right text-xs"></i>
@@ -5632,8 +5617,8 @@
                                         </div>
                                     </div>
 
-                                    {/* Thông Số Kỹ Thuật & Công Thức Tiêu Hao UOM (5% Hao Hụt) */}
-                                    {dims && (
+                                    {/* Thông Số Kỹ Thuật & Công Thức Tiêu Hao UOM (5% Hao Hụt) - CHỈ DÀNH CHO BỂ KÍNH */}
+                                    {item._computedType === 'Bể Kính' && dims && (
                                         <div className="bg-[#121214] border border-white/[0.06] rounded-2xl p-4 space-y-3">
                                             <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold flex items-center justify-between">
                                                 <span>ĐỊNH MỨC TIÊU HAO VẬT TƯ (UOM)</span>
@@ -5656,6 +5641,30 @@
                                                     <div className="text-[10px] text-zinc-400 uppercase font-mono">Keo Silicone</div>
                                                     <div className="font-mono font-black text-amber-400 text-xs mt-0.5">
                                                         {dims.glueMl} ml <span className="text-[9px] font-normal text-zinc-400">({dims.glueBottles} chai)</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Thông Số Quy Cách Sản Phẩm Layout */}
+                                    {item._computedType !== 'Bể Kính' && (
+                                        <div className="bg-[#121214] border border-white/[0.06] rounded-2xl p-4 space-y-3">
+                                            <div className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold flex items-center justify-between">
+                                                <span>QUY CÁCH SẢN PHẨM LAYOUT</span>
+                                                <span className="text-amber-400 font-bold">Định Mức BOM Thủy Sinh</span>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-2 text-center">
+                                                <div className="bg-[#18181b] border border-white/[0.04] p-2.5 rounded-xl">
+                                                    <div className="text-[10px] text-zinc-400 uppercase font-mono">Kích Thước Khung Phôi</div>
+                                                    <div className="font-mono font-black text-white text-xs mt-0.5">
+                                                        {dims ? `${dims.d}x${dims.r}x${dims.c} cm` : (String(item.name || '').match(/size\s*(\d+)|(\d+)\s*cm/i) ? `Size ${String(item.name || '').match(/size\s*(\d+)|(\d+)\s*cm/i)[1] || String(item.name || '').match(/size\s*(\d+)|(\d+)\s*cm/i)[2]} cm` : 'Tiêu Chuẩn')}
+                                                    </div>
+                                                </div>
+                                                <div className="bg-[#18181b] border border-white/[0.04] p-2.5 rounded-xl">
+                                                    <div className="text-[10px] text-zinc-400 uppercase font-mono">Phân Loại Vật Liệu</div>
+                                                    <div className="font-mono font-black text-amber-400 text-xs mt-0.5">
+                                                        Đá / Lũa / Keo 502 (BOM)
                                                     </div>
                                                 </div>
                                             </div>

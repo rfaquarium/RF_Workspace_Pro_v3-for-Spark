@@ -1143,54 +1143,35 @@ const ImportExportTab = React.memo(function ImportExportTab({ data, pushData, is
                     <div className="w-8 h-8 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center shrink-0">
                         <i className="fas fa-boxes text-sky-400 text-xs"></i>
                     </div>
-                    <div className="min-w-0">
-                        <h3 className="font-black text-white text-[12px] uppercase tracking-wider flex items-center gap-2 truncate">
-                            QUẢN LÝ {mode === 'KIEM_KHO' ? 'KIỂM KHO' : 'CHỨNG TỪ'}
-                            <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30 shrink-0">Kho Vận Pro</span>
-                        </h3>
-                    </div>
-                </div>
-                <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap w-full sm:w-auto">
-                    {mode === 'KIEM_KHO' && (
-                        <button onClick={() => {
-                            if (isKiemToan || currentRole === 'KHO VẬN' || currentRole === 'QUẢN LÝ KHO VẬN') {
-                                window.pendingType = 'Kiểm Kho'; setShowForm(true);
-                            } else {
-                                alert('Chỉ Quản Lý Kho, Kế Toán hoặc Kiểm Toán mới có quyền tạo phiếu kiểm kho!');
-                            }
-                        }} className="h-9 px-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all shadow-md cursor-pointer" title="Tạo Phiếu Kiểm Kho">
-                            <i className="fas fa-plus-circle text-xs"></i> <span>Tạo Phiếu Kiểm Kho</span>
-                        </button>
-                    )}
-                    {mode === 'NHAT_KY' && (
+                                 {mode === 'NHAT_KY' && (
                         <>
                             {canCreateImport && (
-                                <button onClick={() => { window.pendingType = 'Nhập'; setShowForm(true); }} className="h-9 w-9 sm:w-auto sm:px-3 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer shadow-sm" title="Tạo phiếu Nhập Kho">
-                                    <i className="fas fa-arrow-down text-emerald-400 text-xs"></i> <span className="hidden sm:inline">Nhập</span>
+                                <button onClick={() => { window.pendingType = 'Nhập'; setShowForm(true); }} className="h-9 w-9 sm:w-auto sm:px-3 rounded-xl bg-[#2E9599] hover:bg-[#38a8ac] text-white text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer border-0 shadow-sm" title="Tạo phiếu Nhập Kho">
+                                    <i className="fas fa-arrow-down text-white text-xs"></i> <span className="hidden sm:inline">Nhập</span>
                                 </button>
                             )}
                             {canCreatePO && (
-                                <button onClick={() => { window.pendingType = 'Đặt Hàng'; setShowForm(true); }} className="h-9 w-9 sm:w-auto sm:px-3 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-300 border border-purple-500/40 text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer shadow-sm" title="Tạo phiếu Đặt Hàng">
-                                    <i className="fas fa-file-invoice text-purple-400 text-xs"></i> <span className="hidden sm:inline">Đặt Hàng</span>
+                                <button onClick={() => { window.pendingType = 'Đặt Hàng'; setShowForm(true); }} className="h-9 w-9 sm:w-auto sm:px-3 rounded-xl bg-[#18191d] hover:bg-[#282b33] text-[#F7DC68] text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer border-0 shadow-sm" title="Tạo phiếu Đặt Hàng">
+                                    <i className="fas fa-file-invoice text-[#F7DC68] text-xs"></i> <span className="hidden sm:inline">Đặt Hàng</span>
                                 </button>
                             )}
                             {canCreateExport && (
                                 <>
-                                    <button onClick={() => { window.pendingType = 'Xuất'; setShowForm(true); }} className="h-9 w-9 sm:w-auto sm:px-3 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/40 text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer shadow-sm" title="Tạo phiếu Xuất Kho">
-                                        <i className="fas fa-arrow-up text-rose-400 text-xs"></i> <span className="hidden sm:inline">Xuất</span>
+                                    <button onClick={() => { window.pendingType = 'Xuất'; setShowForm(true); }} className="h-9 w-9 sm:w-auto sm:px-3 rounded-xl bg-[#A7226F] hover:bg-[#bf2b80] text-white text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer border-0 shadow-sm" title="Tạo phiếu Xuất Kho">
+                                        <i className="fas fa-arrow-up text-white text-xs"></i> <span className="hidden sm:inline">Xuất</span>
                                     </button>
-                                    <button onClick={() => { window.pendingType = 'Thanh Lý'; setShowForm(true); }} className="h-9 w-9 sm:w-auto sm:px-3 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/40 text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer shadow-sm" title="Tạo phiếu Xuất Thanh Lý">
-                                        <i className="fas fa-trash-restore text-amber-400 text-xs"></i> <span className="hidden sm:inline">Thanh Lý</span>
+                                    <button onClick={() => { window.pendingType = 'Thanh Lý'; setShowForm(true); }} className="h-9 w-9 sm:w-auto sm:px-3 rounded-xl bg-[#18191d] hover:bg-[#282b33] text-[#F46C3F] text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer border-0 shadow-sm" title="Tạo phiếu Xuất Thanh Lý">
+                                        <i className="fas fa-trash-restore text-[#F46C3F] text-xs"></i> <span className="hidden sm:inline">Thanh Lý</span>
                                     </button>
                                 </>
                             )}
                             {hasPerm('INV_BOM_CONFIG') && (
                                 <>
-                                    <button onClick={handleSyncBomSku} className="h-9 w-9 sm:w-auto sm:px-3 rounded-xl bg-teal-500/15 hover:bg-teal-500/25 text-teal-300 border border-teal-500/40 text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer shadow-sm" title="Đồng bộ SKU từ Products sang BOM_Config">
-                                        <i className="fas fa-sync-alt text-teal-400 text-xs"></i> <span className="hidden md:inline">Đồng Bộ BOM</span>
+                                    <button onClick={handleSyncBomSku} className="h-9 w-9 sm:w-auto sm:px-3 rounded-xl bg-[#18191d] hover:bg-[#282b33] text-zinc-300 hover:text-white text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer border-0 shadow-sm" title="Đồng bộ SKU từ Products sang BOM_Config">
+                                        <i className="fas fa-sync-alt text-zinc-400 text-xs"></i> <span className="hidden md:inline">Đồng Bộ BOM</span>
                                     </button>
-                                    <button onClick={handleRepairBOM} className="h-9 w-9 sm:w-auto sm:px-3 rounded-xl bg-sky-500/15 hover:bg-sky-500/25 text-sky-300 border border-sky-500/40 text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer shadow-sm" title="Sửa lỗi phiếu xuất BOM">
-                                        <i className="fas fa-magic text-sky-400 text-xs"></i> <span className="hidden md:inline">Sửa BOM</span>
+                                    <button onClick={handleRepairBOM} className="h-9 w-9 sm:w-auto sm:px-3 rounded-xl bg-[#18191d] hover:bg-[#282b33] text-zinc-300 hover:text-white text-[11px] font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 active:scale-95 transition-all cursor-pointer border-0 shadow-sm" title="Sửa lỗi phiếu xuất BOM">
+                                        <i className="fas fa-magic text-zinc-400 text-xs"></i> <span className="hidden md:inline">Sửa BOM</span>
                                     </button>
                                 </>
                             )}
@@ -1199,14 +1180,14 @@ const ImportExportTab = React.memo(function ImportExportTab({ data, pushData, is
                 </div>
             </div>
 
-            {/* Thống kê tổng quan - Tách bạch rõ ràng Tổng Nhập vs Tổng Xuất */}
+            {/* Thống kê tổng quan - Four Seasons Solid Matte */}
             {mode !== 'KIEM_KHO' && (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 w-full max-w-full">
                 {/* Thẻ 1: Tổng Chứng Từ */}
-                <div className="bg-[#121215] border border-white/[0.08] p-3 sm:p-3.5 rounded-2xl flex flex-col min-w-0 shadow-sm">
+                <div className="bg-[#202228] p-3 sm:p-3.5 rounded-2xl flex flex-col min-w-0 shadow-md border-0">
                     <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wider truncate">Tổng Chứng Từ</span>
-                        <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center text-zinc-400 text-xs">
+                        <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider truncate">Tổng Chứng Từ</span>
+                        <div className="w-6 h-6 rounded-lg bg-[#18191d] flex items-center justify-center text-zinc-400 text-xs border-0">
                             <i className="fas fa-file-lines"></i>
                         </div>
                     </div>
@@ -1214,26 +1195,26 @@ const ImportExportTab = React.memo(function ImportExportTab({ data, pushData, is
                         {categoryAndMonthFilteredLogs.length} <span className="text-xs font-normal text-zinc-500">phiếu</span>
                     </div>
                     <div className="text-[10px] text-zinc-500 font-bold mt-1 truncate">
-                        <span className="text-emerald-400 font-semibold">{stats.importCount} Nhập</span> • <span className="text-rose-400 font-semibold">{stats.exportCount} Xuất</span>
+                        <span className="text-[#2E9599] font-semibold">{stats.importCount} Nhập</span> • <span className="text-[#A7226F] font-semibold">{stats.exportCount} Xuất</span>
                     </div>
                 </div>
 
                 {/* Thẻ 2: Tổng Tiền Nhập */}
                 <div 
                     onClick={() => setLogActionFilter(logActionFilter === 'NHAP' ? 'ALL' : 'NHAP')}
-                    className={`border p-3 sm:p-3.5 rounded-2xl flex flex-col min-w-0 shadow-sm transition-all cursor-pointer active:scale-95 ${
+                    className={`p-3 sm:p-3.5 rounded-2xl flex flex-col min-w-0 shadow-md transition-all cursor-pointer active:scale-95 border-0 ${
                         logActionFilter === 'NHAP' 
-                            ? 'bg-emerald-950/40 border-emerald-400/60 shadow-[0_0_15px_rgba(16,185,129,0.2)]' 
-                            : 'bg-[#121215] border-white/[0.08] hover:border-emerald-500/40'
+                            ? 'bg-[#282b33]' 
+                            : 'bg-[#202228] hover:bg-[#282b33]'
                     }`}
                 >
                     <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider truncate">Tổng Tiền Nhập</span>
-                        <div className="w-6 h-6 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-xs">
+                        <span className="text-[10px] font-bold text-[#2E9599] uppercase tracking-wider truncate">Tổng Tiền Nhập</span>
+                        <div className="w-6 h-6 rounded-lg bg-[#2E9599]/20 flex items-center justify-center text-[#2E9599] text-xs border-0">
                             <i className="fas fa-arrow-down"></i>
                         </div>
                     </div>
-                    <div className="text-[16px] sm:text-[18px] font-black text-emerald-400 font-mono truncate">
+                    <div className="text-[16px] sm:text-[18px] font-black text-[#2E9599] font-mono truncate">
                         +{stats.importAmt.toLocaleString('vi-VN')}đ
                     </div>
                     <div className="text-[10px] text-zinc-400 font-bold mt-1">
@@ -1244,19 +1225,19 @@ const ImportExportTab = React.memo(function ImportExportTab({ data, pushData, is
                 {/* Thẻ 3: Tổng Tiền Xuất */}
                 <div 
                     onClick={() => setLogActionFilter(logActionFilter === 'XUAT' ? 'ALL' : 'XUAT')}
-                    className={`border p-3 sm:p-3.5 rounded-2xl flex flex-col min-w-0 shadow-sm transition-all cursor-pointer active:scale-95 ${
+                    className={`p-3 sm:p-3.5 rounded-2xl flex flex-col min-w-0 shadow-md transition-all cursor-pointer active:scale-95 border-0 ${
                         logActionFilter === 'XUAT' 
-                            ? 'bg-rose-950/40 border-rose-400/60 shadow-[0_0_15px_rgba(244,63,94,0.2)]' 
-                            : 'bg-[#121215] border-white/[0.08] hover:border-rose-500/40'
+                            ? 'bg-[#282b33]' 
+                            : 'bg-[#202228] hover:bg-[#282b33]'
                     }`}
                 >
                     <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-black text-rose-400 uppercase tracking-wider truncate">Tổng Tiền Xuất</span>
-                        <div className="w-6 h-6 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 text-xs">
+                        <span className="text-[10px] font-bold text-[#A7226F] uppercase tracking-wider truncate">Tổng Tiền Xuất</span>
+                        <div className="w-6 h-6 rounded-lg bg-[#A7226F]/20 flex items-center justify-center text-[#A7226F] text-xs border-0">
                             <i className="fas fa-arrow-up"></i>
                         </div>
                     </div>
-                    <div className="text-[16px] sm:text-[18px] font-black text-rose-400 font-mono truncate">
+                    <div className="text-[16px] sm:text-[18px] font-black text-[#A7226F] font-mono truncate">
                         -{stats.exportAmt.toLocaleString('vi-VN')}đ
                     </div>
                     <div className="text-[10px] text-zinc-400 font-bold mt-1">
@@ -1265,14 +1246,14 @@ const ImportExportTab = React.memo(function ImportExportTab({ data, pushData, is
                 </div>
 
                 {/* Thẻ 4: Chênh Lệch Luân Chuyển */}
-                <div className="bg-gradient-to-br from-[#18181f] via-[#121215] to-[#09090b] border border-[#d4af37]/40 p-3 sm:p-3.5 rounded-2xl flex flex-col min-w-0 shadow-sm">
+                <div className="bg-[#202228] p-3 sm:p-3.5 rounded-2xl flex flex-col min-w-0 shadow-md border-0">
                     <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-black text-[#d4af37] uppercase tracking-wider truncate">Giá Trị Ròng (Nhập - Xuất)</span>
-                        <div className="w-6 h-6 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/30 flex items-center justify-center text-[#d4af37] text-xs">
+                        <span className="text-[10px] font-bold text-[#F7DC68] uppercase tracking-wider truncate">Giá Trị Ròng (Nhập - Xuất)</span>
+                        <div className="w-6 h-6 rounded-lg bg-[#18191d] flex items-center justify-center text-[#F7DC68] text-xs border-0">
                             <i className="fas fa-scale-balanced"></i>
                         </div>
                     </div>
-                    <div className={`text-[16px] sm:text-[18px] font-black font-mono truncate ${stats.netDiff >= 0 ? 'text-[#d4af37]' : 'text-amber-400'}`}>
+                    <div className={`text-[16px] sm:text-[18px] font-black font-mono truncate ${stats.netDiff >= 0 ? 'text-[#F7DC68]' : 'text-[#F46C3F]'}`}>
                         {stats.netDiff >= 0 ? '+' : ''}{stats.netDiff.toLocaleString('vi-VN')}đ
                     </div>
                     <div className="text-[10px] text-zinc-400 font-bold mt-1 truncate">
@@ -1282,8 +1263,8 @@ const ImportExportTab = React.memo(function ImportExportTab({ data, pushData, is
             </div>
             )}
 
-            {/* Bộ lọc nghiệp vụ & Thanh tìm kiếm */}
-            <div className="bg-[#121215] border border-white/[0.08] p-3.5 sm:p-4 rounded-2xl space-y-3 shadow-sm w-full max-w-full overflow-x-hidden">
+            {/* Bộ lọc nghiệp vụ & Thanh tìm kiếm (Four Seasons Solid Matte) */}
+            <div className="bg-[#202228] p-3.5 sm:p-4 rounded-2xl space-y-3 shadow-md border-0 w-full max-w-full overflow-x-hidden">
                 {mode !== 'KIEM_KHO' && (
                 <div className="space-y-2.5">
                     {/* HÀNG 1: CHỌN KHO (TẤT CẢ / BỂ KÍNH / LAYOUT / PHỤ KIỆN / VẬT TƯ) */}
@@ -1293,47 +1274,47 @@ const ImportExportTab = React.memo(function ImportExportTab({ data, pushData, is
                                 id: 'TẤT CẢ', 
                                 label: 'Tất Cả Kho', 
                                 icon: 'fa-layer-group', 
-                                activeClass: 'bg-white/[0.2] text-white border-white/40 shadow-sm font-black', 
-                                inactiveClass: 'bg-[#18181e] text-zinc-400 border border-white/[0.06] hover:text-white',
+                                activeClass: 'bg-[#282b33] text-white font-black shadow-none border-0', 
+                                inactiveClass: 'bg-transparent text-zinc-400 hover:text-white border-0',
                                 iconColor: 'text-zinc-300'
                             },
                             { 
                                 id: 'KHO BỂ KÍNH', 
                                 label: 'Kho Bể Kính', 
                                 icon: 'fa-fish', 
-                                activeClass: 'bg-gradient-to-r from-cyan-500/30 via-cyan-500/15 to-transparent text-cyan-300 border-cyan-400/60 shadow-[0_0_16px_rgba(6,182,212,0.35)] ring-1 ring-cyan-400/40 font-black', 
-                                inactiveClass: 'bg-[#18181e] text-zinc-400 border border-white/[0.06] hover:text-cyan-300 hover:border-cyan-500/30',
-                                iconColor: 'text-cyan-400'
+                                activeClass: 'bg-[#282b33] text-white font-black shadow-none border-0', 
+                                inactiveClass: 'bg-transparent text-zinc-400 hover:text-white border-0',
+                                iconColor: 'text-[#2E9599]'
                             },
                             { 
                                 id: 'KHO LAYOUT', 
                                 label: 'Kho Layout', 
                                 icon: 'fa-mountain-sun', 
-                                activeClass: 'bg-gradient-to-r from-amber-500/30 via-amber-500/15 to-transparent text-amber-300 border-amber-400/60 shadow-[0_0_16px_rgba(245,158,11,0.35)] ring-1 ring-amber-400/40 font-black', 
-                                inactiveClass: 'bg-[#18181e] text-zinc-400 border border-white/[0.06] hover:text-amber-300 hover:border-amber-500/30',
-                                iconColor: 'text-amber-400'
+                                activeClass: 'bg-[#282b33] text-white font-black shadow-none border-0', 
+                                inactiveClass: 'bg-transparent text-zinc-400 hover:text-white border-0',
+                                iconColor: 'text-[#F46C3F]'
                             },
                             { 
                                 id: 'KHO HÀNG HOÁ', 
                                 label: 'Kho Hàng Hoá (Phụ Kiện)', 
                                 icon: 'fa-plug', 
-                                activeClass: 'bg-gradient-to-r from-purple-500/30 via-purple-500/15 to-transparent text-purple-300 border-purple-400/60 shadow-[0_0_16px_rgba(168,85,247,0.35)] ring-1 ring-purple-400/40 font-black', 
-                                inactiveClass: 'bg-[#18181e] text-zinc-400 border border-white/[0.06] hover:text-purple-300 hover:border-purple-500/30',
-                                iconColor: 'text-purple-400'
+                                activeClass: 'bg-[#282b33] text-white font-black shadow-none border-0', 
+                                inactiveClass: 'bg-transparent text-zinc-400 hover:text-white border-0',
+                                iconColor: 'text-[#F7DC68]'
                             },
                             { 
                                 id: 'KHO NGUYÊN LIỆU', 
                                 label: 'Kho Nguyên Liệu (Vật Tư)', 
                                 icon: 'fa-boxes-stacked', 
-                                activeClass: 'bg-gradient-to-r from-emerald-500/30 via-emerald-500/15 to-transparent text-emerald-300 border-emerald-400/60 shadow-[0_0_16px_rgba(16,185,129,0.35)] ring-1 ring-emerald-400/40 font-black', 
-                                inactiveClass: 'bg-[#18181e] text-zinc-400 border border-white/[0.06] hover:text-emerald-300 hover:border-emerald-500/30',
-                                iconColor: 'text-emerald-400'
+                                activeClass: 'bg-[#282b33] text-white font-black shadow-none border-0', 
+                                inactiveClass: 'bg-transparent text-zinc-400 hover:text-white border-0',
+                                iconColor: 'text-[#A7226F]'
                             }
                         ].map(tab => (
                             <button
                                 key={tab.id}
                                 onClick={() => setFilterType(tab.id)}
-                                className={`px-3.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer active:scale-95 border ${
+                                className={`px-3.5 py-2 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                                     filterType === tab.id ? tab.activeClass : tab.inactiveClass
                                 }`}
                             >
@@ -1344,13 +1325,13 @@ const ImportExportTab = React.memo(function ImportExportTab({ data, pushData, is
                     </div>
 
                     {/* HÀNG 2: TÁCH RIÊNG XUẤT / NHẬP / ĐẶT HÀNG / KIỂM KHO TRONG KHO ĐANG CHỌN */}
-                    <div className="flex gap-1.5 overflow-x-auto hide-scrollbar items-center py-0.5 border-t border-white/[0.06] pt-2">
+                    <div className="flex gap-1.5 overflow-x-auto hide-scrollbar items-center py-0.5 border-t border-white/[0.04] pt-2">
                         {[
-                            { id: 'ALL', label: `Tất Cả (${categoryAndMonthFilteredLogs.length})`, icon: 'fa-list' },
-                            { id: 'NHAP', label: `Nhập Kho (${stats.importCount})`, icon: 'fa-arrow-down', activeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-400/50 font-black' },
-                            { id: 'XUAT', label: `Xuất Kho (${stats.exportCount})`, icon: 'fa-arrow-up', activeClass: 'bg-rose-500/20 text-rose-300 border-rose-400/50 font-black' },
-                            { id: 'DAT_HANG', label: `Đặt Hàng (${stats.poCount})`, icon: 'fa-file-invoice', activeClass: 'bg-purple-500/20 text-purple-300 border-purple-400/50 font-black' },
-                            { id: 'KIEM_KHO', label: `Kiểm Kho / Khác (${stats.auditCount})`, icon: 'fa-clipboard-check', activeClass: 'bg-cyan-500/20 text-cyan-300 border-cyan-400/50 font-black' }
+                            { id: 'ALL', label: `Tất Cả (${categoryAndMonthFilteredLogs.length})`, icon: 'fa-list', activeClass: 'bg-[#282b33] text-white font-black border-0' },
+                            { id: 'NHAP', label: `Nhập Kho (${stats.importCount})`, icon: 'fa-arrow-down', activeClass: 'bg-[#2E9599] text-white font-black border-0' },
+                            { id: 'XUAT', label: `Xuất Kho (${stats.exportCount})`, icon: 'fa-arrow-up', activeClass: 'bg-[#A7226F] text-white font-black border-0' },
+                            { id: 'DAT_HANG', label: `Đặt Hàng (${stats.poCount})`, icon: 'fa-file-invoice', activeClass: 'bg-[#F7DC68] text-zinc-950 font-bold border-0' },
+                            { id: 'KIEM_KHO', label: `Kiểm Kho / Khác (${stats.auditCount})`, icon: 'fa-clipboard-check', activeClass: 'bg-[#F46C3F] text-white font-black border-0' }
                         ].map(sub => {
                             const isSel = logActionFilter === sub.id;
                             return (
@@ -1358,10 +1339,10 @@ const ImportExportTab = React.memo(function ImportExportTab({ data, pushData, is
                                     key={sub.id}
                                     type="button"
                                     onClick={() => setLogActionFilter(sub.id)}
-                                    className={`px-3 py-1 rounded-xl text-[10.5px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 border whitespace-nowrap ${
+                                    className={`px-3 py-1 rounded-xl text-[10.5px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 whitespace-nowrap border-0 ${
                                         isSel
-                                            ? (sub.activeClass || 'bg-white/[0.2] text-white border-white/40 shadow-sm font-black')
-                                            : 'bg-[#18181e] text-zinc-400 border-white/[0.06] hover:text-zinc-200'
+                                            ? (sub.activeClass || 'bg-[#282b33] text-white font-black')
+                                            : 'bg-[#18191d] text-zinc-400 hover:text-white'
                                     }`}
                                 >
                                     <i className={`fas ${sub.icon} text-[9.5px]`}></i>
@@ -1374,7 +1355,7 @@ const ImportExportTab = React.memo(function ImportExportTab({ data, pushData, is
                 )}
 
                 <div className="flex gap-2 items-center">
-                    <div className="relative flex-1 bg-[#09090b] border border-white/[0.08] rounded-xl flex items-center px-3 py-1 focus-within:border-[#d4af37]/60 focus-within:ring-1 focus-within:ring-[#d4af37]/25 transition-all">
+                    <div className="relative flex-1 bg-[#18191d] rounded-xl flex items-center px-3 py-1 border-0 focus-within:ring-1 focus-within:ring-[#2E9599] transition-all">
                         <i className="fas fa-search text-zinc-500 text-xs mr-2.5 shrink-0"></i>
                         <input 
                             type="text" 
@@ -1392,9 +1373,9 @@ const ImportExportTab = React.memo(function ImportExportTab({ data, pushData, is
                     <div className="relative w-[130px] sm:w-40 shrink-0">
                         <input 
                             type="month" 
-                            value={filterMonth}
-                            onChange={(e) => setFilterMonth(e.target.value)}
-                            className="w-full bg-[#09090b] border border-white/[0.08] rounded-xl px-2.5 sm:px-3 py-2 text-xs font-bold text-white outline-none focus:border-[#d4af37] transition-colors"
+                            value={filterMonth} 
+                            onChange={(e) => setFilterMonth(e.target.value)} 
+                            className="w-full bg-[#18191d] rounded-xl px-2.5 sm:px-3 py-2 text-xs font-bold text-white outline-none border-0 transition-colors" 
                         />
                     </div>
                 </div>

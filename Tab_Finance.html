@@ -2739,7 +2739,11 @@ const FinanceTab = React.memo(function FinanceTab({ orders, erpData, pushDeltas,
         return () => window.removeEventListener('rf_categories_updated', handleUpdate);
     }, []);
 
-    const [activeSubTab, setActiveSubTab] = React.useState('CASHBOOK'); // CASHBOOK | SO_QUY | THONG_KE
+    const [activeSubTab, setActiveSubTab] = React.useState('OPERATING'); // OPERATING | VAULT | PARTNERS | LEDGER
+    const [ledgerViewMode, setLedgerViewMode] = React.useState('CASHBOOK'); // CASHBOOK | SO_QUY | THONG_KE
+    const [selectedPartnerForDrawer, setSelectedPartnerForDrawer] = React.useState(null);
+    const [partnerSearch, setPartnerSearch] = React.useState('');
+    const [partnerGroupFilter, setPartnerGroupFilter] = React.useState('ALL');
     const [filterTime, setFilterTime] = React.useState('Tháng Này'); 
     const [customMonth, setCustomMonth] = React.useState('');
     const [filterAccount, setFilterAccount] = React.useState('ALL');
@@ -2777,6 +2781,33 @@ const FinanceTab = React.memo(function FinanceTab({ orders, erpData, pushDeltas,
             return cached ? { ...acc, ...cached } : acc; 
         });
     }, [erpData?.Accounts, localAccounts]);
+
+    // Nhận diện tài khoản Vault / Dài hạn
+    const isVaultAccount = React.useCallback((acc) => {
+        if (!acc) return false;
+        const name = String(acc.accountName || acc.name || '').toLowerCase();
+        const type = String(acc.type || '').toLowerCase();
+        return name.includes('vault') || name.includes('vndc') || name.includes('đầu tư') || 
+               name.includes('dài hạn') || name.includes('dự trữ') || type.includes('đầu tư') || type.includes('vault');
+    }, []);
+
+    const operatingAccounts = React.useMemo(() => {
+        return accountsData.filter(a => !isVaultAccount(a));
+    }, [accountsData, isVaultAccount]);
+
+    const vaultAccounts = React.useMemo(() => {
+        return accountsData.filter(a => isVaultAccount(a));
+    }, [accountsData, isVaultAccount]);
+
+    const operatingCash = React.useMemo(() => {
+        return operatingAccounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+    }, [operatingAccounts]);
+
+    // Quỹ Vault Tầng 2: Nếu có tài khoản trong CSDL thì tính tổng, nếu chưa thì hiển thị mức cam kết sàn 689M VNDC
+    const vaultReserveTotal = React.useMemo(() => {
+        const fromAccs = vaultAccounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+        return fromAccs > 0 ? fromAccs : 689000000;
+    }, [vaultAccounts]);
 
     // Helper kiểm tra giao dịch điều chỉnh số dư kỹ thuật
     const isAdjustmentTx = React.useCallback((t) => {
@@ -2863,6 +2894,121 @@ const FinanceTab = React.memo(function FinanceTab({ orders, erpData, pushDeltas,
         });
         return merged.sort((a, b) => parseTxTimestamp(b) - parseTxTimestamp(a));
     }, [erpData?.Transactions, localTxs]);
+
+    // Khoản Cho Vay Nhân Sự Nội Bộ (Asset): Tạm ứng, Cho vay (hạch toán Tài Sản Phải Thu, tuyệt đối không tính vào OPEX)
+    const staffLoansData = React.useMemo(() => {
+        const list = allTxs.filter(t => {
+            const cat = String(t.category || '').toLowerCase();
+            const title = String(t.title || '').toLowerCase();
+            return (cat.includes('tạm ứng') || cat.includes('cho vay') || title.includes('tạm ứng') || title.includes('cho vay')) && t.type === 'Chi';
+        });
+        const total = list.reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+        return { list, total };
+    }, [allTxs]);
+
+    // OPEX 30 ngày qua (Loại trừ Chuyển tiền, Điều chỉnh, Cho vay/Tạm ứng nội bộ, Quỹ đầu tư)
+    const opexLast30Days = React.useMemo(() => {
+        const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+        return allTxs.filter(t => {
+            if (t.type !== 'Chi') return false;
+            if (isAdjustmentTx(t)) return false;
+            const cat = String(t.category || '').toLowerCase();
+            if (cat.includes('tạm ứng') || cat.includes('cho vay') || cat.includes('đầu tư') || cat.includes('vault')) return false;
+            const ts = parseTxTimestamp(t);
+            return ts >= thirtyDaysAgo;
+        }).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    }, [allTxs, isAdjustmentTx]);
+
+    const dailyBurnRate = React.useMemo(() => {
+        return Math.max(Math.round(opexLast30Days / 30), 1000000);
+    }, [opexLast30Days]);
+
+    const cashRunwayDays = React.useMemo(() => {
+        return dailyBurnRate > 0 ? Math.floor(operatingCash / dailyBurnRate) : 999;
+    }, [operatingCash, dailyBurnRate]);
+
+    // Sổ Danh Sách Đối Tác 3 Nhóm (Vật tư, Vận chuyển/Sàn, CTV/Sỉ)
+    const partnersList = React.useMemo(() => {
+        const result = [];
+        // 1. Nhóm NCC Vật tư: erpData?.Suppliers
+        (erpData?.Suppliers || []).forEach(s => {
+            result.push({
+                id: s.id || 'SUP_' + s.name,
+                name: s.name || 'NCC Không tên',
+                group: 'SUPPLIER',
+                groupLabel: 'Vật Tư & Xưởng',
+                phone: s.phone || 'Chưa có SĐT',
+                debt: Number(s.totalDebt) || 0,
+                isPayable: true,
+                category: s.category || 'Nguyên Vật Liệu',
+                note: s.note || '',
+                raw: s
+            });
+        });
+
+        // 2. Nhóm Vận chuyển & Sàn TMĐT
+        const carriers = [
+            { name: 'Shopee Platform & Ví', group: 'CARRIER', groupLabel: 'Sàn & Vận Chuyển', phone: 'Hotline 19001221', category: 'Sàn TMĐT' },
+            { name: 'TikTok Shop VN', group: 'CARRIER', groupLabel: 'Sàn & Vận Chuyển', phone: 'Hotline TikTok', category: 'Sàn TMĐT' },
+            { name: 'Viettel Post', group: 'CARRIER', groupLabel: 'Sàn & Vận Chuyển', phone: '19008095', category: 'Vận Chuyển COD' },
+            { name: 'SPX Express', group: 'CARRIER', groupLabel: 'Sàn & Vận Chuyển', phone: '19001442', category: 'Vận Chuyển' },
+            { name: 'Giao Hàng Nhanh (GHN)', group: 'CARRIER', groupLabel: 'Sàn & Vận Chuyển', phone: '1900636677', category: 'Vận Chuyển COD' }
+        ];
+        carriers.forEach((c, idx) => {
+            const matchingTxs = allTxs.filter(t => (t.title && t.title.toLowerCase().includes(c.name.toLowerCase())) || (t.note && t.note.toLowerCase().includes(c.name.toLowerCase())));
+            const recentAmt = matchingTxs.slice(0, 5).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+            result.push({
+                id: 'CARRIER_' + idx,
+                name: c.name,
+                group: c.group,
+                groupLabel: c.groupLabel,
+                phone: c.phone,
+                debt: 0,
+                isPayable: false,
+                category: c.category,
+                note: `GD gần nhất: ${formatFinanceMoney(recentAmt)}đ`,
+                raw: c
+            });
+        });
+
+        // 3. Nhóm Cộng tác viên / Đại lý sỉ: CTV_Finance
+        (erpData?.CTV_Finance || []).forEach((ctv, idx) => {
+            const uName = ctv.user || ctv.name || `CTV #${idx + 1}`;
+            const existing = result.find(r => r.name === uName && r.group === 'CTV');
+            const amt = Number(ctv.amount) || 0;
+            if (existing) {
+                existing.debt += (ctv.type === 'Thu' ? -amt : amt);
+            } else {
+                result.push({
+                    id: ctv.id || 'CTV_' + idx,
+                    name: uName,
+                    group: 'CTV',
+                    groupLabel: 'Cộng Tác Viên & Sỉ',
+                    phone: ctv.phone || 'CTV / Sỉ',
+                    debt: amt,
+                    isPayable: false,
+                    category: 'Hoa hồng / Chiết khấu',
+                    note: ctv.note || '',
+                    raw: ctv
+                });
+            }
+        });
+
+        return result;
+    }, [erpData?.Suppliers, erpData?.CTV_Finance, allTxs]);
+
+    // Giao dịch 60 ngày của đối tác được chọn
+    const partner60DayTxs = React.useMemo(() => {
+        if (!selectedPartnerForDrawer) return [];
+        const pName = String(selectedPartnerForDrawer.name || '').toLowerCase();
+        const sixtyDaysAgo = Date.now() - (60 * 24 * 60 * 60 * 1000);
+        return allTxs.filter(t => {
+            const title = String(t.title || '').toLowerCase();
+            const note = String(t.note || '').toLowerCase();
+            const ts = parseTxTimestamp(t);
+            return ts >= sixtyDaysAgo && (title.includes(pName) || note.includes(pName));
+        });
+    }, [selectedPartnerForDrawer, allTxs]);
 
     // Time window calculation
     const timeRange = React.useMemo(() => {
@@ -3471,111 +3617,81 @@ const FinanceTab = React.memo(function FinanceTab({ orders, erpData, pushDeltas,
         exportToExcel(filteredTxs, columns, `So_Quy_RichFish_${new Date().toISOString().slice(0, 10)}.xlsx`);
     };
 
+    // GATEKEEPER (BẢO MẬT 100%): CHỈ TIẾN (BOSS) VÀ KẾ TOÁN (TRANG/FINANCE_ADMIN) ĐƯỢC TRUY CẬP
+    if (!isBoss && !isAccountant && !hasPerm('FIN_VIEW_ACCOUNTS') && !hasPerm('FINANCE_ADMIN')) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[65vh] p-8 text-center bg-[#09090b] rounded-3xl border border-white/[0.06] my-4 shadow-2xl">
+                <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 text-2xl mb-4 shadow-lg shadow-rose-950/40">
+                    <i className="fas fa-shield-halved"></i>
+                </div>
+                <h3 className="text-lg font-black text-white uppercase tracking-wider mb-2">403 · KHÔNG CÓ QUYỀN TRUY CẬP PHÂN HỆ TÀI CHÍNH</h3>
+                <p className="text-zinc-400 text-sm max-w-md mb-6 leading-relaxed">
+                    Phân hệ Quản Trị Tài Chính, Dòng Tiền và Quỹ là khu vực bảo mật tối cao của RichFish Aquarium, chỉ dành cho Ban Giám Đốc (Tiến) và Bộ Phận Kế Toán.
+                </p>
+                <div className="text-xs text-zinc-400 font-mono bg-zinc-900/60 px-4 py-2 rounded-xl border border-white/[0.06] flex items-center gap-2">
+                    <i className="fas fa-lock text-amber-400"></i>
+                    <span>Yêu cầu quyền: <b className="text-amber-300">FIN_VIEW_ACCOUNTS</b> hoặc <b className="text-amber-300">FINANCE_ADMIN</b></span>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-3.5 pb-12 w-full">
             
-            {/* 1. HERO METRICS DECK: BÁO CÁO LƯU CHUYỂN TIỀN TỆ CHUẨN KẾ TOÁN (4 NHỊP CHUYỂN DÒNG TIỀN) */}
-            <div className="bg-[#121216] border border-white/[0.08] p-3.5 sm:p-4 rounded-3xl shadow-xl backdrop-blur-md relative overflow-hidden">
-                <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 mb-3 border-b border-white/[0.06] pb-3">
-                    <div className="flex items-center gap-2.5">
-                        <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-amber-500/20 to-amber-400/10 border border-amber-500/40 flex items-center justify-center text-amber-400 text-base shadow-inner">
-                            <i className="fas fa-scale-balanced"></i>
-                        </div>
-                        <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <h2 className="text-[13.5px] font-black text-white uppercase tracking-wider">Báo Cáo Chu Chuyển Tiền Tệ</h2>
-                                {filterAccount !== 'ALL' && (
-                                    <span className="bg-sky-950/60 text-sky-300 border border-sky-500/40 text-[9.5px] font-black px-2 py-0.5 rounded-lg shadow-sm">
-                                        {accountPeriodStats.selectedAccountName}
-                                    </span>
-                                )}
-                            </div>
-                            <p className="text-[10.5px] text-zinc-400 font-medium">Đối soát cân đối: <span className="text-zinc-200 font-semibold">Đầu kỳ + Thu - Chi = Cuối kỳ</span></p>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <div className="bg-[#09090b] border border-zinc-800 px-3 py-1.5 rounded-xl flex items-center gap-2 text-[11px] shadow-inner">
-                            <span className="text-zinc-400 font-bold uppercase tracking-wider text-[9.5px]">Dòng Tiền Thuần:</span>
-                            <span className={`font-mono font-black ${accountPeriodStats.netCashflow >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                {accountPeriodStats.netCashflow >= 0 ? '+' : ''}{secureMoney(accountPeriodStats.netCashflow)}đ
-                            </span>
-                        </div>
-                        <div className="bg-[#09090b] border border-zinc-800 px-3 py-1.5 rounded-xl flex items-center gap-2 text-[11px] shadow-inner">
-                            <span className="text-zinc-400 font-bold uppercase tracking-wider text-[9.5px]">Nợ Phải Trả NCC:</span>
-                            <span className="font-mono font-black text-rose-400">
-                                {secureMoney(totalDebtSuppliers)}đ
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-                    {/* 1. QUỸ ĐẦU KỲ */}
-                    <div className="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 p-3.5 rounded-2xl relative overflow-hidden group hover:border-amber-500/50 transition-all shadow-[0_0_20px_rgba(245,158,11,0.1)]">
-                        <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-[10px] font-extrabold text-amber-400 uppercase tracking-wider">1. Quỹ Đầu Kỳ</span>
-                            <span className="text-[9.5px] text-amber-300 font-mono bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-500/30">{filterTime}</span>
-                        </div>
-                        <div className="text-[18px] sm:text-[21px] font-mono font-black text-amber-300 tracking-tight">
-                            {secureMoney(accountPeriodStats.totalOpening)}đ
-                        </div>
-                        <p className="text-[10px] text-zinc-400 mt-1 font-medium">Số dư đầu kỳ báo cáo</p>
-                    </div>
-
-                    {/* 2. TỔNG THU TRONG KỲ */}
-                    <div className="bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/30 p-3.5 rounded-2xl relative overflow-hidden group hover:border-emerald-500/50 transition-all shadow-[0_0_20px_rgba(16,185,129,0.1)]">
-                        <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider">2. Tiền Thu Trong Kỳ (+)</span>
-                            <div className="w-5 h-5 rounded-lg bg-emerald-950/80 text-emerald-400 flex items-center justify-center text-[10px] border border-emerald-500/30">
-                                <i className="fas fa-arrow-down"></i>
-                            </div>
-                        </div>
-                        <div className="text-[18px] sm:text-[21px] font-mono font-black text-emerald-400 tracking-tight">
-                            +{secureMoney(accountPeriodStats.totalInflow)}đ
-                        </div>
-                        <p className="text-[10px] text-zinc-400 mt-1 font-medium">{countThu} giao dịch phát sinh thu</p>
-                    </div>
-
-                    {/* 3. TỔNG CHI TRONG KỲ */}
-                    <div className="bg-gradient-to-br from-rose-500/10 via-rose-500/5 to-transparent border border-rose-500/30 p-3.5 rounded-2xl relative overflow-hidden group hover:border-rose-500/50 transition-all shadow-[0_0_20px_rgba(244,63,94,0.1)]">
-                        <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-[10px] font-extrabold text-rose-400 uppercase tracking-wider">3. Tiền Chi Trong Kỳ (-)</span>
-                            <div className="w-5 h-5 rounded-lg bg-rose-950/80 text-rose-400 flex items-center justify-center text-[10px] border border-rose-500/30">
-                                <i className="fas fa-arrow-up"></i>
-                            </div>
-                        </div>
-                        <div className="text-[18px] sm:text-[21px] font-mono font-black text-rose-400 tracking-tight">
-                            -{secureMoney(accountPeriodStats.totalOutflow)}đ
-                        </div>
-                        <p className="text-[10px] text-zinc-400 mt-1 font-medium">{countChi} giao dịch phát sinh chi</p>
-                    </div>
-
-                    {/* 4. QUỸ CUỐI KỲ / TỒN HIỆN HỮU */}
-                    <div className="bg-gradient-to-br from-sky-500/10 via-sky-500/5 to-transparent border border-sky-500/40 p-3.5 rounded-2xl relative overflow-hidden group hover:border-sky-500/60 transition-all shadow-[0_0_20px_rgba(14,165,233,0.1)]">
-                        <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-[10px] font-extrabold text-sky-400 uppercase tracking-wider">4. Tồn Quỹ Cuối Kỳ (=)</span>
-                            <div className="w-5 h-5 rounded-lg bg-sky-950/80 text-sky-400 flex items-center justify-center text-[10px] border border-sky-500/30">
-                                <i className="fas fa-vault"></i>
-                            </div>
-                        </div>
-                        <div className="text-[18px] sm:text-[21px] font-mono font-black text-sky-300 tracking-tight">
-                            {secureMoney(accountPeriodStats.totalEnding)}đ
-                        </div>
-                        <p className="text-[10px] text-zinc-400 mt-1 font-medium">Tổng số dư khả dụng</p>
-                    </div>
-                </div>
+            {/* 1. TOP SUB-TABS (FOUR SEASONS SOLID MATTE) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 bg-[#202228] p-1 rounded-2xl gap-1 border-0 shadow-md">
+                <button 
+                    onClick={() => setActiveSubTab('OPERATING')} 
+                    className={`py-2.5 px-2 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border-0 ${
+                        activeSubTab === 'OPERATING' 
+                            ? 'bg-[#282b33] text-white shadow-none font-black' 
+                            : 'bg-transparent text-zinc-400 hover:text-white'
+                    }`}
+                >
+                    <i className="fas fa-wallet text-xs text-[#2E9599]"></i> <span className="truncate">Dòng Tiền & Vốn Khả Dụng</span>
+                </button>
+                <button 
+                    onClick={() => setActiveSubTab('VAULT')} 
+                    className={`py-2.5 px-3 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border-0 ${
+                        activeSubTab === 'VAULT' 
+                            ? 'bg-[#282b33] text-white shadow-none font-black' 
+                            : 'bg-transparent text-zinc-400 hover:text-white'
+                    }`}
+                >
+                    <i className="fas fa-shield-halved text-xs text-[#F7DC68]"></i> <span className="truncate">Quỹ Dự Trữ Khẩn Cấp</span>
+                </button>
+                <button 
+                    onClick={() => setActiveSubTab('PARTNERS')} 
+                    className={`py-2.5 px-3 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border-0 ${
+                        activeSubTab === 'PARTNERS' 
+                            ? 'bg-[#282b33] text-white shadow-none font-black' 
+                            : 'bg-transparent text-zinc-400 hover:text-white'
+                    }`}
+                >
+                    <i className="fas fa-building-columns text-xs text-[#F46C3F]"></i> <span className="truncate">Sổ Đối Tác & Công Nợ</span>
+                </button>
+                <button 
+                    onClick={() => setActiveSubTab('LEDGER')} 
+                    className={`py-2.5 px-3 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border-0 ${
+                        activeSubTab === 'LEDGER' 
+                            ? 'bg-[#282b33] text-white shadow-none font-black' 
+                            : 'bg-transparent text-zinc-400 hover:text-white'
+                    }`}
+                >
+                    <i className="fas fa-book text-xs text-[#A7226F]"></i> <span className="truncate">Sổ Nhật Ký Thu Chi</span>
+                </button>
             </div>
 
-            {/* 2. ACTION BAR & TIME FILTER (CÙNG 1 HÀNG DUY NHẤT) */}
-            <div className="flex items-center justify-between gap-2 bg-[#121216] border border-white/[0.08] p-2 rounded-2xl overflow-x-auto hide-scrollbar">
+            {/* 2. ACTION BAR & TIME FILTER (FOUR SEASONS SOLID MATTE) */}
+            <div className="flex flex-wrap items-center justify-between gap-2.5 bg-[#202228] p-2.5 sm:p-3 rounded-2xl border-0 shadow-md">
                 {/* Cụm nút hành động bên trái */}
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-2 shrink-0">
                     {canManageFinance && (
                         <>
                             <button 
                                 onClick={handleOpenAddTx} 
-                                className="h-9 px-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black rounded-xl flex items-center gap-1.5 shadow-md shadow-amber-950/40 active:scale-95 transition-all cursor-pointer shrink-0 text-[11px] uppercase tracking-wider whitespace-nowrap"
+                                className="h-9 px-3.5 bg-[#F46C3F] hover:bg-[#ff7d52] text-white font-black rounded-xl flex items-center gap-1.5 shadow-sm active:scale-95 transition-all cursor-pointer shrink-0 text-xs tracking-wide border-0"
                                 title="Tạo Phiếu Thu / Chi Mới"
                             >
                                 <i className="fas fa-plus text-xs"></i>
@@ -3584,52 +3700,52 @@ const FinanceTab = React.memo(function FinanceTab({ orders, erpData, pushDeltas,
 
                             <button 
                                 onClick={() => setShowImportScanner(true)} 
-                                className="h-9 px-2.5 bg-sky-950/40 hover:bg-sky-900/50 text-sky-300 border border-sky-500/30 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 text-[11px] font-bold active:scale-95" 
+                                className="h-9 px-3 bg-[#18191d] hover:bg-[#282b33] text-zinc-300 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 text-xs font-semibold active:scale-95 border-0" 
                                 title="Quét Sao Kê Bank Excel/CSV"
                             >
-                                <i className="fas fa-file-invoice-dollar text-sky-400 text-sm"></i>
+                                <i className="fas fa-file-invoice-dollar text-zinc-400"></i>
                                 <span className="hidden sm:inline">Sao Kê</span>
                             </button>
                             
                             <button 
                                 onClick={() => setShowShopeeWalletScanner(true)} 
-                                className="h-9 px-2.5 bg-orange-950/40 hover:bg-orange-900/50 text-orange-300 border border-orange-500/30 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 text-[11px] font-bold active:scale-95" 
+                                className="h-9 px-3 bg-[#18191d] hover:bg-[#282b33] text-zinc-300 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 text-xs font-semibold active:scale-95 border-0" 
                                 title="Quét Báo Cáo Ví Shopee"
                             >
-                                <i className="fas fa-wallet text-orange-400 text-sm"></i>
+                                <i className="fas fa-wallet text-zinc-400"></i>
                                 <span className="hidden sm:inline">Ví Shopee</span>
                             </button>
 
                             <button 
                                 onClick={() => setShowReceiptScanner(true)} 
-                                className="h-9 px-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 text-[11px] font-bold active:scale-95" 
+                                className="h-9 px-3 bg-[#18191d] hover:bg-[#282b33] text-zinc-300 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 text-xs font-semibold active:scale-95 border-0" 
                                 title="Đọc ảnh chụp bill bằng AI OCR"
                             >
-                                <i className="fas fa-camera text-amber-400 text-sm"></i>
+                                <i className="fas fa-camera text-zinc-400"></i>
                                 <span className="hidden sm:inline">OCR Bill</span>
                             </button>
 
                             <button 
                                 type="button"
                                 onClick={() => setShowQuickNotes(prev => !prev)}
-                                className={`h-9 px-2.5 border rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 active:scale-95 text-[11px] font-bold ${
-                                    showQuickNotes ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm' : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                className={`h-9 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer shrink-0 active:scale-95 text-xs font-semibold border-0 ${
+                                    showQuickNotes ? 'bg-[#F7DC68] text-zinc-950 font-bold' : 'bg-[#18191d] hover:bg-[#282b33] text-zinc-300'
                                 }`} 
                                 title="Ghi chú & nhắc việc tài chính"
                             >
-                                <i className="fas fa-sticky-note text-amber-400 text-sm"></i>
+                                <i className={`fas fa-note-sticky ${showQuickNotes ? 'text-zinc-950' : 'text-zinc-400'}`}></i>
                                 <span className="hidden lg:inline">Ghi Chú</span>
                             </button>
                         </>
                     )}
                 </div>
 
-                {/* Cụm lọc thời gian bên phải (CÙNG HÀNG) */}
+                {/* Cụm lọc thời gian bên phải */}
                 <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                     <select 
                         value={filterTime} 
                         onChange={e => { setFilterTime(e.target.value); if (e.target.value !== 'Chọn Tháng') setCustomMonth(''); }} 
-                        className="bg-[#09090b] border border-zinc-700 hover:border-amber-400/60 text-amber-300 text-[11px] font-bold px-3 py-2 rounded-xl outline-none transition-colors cursor-pointer"
+                        className="bg-[#18191d] text-zinc-200 text-xs font-medium px-3 py-2 rounded-xl outline-none border-0 transition-colors cursor-pointer"
                     >
                         <option value="Hôm Nay">Hôm Nay</option>
                         <option value="7 Ngày Qua">7 Ngày Qua</option>
@@ -3644,27 +3760,27 @@ const FinanceTab = React.memo(function FinanceTab({ orders, erpData, pushDeltas,
                             type="month" 
                             value={customMonth} 
                             onChange={e => setCustomMonth(e.target.value)} 
-                            className="bg-[#09090b] border border-zinc-700 text-amber-300 text-[11px] font-mono font-bold px-2 py-1.5 rounded-xl outline-none" 
+                            className="bg-[#18191d] text-zinc-200 text-xs font-mono font-medium px-2 py-1.5 rounded-xl outline-none border-0" 
                         />
                     )}
                 </div>
             </div>
 
-            {/* 3. THANH TAB CUỘN NGANG NHANH CÁC QUỸ (FUND PILLS BAR) */}
+            {/* THANH TAB CUỘN NGANG CÁC TÀI KHOẢN / QUỸ (TỐI GIẢN) */}
             <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar py-0.5 px-0.5">
                 {/* Nút Tất Cả Quỹ */}
                 <button 
                     onClick={() => setFilterAccount('ALL')}
-                    className={`px-3.5 py-2 rounded-xl text-[11px] font-extrabold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 shrink-0 active:scale-95 ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold tracking-wide transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 shrink-0 active:scale-95 ${
                         filterAccount === 'ALL'
-                            ? 'bg-gradient-to-r from-amber-500/30 via-amber-500/15 to-transparent text-amber-300 border border-amber-400/70 shadow-[0_0_16px_rgba(245,158,11,0.3)] ring-1 ring-amber-400/40 font-black'
-                            : 'bg-[#121216] text-zinc-400 hover:text-white hover:bg-zinc-800/80 border border-white/[0.08]'
+                            ? 'bg-zinc-800 text-white border border-zinc-600 shadow-sm'
+                            : 'bg-[#121214] text-zinc-400 hover:text-white hover:bg-zinc-800/80 border border-white/[0.06]'
                     }`}
                 >
-                    <i className="fas fa-vault text-[10px] text-amber-400"></i>
+                    <i className="fas fa-layer-group text-[11px] text-zinc-400"></i>
                     <span>Tất Cả Quỹ</span>
-                    <span className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-mono font-black ${
-                        filterAccount === 'ALL' ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40' : 'bg-[#09090b] text-amber-400 border border-zinc-800'
+                    <span className={`text-[10px] px-2 py-0.5 rounded-md font-mono font-bold ${
+                        filterAccount === 'ALL' ? 'bg-zinc-700 text-white' : 'bg-black/40 text-zinc-400'
                     }`}>
                         {secureMoney(accountPeriodStats.totalEnding)}đ
                     </span>
@@ -3673,7 +3789,6 @@ const FinanceTab = React.memo(function FinanceTab({ orders, erpData, pushDeltas,
                 {/* Từng Quỹ */}
                 {accountsData.map(a => {
                     const parsed = parseAccountInfo(a);
-                    const visuals = getBankVisuals(parsed.name, parsed.type);
                     const isSelected = filterAccount === a.id;
                     const accStat = accountPeriodStats.byAccount[a.id];
                     const bal = accStat ? accStat.endingBalance : Number(a.balance || 0);
@@ -3682,18 +3797,16 @@ const FinanceTab = React.memo(function FinanceTab({ orders, erpData, pushDeltas,
                         <button 
                             key={a.id}
                             onClick={() => setFilterAccount(isSelected ? 'ALL' : a.id)}
-                            className={`px-3.5 py-2 rounded-xl text-[11px] font-bold tracking-wide transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 shrink-0 active:scale-95 ${
+                            className={`px-3 py-1.5 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 shrink-0 active:scale-95 ${
                                 isSelected
-                                    ? `${visuals.bg} ${visuals.color} border ${visuals.border} shadow-[0_0_16px_rgba(56,189,248,0.25)] ring-1 ${visuals.ring} font-black`
-                                    : 'bg-[#121216] text-zinc-300 hover:text-white hover:bg-zinc-800/80 border border-white/[0.08]'
+                                    ? 'bg-zinc-800 text-white border border-zinc-600 shadow-sm font-bold'
+                                    : 'bg-[#121214] text-zinc-400 hover:text-white hover:bg-zinc-800/80 border border-white/[0.06]'
                             }`}
                         >
-                            <div className={`w-4 h-4 rounded-md ${visuals.bg} ${visuals.color} flex items-center justify-center text-[9px]`}>
-                                <i className={`fas ${visuals.icon}`}></i>
-                            </div>
+                            <span className="w-2 h-2 rounded-full bg-zinc-400"></span>
                             <span>{parsed.name}</span>
-                            <span className={`text-[9.5px] font-mono px-1.5 py-0.2 rounded-full font-bold ${
-                                isSelected ? 'bg-black/40 text-white font-black' : 'bg-[#09090b] text-zinc-400 border border-zinc-800'
+                            <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md ${
+                                isSelected ? 'bg-zinc-700 text-white font-bold' : 'bg-black/40 text-zinc-400'
                             }`}>
                                 {secureMoney(bal)}đ
                             </span>
@@ -3714,99 +3827,546 @@ const FinanceTab = React.memo(function FinanceTab({ orders, erpData, pushDeltas,
                 />
             )}
 
-            {/* 3. SEGMENTED SUB-TABS (HALLMARK CONTRAST PILLS) */}
-            <div className="grid grid-cols-3 bg-[#0d0d11] p-1.5 rounded-2xl border border-white/[0.08] gap-1.5 shadow-sm">
-                <button 
-                    onClick={() => setActiveSubTab('CASHBOOK')} 
-                    className={`py-2.5 text-[11.5px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 ${
-                        activeSubTab === 'CASHBOOK' 
-                            ? 'bg-gradient-to-r from-amber-500/30 via-amber-500/15 to-transparent text-amber-300 border border-amber-400/70 shadow-[0_0_20px_rgba(245,158,11,0.25)] ring-1 ring-amber-400/40 font-black' 
-                            : 'bg-white/[0.02] border border-white/[0.06] text-zinc-400 hover:text-amber-300 hover:bg-amber-500/10'
-                    }`}
-                >
-                    <i className="fas fa-book-open text-xs text-amber-400"></i> <span className="truncate">Sổ Quỹ Thu Chi</span>
-                </button>
-                <button 
-                    onClick={() => setActiveSubTab('SO_QUY')} 
-                    className={`py-2.5 text-[11.5px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 ${
-                        activeSubTab === 'SO_QUY' 
-                            ? 'bg-gradient-to-r from-sky-500/30 via-sky-500/15 to-transparent text-sky-300 border border-sky-400/70 shadow-[0_0_20px_rgba(14,165,233,0.25)] ring-1 ring-sky-400/40 font-black' 
-                            : 'bg-white/[0.02] border border-white/[0.06] text-zinc-400 hover:text-sky-300 hover:bg-sky-500/10'
-                    }`}
-                >
-                    <i className="fas fa-university text-xs text-sky-400"></i> <span className="truncate">Danh Sách Quỹ</span>
-                </button>
-                <button 
-                    onClick={() => setActiveSubTab('THONG_KE')} 
-                    className={`py-2.5 text-[11.5px] font-black uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 ${
-                        activeSubTab === 'THONG_KE' 
-                            ? 'bg-gradient-to-r from-emerald-500/30 via-emerald-500/15 to-transparent text-emerald-300 border border-emerald-400/70 shadow-[0_0_20px_rgba(16,185,129,0.25)] ring-1 ring-emerald-400/40 font-black' 
-                            : 'bg-white/[0.02] border border-white/[0.06] text-zinc-400 hover:text-emerald-300 hover:bg-emerald-500/10'
-                    }`}
-                >
-                    <i className="fas fa-chart-pie text-xs text-emerald-400"></i> <span className="truncate">Báo Cáo Cơ Cấu</span>
-                </button>
-            </div>
+            {/* ========================================================================= */}
+            {/* 3. SUB-TAB 1: DÒNG TIỀN & VỐN KHẢ DỤNG (OPERATING)                         */}
+            {/* ========================================================================= */}
+            {activeSubTab === 'OPERATING' && (
+                <div className="space-y-3.5 animate-fade-in w-full">
+                    {/* 1. THẺ CHỈ SỐ QUẢN TRỊ TÀI CHÍNH (FOUR SEASONS SOLID MATTE) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {/* Card 1: Vốn Lưu Động Vận Hành */}
+                        <div className="bg-[#202228] p-4 rounded-2xl relative overflow-hidden flex flex-col justify-between border-0 shadow-md">
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                                        Vốn Khả Dụng Vận Hành
+                                    </span>
+                                    <span className="text-[10px] text-zinc-400 font-mono bg-[#18191d] px-2 py-0.5 rounded border-0">{operatingAccounts.length} Quỹ/TK</span>
+                                </div>
+                                <div className="text-2xl font-mono font-bold text-white tracking-tight">
+                                    {secureMoney(operatingCash)}đ
+                                </div>
+                            </div>
+                            <div className="mt-3 pt-2.5 border-t border-white/[0.04] text-[11px] text-zinc-400 flex items-center justify-between">
+                                <span>VCB, MB & Tiền mặt két</span>
+                                <span className="text-[#2E9599] font-semibold">Khả dụng 100%</span>
+                            </div>
+                        </div>
 
-            {/* 4. SUB-TAB 1: SỔ QUỸ THU CHI (CASHBOOK) */}
-            {activeSubTab === 'CASHBOOK' && (
+                        {/* Card 2: Cash Runway (Thời Gian Duy Trì) */}
+                        <div className="bg-[#202228] p-4 rounded-2xl relative overflow-hidden flex flex-col justify-between border-0 shadow-md">
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                                        Thời Gian Duy Trì (Runway)
+                                    </span>
+                                    {cashRunwayDays < 15 ? (
+                                        <span className="text-[10px] font-bold text-white bg-[#A7226F] px-2 py-0.5 rounded-full border-0">
+                                            Báo Động
+                                        </span>
+                                    ) : cashRunwayDays <= 45 ? (
+                                        <span className="text-[10px] font-bold text-zinc-950 bg-[#F7DC68] px-2 py-0.5 rounded-full border-0">
+                                            Lưu Ý
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] font-bold text-white bg-[#2E9599] px-2 py-0.5 rounded-full border-0">
+                                            An Toàn
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex items-baseline gap-2">
+                                    <span className="text-2xl font-mono font-bold text-white tracking-tight">{cashRunwayDays}</span>
+                                    <span className="text-xs text-zinc-400 font-medium">ngày vận hành</span>
+                                </div>
+                            </div>
+                            <div className="mt-3 pt-2.5 border-t border-white/[0.04] text-[11px] text-zinc-500 font-mono">
+                                Vốn Lưu Động / Chi Phí Ngày
+                            </div>
+                        </div>
+
+                        {/* Card 3: Chi Phí Vận Hành TB (Daily Burn Rate) */}
+                        <div className="bg-[#202228] p-4 rounded-2xl relative overflow-hidden flex flex-col justify-between border-0 shadow-md">
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                                        Chi Phí Vận Hành TB / Ngày
+                                    </span>
+                                    <span className="text-[10px] text-zinc-400 font-mono bg-[#18191d] px-2 py-0.5 rounded border-0">30 Ngày</span>
+                                </div>
+                                <div className="text-2xl font-mono font-bold text-zinc-200 tracking-tight">
+                                    -{secureMoney(dailyBurnRate)}đ<span className="text-xs text-zinc-500 font-normal">/ngày</span>
+                                </div>
+                            </div>
+                            <div className="mt-3 pt-2.5 border-t border-white/[0.04] text-[11px] text-zinc-400 flex items-center justify-between">
+                                <span>Tổng OPEX 30 ngày:</span>
+                                <span className="font-mono text-zinc-300 font-bold">{secureMoney(opexLast30Days)}đ</span>
+                            </div>
+                        </div>
+
+                        {/* Card 4: Quỹ Dự Trữ Dài Hạn */}
+                        <div className="bg-[#202228] p-4 rounded-2xl relative overflow-hidden flex flex-col justify-between cursor-pointer hover:bg-[#282b33] transition-all border-0 shadow-md" onClick={() => setActiveSubTab('VAULT')}>
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+                                        Quỹ Dự Phòng Khẩn Cấp
+                                    </span>
+                                    <span className="text-[10px] font-bold text-zinc-950 bg-[#F7DC68] px-2 py-0.5 rounded-full border-0">
+                                        Bảo Vệ
+                                    </span>
+                                </div>
+                                <div className="text-2xl font-mono font-bold text-white tracking-tight">
+                                    {formatFinanceMoney(vaultReserveTotal)} <span className="text-xs text-zinc-400 font-normal">VNDC</span>
+                                </div>
+                            </div>
+                            <div className="mt-3 pt-2.5 border-t border-white/[0.04] text-[11px] text-zinc-400 flex items-center justify-between">
+                                <span>Tài sản dự phòng rủi ro</span>
+                                <span className="text-zinc-300 font-semibold hover:underline">Xem Chi Tiết →</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 2. HERO METRICS DECK: BÁO CÁO LƯU CHUYỂN TIỀN TỆ CHUẨN KẾ TOÁN */}
+                    <div className="bg-[#202228] p-3.5 sm:p-4 rounded-2xl shadow-md border-0 relative overflow-hidden">
+                        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 mb-3 border-b border-white/[0.04] pb-3">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-xl bg-[#18191d] flex items-center justify-center text-[#F7DC68] text-base border-0">
+                                    <i className="fas fa-scale-balanced"></i>
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h2 className="text-[13.5px] font-black text-white uppercase tracking-wider">Báo Cáo Chu Chuyển Tiền Tệ</h2>
+                                        {filterAccount !== 'ALL' && (
+                                            <span className="bg-[#282b33] text-zinc-200 text-[9.5px] font-black px-2 py-0.5 rounded-lg border-0">
+                                                {accountPeriodStats.selectedAccountName}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-[10.5px] text-zinc-400 font-medium">Đối soát cân đối: <span className="text-zinc-200 font-semibold">Đầu kỳ + Thu - Chi = Cuối kỳ</span></p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <div className="bg-[#18191d] px-3 py-1.5 rounded-xl flex items-center gap-2 text-[11px] border-0">
+                                    <span className="text-zinc-400 font-bold uppercase tracking-wider text-[9.5px]">Dòng Tiền Thuần:</span>
+                                    <span className={`font-mono font-black ${accountPeriodStats.netCashflow >= 0 ? 'text-white' : 'text-rose-400'}`}>
+                                        {accountPeriodStats.netCashflow >= 0 ? '+' : ''}{secureMoney(accountPeriodStats.netCashflow)}đ
+                                    </span>
+                                </div>
+                                <div className="bg-[#18191d] px-3 py-1.5 rounded-xl flex items-center gap-2 text-[11px] border-0">
+                                    <span className="text-zinc-400 font-bold uppercase tracking-wider text-[9.5px]">Nợ Phải Trả NCC:</span>
+                                    <span className="font-mono font-black text-white">
+                                        {secureMoney(totalDebtSuppliers)}đ
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+                            {/* 1. QUỸ ĐẦU KỲ */}
+                            <div className="bg-[#18191d] p-3.5 rounded-2xl border-0">
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">1. Quỹ Đầu Kỳ</span>
+                                    <span className="text-[9.5px] text-zinc-400 font-mono bg-[#202228] px-1.5 py-0.5 rounded-lg border-0">{filterTime}</span>
+                                </div>
+                                <div className="text-[18px] sm:text-[21px] font-mono font-black text-white tracking-tight">
+                                    {secureMoney(accountPeriodStats.totalOpening)}đ
+                                </div>
+                                <p className="text-[10px] text-zinc-500 mt-1 font-medium">Số dư đầu kỳ báo cáo</p>
+                            </div>
+
+                            {/* 2. TỔNG THU TRONG KỲ */}
+                            <div className="bg-[#18191d] p-3.5 rounded-2xl border-0">
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">2. Tiền Thu Trong Kỳ (+)</span>
+                                    <div className="w-5 h-5 rounded-lg bg-[#202228] text-[#2E9599] flex items-center justify-center text-[10px] border-0">
+                                        <i className="fas fa-arrow-down"></i>
+                                    </div>
+                                </div>
+                                <div className="text-[18px] sm:text-[21px] font-mono font-black text-white tracking-tight">
+                                    +{secureMoney(accountPeriodStats.totalInflow)}đ
+                                </div>
+                                <p className="text-[10px] text-zinc-500 mt-1 font-medium">{countThu} giao dịch phát sinh thu</p>
+                            </div>
+
+                            {/* 3. TỔNG CHI TRONG KỲ */}
+                            <div className="bg-[#18191d] p-3.5 rounded-2xl border-0">
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">3. Tiền Chi Trong Kỳ (-)</span>
+                                    <div className="w-5 h-5 rounded-lg bg-[#202228] text-rose-400 flex items-center justify-center text-[10px] border-0">
+                                        <i className="fas fa-arrow-up"></i>
+                                    </div>
+                                </div>
+                                <div className="text-[18px] sm:text-[21px] font-mono font-black text-rose-400 tracking-tight">
+                                    -{secureMoney(accountPeriodStats.totalOutflow)}đ
+                                </div>
+                                <p className="text-[10px] text-zinc-500 mt-1 font-medium">{countChi} giao dịch phát sinh chi</p>
+                            </div>
+
+                            {/* 4. QUỸ CUỐI KỲ / TỒN HIỆN HỮU */}
+                            <div className="bg-[#18191d] p-3.5 rounded-2xl border-0">
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">4. Tồn Quỹ Cuối Kỳ (=)</span>
+                                    <div className="w-5 h-5 rounded-lg bg-[#202228] text-zinc-400 flex items-center justify-center text-[10px] border-0">
+                                        <i className="fas fa-vault"></i>
+                                    </div>
+                                </div>
+                                <div className="text-[18px] sm:text-[21px] font-mono font-black text-white tracking-tight">
+                                    {secureMoney(accountPeriodStats.totalEnding)}đ
+                                </div>
+                                <p className="text-[10px] text-zinc-500 mt-1 font-medium">Tổng số dư khả dụng</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 3. SỔ KHOẢN CHO VAY NHÂN SỰ NỘI BỘ (TÀI SẢN PHẢI THU - ASSET) */}
+                    <div className="bg-[#202228] p-4 rounded-2xl border-0 shadow-md">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-3 border-b border-white/[0.04] pb-3">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-xl bg-[#18191d] flex items-center justify-center text-zinc-400 text-sm border-0">
+                                    <i className="fas fa-hand-holding-dollar"></i>
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h3 className="text-xs font-black text-white uppercase tracking-wider">Khoản Cho Vay & Tạm Ứng Nhân Sự Nội Bộ</h3>
+                                        <span className="text-[9.5px] bg-[#18191d] text-zinc-300 px-2 py-0.5 rounded-lg font-bold border-0">
+                                            Hạch toán Tài Sản Phải Thu (Asset)
+                                        </span>
+                                    </div>
+                                    <p className="text-[10px] text-zinc-500">Nghiêm cấm hạch toán vào Chi Phí Vận Hành (OPEX) theo Hiến Pháp Tài Chính v3.0</p>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <span className="text-[9.5px] text-zinc-400 uppercase font-bold block">Tổng Dư Nợ Nội Bộ</span>
+                                <span className="text-base font-mono font-black text-purple-300">{secureMoney(staffLoansData.total)}đ</span>
+                            </div>
+                        </div>
+
+                        {staffLoansData.list.length === 0 ? (
+                            <div className="text-center py-6 text-zinc-500 text-xs italic">
+                                Không có khoản tạm ứng hoặc cho vay nội bộ nào đang phát sinh.
+                            </div>
+                        ) : (
+                            <div className="space-y-2 max-h-56 overflow-y-auto hide-scrollbar">
+                                {staffLoansData.list.slice(0, 10).map((t) => (
+                                    <div key={t.id} className="flex items-center justify-between p-2.5 bg-[#09090b] rounded-xl border border-white/[0.04] text-xs hover:border-purple-500/30 transition-all">
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-6 h-6 rounded-lg bg-purple-950 text-purple-400 flex items-center justify-center text-[10px]">
+                                                <i className="fas fa-user-clock"></i>
+                                            </div>
+                                            <div>
+                                                <div className="font-bold text-zinc-200">{t.title}</div>
+                                                <div className="text-[10px] text-zinc-400 font-mono">{formatDateTime24h(t.date, t.time)} · {t.category}</div>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className="font-mono font-black text-purple-300">{secureMoney(t.amount)}đ</div>
+                                            <div className="text-[9.5px] text-zinc-500">Tài sản phải thu</div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* ========================================================================= */}
+            {/* 4. SUB-TAB 2: VAULT 689M VNDC (KÉT SẮT DỰ TRỮ CHIẾN LƯỢC TẦNG 2)          */}
+            {/* ========================================================================= */}
+            {activeSubTab === 'VAULT' && (
+                <div className="space-y-4 animate-fade-in w-full">
+                    <div className="bg-[#121214] border border-yellow-500/30 p-6 rounded-3xl relative overflow-hidden shadow-[0_0_30px_rgba(234,179,8,0.1)]">
+                        <div className="absolute -top-12 -right-12 w-48 h-48 bg-yellow-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                            <div className="flex items-center gap-4">
+                                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-yellow-500/30 to-amber-400/10 border border-yellow-500/50 flex items-center justify-center text-yellow-400 text-3xl shadow-xl shadow-yellow-950/40">
+                                    <i className="fas fa-vault"></i>
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                        <h2 className="text-lg font-black text-white uppercase tracking-wider">Két Sắt Dự Trữ & Quỹ Đầu Tư Dài Hạn (Tầng 2)</h2>
+                                        <span className="bg-yellow-950/80 text-yellow-300 border border-yellow-500/50 text-[10px] font-black px-2.5 py-0.5 rounded-full">
+                                            BẢO TOÀN VỐN 100%
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-zinc-400 max-w-xl leading-relaxed">
+                                        Quỹ dự trữ chiến lược tách biệt tuyệt đối khỏi tài khoản vận hành xưởng. Nghiêm cấm trích chi cho OPEX hàng ngày.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="text-center md:text-right bg-[#09090b] px-6 py-4 rounded-2xl border border-yellow-500/20 shadow-inner">
+                                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-wider block mb-1">Tổng Số Dư Khóa An Toàn</span>
+                                <div className="text-3xl sm:text-4xl font-mono font-black text-yellow-300 tracking-tight">
+                                    {formatFinanceMoney(vaultReserveTotal)} <span className="text-base text-yellow-400">VNDC</span>
+                                </div>
+                                <span className="text-[10px] text-zinc-500 font-mono mt-1 block">Tương đương 689.000.000 VNĐ</span>
+                            </div>
+                        </div>
+
+                        {/* QUY CHẾ VẬN HÀNH QUỸ DỰ TRỮ */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-6 pt-6 border-t border-white/[0.06]">
+                            <div className="p-3.5 bg-[#09090b] rounded-2xl border border-white/[0.04]">
+                                <div className="text-yellow-400 text-xs font-black uppercase mb-1.5 flex items-center gap-1.5">
+                                    <i className="fas fa-lock"></i> 1. Kỷ Luật Bảo Toàn Vốn
+                                </div>
+                                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                                    Tuyệt đối không lấy tiền từ Vault để bù đắp các chi phí vận hành thường nhật (tiền điện, lương phụ, mua vật tư nhỏ).
+                                </p>
+                            </div>
+                            <div className="p-3.5 bg-[#09090b] rounded-2xl border border-white/[0.04]">
+                                <div className="text-sky-400 text-xs font-black uppercase mb-1.5 flex items-center gap-1.5">
+                                    <i className="fas fa-shield-halved"></i> 2. Điều Kiện Kích Hoạt
+                                </div>
+                                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                                    Chỉ được phép trích quỹ khẩn cấp khi Cash Runway dưới 7 ngày VÀ có quyết định ký duyệt tối cao bằng văn bản từ Giám Đốc (Tiến).
+                                </p>
+                            </div>
+                            <div className="p-3.5 bg-[#09090b] rounded-2xl border border-white/[0.04]">
+                                <div className="text-emerald-400 text-xs font-black uppercase mb-1.5 flex items-center gap-1.5">
+                                    <i className="fas fa-seedling"></i> 3. Tái Đầu Tư Mở Rộng
+                                </div>
+                                <p className="text-[11px] text-zinc-400 leading-relaxed">
+                                    Chỉ giải ngân cho các tài sản sinh lời dài hạn: Mua máy mài CNC, mở rộng mặt bằng xưởng hoặc nhập lô phôi số lượng lớn chiết khấu >30%.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ========================================================================= */}
+            {/* 5. SUB-TAB 3: SỔ ĐỐI TÁC & CÔNG NỢ 3 NHÓM (PARTNERS)                       */}
+            {/* ========================================================================= */}
+            {activeSubTab === 'PARTNERS' && (
+                <div className="space-y-3.5 animate-fade-in w-full">
+                    {/* THANH CÔNG CỤ TÌM KIẾM & LỌC NHÓM ĐỐI TÁC */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-[#121214] p-3 rounded-2xl border border-white/[0.06]">
+                        <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar py-0.5">
+                            {[
+                                { key: 'ALL', label: 'Tất Cả', icon: 'fa-layer-group' },
+                                { key: 'SUPPLIER', label: 'Vật Tư & Xưởng', icon: 'fa-cubes' },
+                                { key: 'CARRIER', label: 'Sàn & Vận Chuyển', icon: 'fa-truck-fast' },
+                                { key: 'CTV', label: 'CTV & Khách Sỉ', icon: 'fa-users' }
+                            ].map(tab => (
+                                <button
+                                    key={tab.key}
+                                    onClick={() => setPartnerGroupFilter(tab.key)}
+                                    className={`px-3 py-1.5 rounded-xl text-[11px] font-bold tracking-wide transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 active:scale-95 ${
+                                        partnerGroupFilter === tab.key
+                                            ? 'bg-sky-500/20 text-sky-300 border border-sky-500/50 shadow-sm font-black'
+                                            : 'bg-[#09090b] text-zinc-400 hover:text-white border border-white/[0.04]'
+                                    }`}
+                                >
+                                    <i className={`fas ${tab.icon} text-xs`}></i>
+                                    <span>{tab.label}</span>
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="relative min-w-[220px]">
+                            <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-xs"></i>
+                            <input
+                                type="text"
+                                value={partnerSearch}
+                                onChange={e => setPartnerSearch(e.target.value)}
+                                placeholder="Tìm đối tác, SĐT, danh mục..."
+                                className="w-full bg-[#09090b] border border-zinc-800 text-xs text-white pl-8 pr-3 py-2 rounded-xl outline-none focus:border-sky-400/60"
+                            />
+                        </div>
+                    </div>
+
+                    {/* HIGH-DENSITY PARTNERS TABLE (h-14 STANDARD) */}
+                    <div className="bg-[#121214] border border-white/[0.06] rounded-3xl overflow-hidden shadow-sm">
+                        <div className="overflow-x-auto hide-scrollbar">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="border-b border-white/[0.06] bg-[#09090b]/80 text-[10.5px] text-zinc-400 font-black uppercase tracking-wider h-11">
+                                        <th className="px-4 py-2">Đối Tác</th>
+                                        <th className="px-4 py-2">Phân Nhóm</th>
+                                        <th className="px-4 py-2">Liên Hệ / Kênh</th>
+                                        <th className="px-4 py-2 text-right">Công Nợ Hiện Tại</th>
+                                        <th className="px-4 py-2 text-center">Thao Tác</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/[0.04] text-xs">
+                                    {partnersList
+                                        .filter(p => {
+                                            if (partnerGroupFilter !== 'ALL' && p.group !== partnerGroupFilter) return false;
+                                            if (partnerSearch) {
+                                                const q = partnerSearch.toLowerCase();
+                                                return p.name.toLowerCase().includes(q) || (p.phone && p.phone.toLowerCase().includes(q)) || (p.category && p.category.toLowerCase().includes(q));
+                                            }
+                                            return true;
+                                        })
+                                        .map(partner => (
+                                            <tr key={partner.id} className="h-14 hover:bg-white/[0.02] transition-colors">
+                                                <td className="px-4 py-2">
+                                                    <div className="font-bold text-white text-xs">{partner.name}</div>
+                                                    <div className="text-[10px] text-zinc-500">{partner.category}</div>
+                                                </td>
+                                                <td className="px-4 py-2">
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                                                        partner.group === 'SUPPLIER'
+                                                            ? 'bg-amber-950/40 text-amber-300 border-amber-500/30'
+                                                            : partner.group === 'CARRIER'
+                                                            ? 'bg-sky-950/40 text-sky-300 border-sky-500/30'
+                                                            : 'bg-emerald-950/40 text-emerald-300 border-emerald-500/30'
+                                                    }`}>
+                                                        {partner.groupLabel}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-2 font-mono text-zinc-400 text-[11px]">
+                                                    {partner.phone}
+                                                </td>
+                                                <td className="px-4 py-2 text-right font-mono font-black">
+                                                    {partner.debt > 0 ? (
+                                                        <span className={partner.isPayable ? 'text-rose-400' : 'text-emerald-400'}>
+                                                            {partner.isPayable ? 'Nợ: ' : 'Thu: '}{formatFinanceMoney(partner.debt)}đ
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-zinc-500">0đ (Đã cân đối)</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-2 text-center">
+                                                    <div className="flex items-center justify-center gap-1.5">
+                                                        <button
+                                                            onClick={() => setSelectedPartnerForDrawer(partner)}
+                                                            className="h-8 px-2.5 bg-zinc-900 hover:bg-sky-950/60 text-zinc-300 hover:text-sky-300 border border-zinc-800 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
+                                                            title="Xem thẻ công nợ 60 ngày"
+                                                        >
+                                                            <i className="fas fa-file-invoice text-xs text-sky-400"></i>
+                                                            <span>Thẻ 60 Ngày</span>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingTxData({
+                                                                    type: partner.isPayable ? 'Chi' : 'Thu',
+                                                                    category: partner.group === 'SUPPLIER' ? 'Vật Tư & Xưởng' : 'Đối Tác & CTV',
+                                                                    amount: partner.debt > 0 ? String(partner.debt) : '',
+                                                                    title: partner.name,
+                                                                    note: `Thanh toán đối soát công nợ [${partner.name}]`,
+                                                                    fromAccount: accountsData[0]?.id || '',
+                                                                    toAccount: '',
+                                                                    date: new Date().toISOString().slice(0, 10),
+                                                                    time: formatTime24h()
+                                                                });
+                                                                setShowAddTx(true);
+                                                            }}
+                                                            className="h-8 px-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-xl text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 active:scale-95"
+                                                            title="Lập lệnh thanh toán 1-chạm"
+                                                        >
+                                                            <i className="fas fa-plus text-[10px]"></i>
+                                                            <span>Lập Lệnh</span>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ========================================================================= */}
+            {/* 6. SUB-TAB 4: SỔ NHẬT KÝ THU CHI & QUẢN LÝ QUỸ (LEDGER)                    */}
+            {/* ========================================================================= */}
+            {activeSubTab === 'LEDGER' && (
+                <div className="space-y-3.5 animate-fade-in w-full">
+                    {/* SUB-VIEW TOGGLE (FOUR SEASONS SOLID MATTE) */}
+                    <div className="grid grid-cols-3 bg-[#202228] p-1 rounded-2xl border-0 gap-1 shadow-md">
+                        <button 
+                            onClick={() => setLedgerViewMode('CASHBOOK')} 
+                            className={`py-2 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border-0 ${
+                                ledgerViewMode === 'CASHBOOK' 
+                                    ? 'bg-[#282b33] text-white font-black shadow-none' 
+                                    : 'bg-transparent text-zinc-400 hover:text-white'
+                            }`}
+                        >
+                            <i className="fas fa-book-open text-xs text-[#F7DC68]"></i> <span className="truncate">Sổ Quỹ Thu Chi</span>
+                        </button>
+                        <button 
+                            onClick={() => setLedgerViewMode('SO_QUY')} 
+                            className={`py-2 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border-0 ${
+                                ledgerViewMode === 'SO_QUY' 
+                                    ? 'bg-[#282b33] text-white font-black shadow-none' 
+                                    : 'bg-transparent text-zinc-400 hover:text-white'
+                            }`}
+                        >
+                            <i className="fas fa-university text-xs text-[#2E9599]"></i> <span className="truncate">Danh Sách Quỹ</span>
+                        </button>
+                        <button 
+                            onClick={() => setLedgerViewMode('THONG_KE')} 
+                            className={`py-2 text-[11px] font-bold uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 border-0 ${
+                                ledgerViewMode === 'THONG_KE' 
+                                    ? 'bg-[#282b33] text-white font-black shadow-none' 
+                                    : 'bg-transparent text-zinc-400 hover:text-white'
+                            }`}
+                        >
+                            <i className="fas fa-chart-pie text-xs text-[#F46C3F]"></i> <span className="truncate">Báo Cáo Cơ Cấu</span>
+                        </button>
+                    </div>
+
+                    {ledgerViewMode === 'CASHBOOK' && (
                 <div className="space-y-3 animate-fade-in w-full">
-                    {/* BỘ LỌC NHANH: TẤT CẢ / THU / CHI / CHUYỂN / ĐIỀU CHỈNH */}
-                    <div className="bg-[#121216] border border-white/[0.08] p-2.5 rounded-2xl shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    {/* BỘ LỌC NHANH: TẤT CẢ / THU / CHI / CHUYỂN / ĐIỀU CHỈNH (FOUR SEASONS SOLID PILLS) */}
+                    <div className="bg-[#202228] p-2.5 rounded-2xl shadow-md border-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                         <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar py-0.5">
                             <button 
                                 onClick={() => setFilterTxType('ALL')} 
-                                className={`px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 active:scale-95 ${
-                                    filterTxType === 'ALL' ? 'bg-white text-zinc-950 shadow-md font-black' : 'bg-[#121214] text-zinc-400 hover:text-white border border-white/[0.08]'
+                                className={`px-3.5 py-1.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 active:scale-95 border-0 ${
+                                    filterTxType === 'ALL' ? 'bg-[#282b33] text-white shadow-sm font-black' : 'bg-[#18191d] text-zinc-400 hover:text-white'
                                 }`}
                             >
                                 <span>Tất Cả</span>
-                                <span className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-mono ${filterTxType === 'ALL' ? 'bg-zinc-200 text-zinc-950 font-black' : 'bg-zinc-800 text-zinc-400'}`}>
+                                <span className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-mono ${filterTxType === 'ALL' ? 'bg-black/30 text-white font-black' : 'bg-black/30 text-zinc-400'}`}>
                                     {basePeriodTxs.length}
                                 </span>
                             </button>
 
                             <button 
                                 onClick={() => setFilterTxType('THU')} 
-                                className={`px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 active:scale-95 ${
+                                className={`px-3.5 py-1.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 active:scale-95 border-0 ${
                                     filterTxType === 'THU' 
-                                        ? 'bg-gradient-to-r from-emerald-500/30 text-emerald-300 border border-emerald-400 shadow-[0_0_16px_rgba(16,185,129,0.3)] ring-1 ring-emerald-400/40 font-black' 
-                                        : 'bg-[#121214] text-emerald-400 hover:bg-emerald-950/30 border border-emerald-500/20'
+                                        ? 'bg-[#2E9599] text-white shadow-sm font-black' 
+                                        : 'bg-[#18191d] text-zinc-400 hover:text-white'
                                 }`}
                             >
                                 <i className="fas fa-arrow-down text-xs"></i>
                                 <span>Tiền Thu</span>
-                                <span className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-mono ${filterTxType === 'THU' ? 'bg-black/40 text-emerald-300 font-black' : 'bg-emerald-950 text-emerald-300'}`}>
+                                <span className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-mono ${filterTxType === 'THU' ? 'bg-black/30 text-white font-black' : 'bg-black/30 text-zinc-400'}`}>
                                     +{secureMoney(totalThu)}đ
                                 </span>
                             </button>
 
                             <button 
                                 onClick={() => setFilterTxType('CHI')} 
-                                className={`px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 active:scale-95 ${
+                                className={`px-3.5 py-1.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 active:scale-95 border-0 ${
                                     filterTxType === 'CHI' 
-                                        ? 'bg-gradient-to-r from-rose-500/30 text-rose-300 border border-rose-400 shadow-[0_0_16px_rgba(244,63,94,0.3)] ring-1 ring-rose-400/40 font-black' 
-                                        : 'bg-[#121214] text-rose-400 hover:bg-rose-950/30 border border-rose-500/20'
+                                        ? 'bg-[#A7226F] text-white shadow-sm font-black' 
+                                        : 'bg-[#18191d] text-zinc-400 hover:text-white'
                                 }`}
                             >
                                 <i className="fas fa-arrow-up text-xs"></i>
                                 <span>Tiền Chi</span>
-                                <span className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-mono ${filterTxType === 'CHI' ? 'bg-black/40 text-rose-300 font-black' : 'bg-rose-950 text-rose-300'}`}>
+                                <span className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-mono ${filterTxType === 'CHI' ? 'bg-black/30 text-white font-black' : 'bg-black/30 text-zinc-400'}`}>
                                     -{secureMoney(totalChi)}đ
                                 </span>
                             </button>
 
                             <button 
                                 onClick={() => setFilterTxType('CHUYEN')} 
-                                className={`px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 active:scale-95 ${
+                                className={`px-3.5 py-1.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 active:scale-95 border-0 ${
                                     filterTxType === 'CHUYEN' 
-                                        ? 'bg-gradient-to-r from-sky-500/30 text-sky-300 border border-sky-400 shadow-[0_0_16px_rgba(14,165,233,0.3)] ring-1 ring-sky-400/40 font-black' 
-                                        : 'bg-[#121214] text-sky-400 hover:bg-sky-950/30 border border-sky-500/20'
+                                        ? 'bg-[#282b33] text-white shadow-sm font-black' 
+                                        : 'bg-[#18191d] text-zinc-400 hover:text-white'
                                 }`}
                             >
                                 <i className="fas fa-exchange-alt text-xs"></i>
                                 <span>Chuyển Quỹ</span>
-                                <span className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-mono ${filterTxType === 'CHUYEN' ? 'bg-black/40 text-sky-300 font-black' : 'bg-sky-950 text-sky-300'}`}>
+                                <span className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-mono ${filterTxType === 'CHUYEN' ? 'bg-black/30 text-white font-black' : 'bg-black/30 text-zinc-400'}`}>
                                     {countChuyen}
                                 </span>
                             </button>
@@ -3814,13 +4374,13 @@ const FinanceTab = React.memo(function FinanceTab({ orders, erpData, pushDeltas,
                             {countAdj > 0 && (
                                 <button 
                                     onClick={() => setFilterTxType('DIEU_CHINH')} 
-                                    className={`px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 active:scale-95 ${
-                                        filterTxType === 'DIEU_CHINH' ? 'bg-purple-500/30 text-purple-300 border border-purple-400 font-black' : 'bg-purple-950/20 text-purple-300 hover:bg-purple-950/40 border border-purple-500/30'
+                                    className={`px-3.5 py-1.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 active:scale-95 border-0 ${
+                                        filterTxType === 'DIEU_CHINH' ? 'bg-[#F46C3F] text-white shadow-sm font-black' : 'bg-[#18191d] text-zinc-400 hover:text-white'
                                     }`}
                                 >
                                     <i className="fas fa-sliders-h text-xs"></i>
                                     <span>Điều Chỉnh</span>
-                                    <span className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-mono ${filterTxType === 'DIEU_CHINH' ? 'bg-black/30 text-white font-bold' : 'bg-purple-900/50 text-purple-300'}`}>
+                                    <span className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-mono ${filterTxType === 'DIEU_CHINH' ? 'bg-black/30 text-white font-bold' : 'bg-black/30 text-zinc-400'}`}>
                                         {countAdj}
                                     </span>
                                 </button>
@@ -4219,7 +4779,7 @@ const FinanceTab = React.memo(function FinanceTab({ orders, erpData, pushDeltas,
             )}
 
             {/* 5. SUB-TAB 2: QUẢN LÝ QUỸ & TỔNG QUỸ ĐẦU KỲ (SO_QUY) */}
-            {activeSubTab === 'SO_QUY' && (
+            {ledgerViewMode === 'SO_QUY' && (
                 <div className="space-y-3.5 animate-fade-in w-full">
                     {/* BẢNG TỔNG HỢP ĐẦU KỲ / BIẾN ĐỘNG / CUỐI KỲ */}
                     <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 bg-[#121216] border border-white/[0.08] p-3.5 rounded-3xl shadow-sm">
@@ -4341,7 +4901,7 @@ const FinanceTab = React.memo(function FinanceTab({ orders, erpData, pushDeltas,
             )}
 
             {/* 6. SUB-TAB 3: THỐNG KÊ CƠ CẤU (THONG_KE) */}
-            {activeSubTab === 'THONG_KE' && (
+            {ledgerViewMode === 'THONG_KE' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 animate-fade-in">
                     {/* Tỷ trọng Thu */}
                     <div className="bg-[#121216] border border-white/[0.08] rounded-3xl p-4 sm:p-5 shadow-sm">
@@ -4412,6 +4972,99 @@ const FinanceTab = React.memo(function FinanceTab({ orders, erpData, pushDeltas,
                                     );
                                 });
                             })()}
+                        </div>
+                    </div>
+                </div>
+            )}
+                </div>
+            )}
+
+            {/* SIDE DRAWER: THẺ CÔNG NỢ ĐỐI TÁC 60 NGÀY (HALLMARK ROYAL ELEVATED SURFACE) */}
+            {selectedPartnerForDrawer && (
+                <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-md animate-fade-in" onClick={() => setSelectedPartnerForDrawer(null)}>
+                    <div 
+                        className="w-full max-w-xl h-full bg-[#18181b] border-l border-white/[0.08] shadow-2xl flex flex-col p-6 overflow-y-auto hide-scrollbar animate-slide-left"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="flex items-start justify-between border-b border-white/[0.08] pb-4 mb-4">
+                            <div>
+                                <span className="text-[10px] font-black text-sky-400 uppercase tracking-wider block mb-1">Thẻ Công Nợ Đối Tác 60 Ngày</span>
+                                <h3 className="text-xl font-black text-white">{selectedPartnerForDrawer.name}</h3>
+                                <div className="text-xs text-zinc-400 mt-1 flex items-center gap-2">
+                                    <span>Nhóm: <b className="text-zinc-200">{selectedPartnerForDrawer.groupLabel}</b></span>
+                                    <span>·</span>
+                                    <span>SĐT: <b className="text-zinc-200">{selectedPartnerForDrawer.phone}</b></span>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => setSelectedPartnerForDrawer(null)}
+                                className="w-8 h-8 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                            >
+                                <i className="fas fa-times"></i>
+                            </button>
+                        </div>
+
+                        {/* Dư nợ & Action Buttons */}
+                        <div className="bg-[#121214] p-4 rounded-2xl border border-white/[0.06] mb-4 flex items-center justify-between">
+                            <div>
+                                <span className="text-[10px] text-zinc-400 uppercase font-bold block">Công Nợ Hiện Tại</span>
+                                <span className={`text-2xl font-mono font-black ${selectedPartnerForDrawer.isPayable ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                    {formatFinanceMoney(selectedPartnerForDrawer.debt)}đ
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => {
+                                        setEditingTxData({
+                                            type: selectedPartnerForDrawer.isPayable ? 'Chi' : 'Thu',
+                                            category: selectedPartnerForDrawer.group === 'SUPPLIER' ? 'Vật Tư & Xưởng' : 'Đối Tác & CTV',
+                                            amount: selectedPartnerForDrawer.debt > 0 ? String(selectedPartnerForDrawer.debt) : '',
+                                            title: selectedPartnerForDrawer.name,
+                                            note: `Thanh toán đối soát công nợ [${selectedPartnerForDrawer.name}]`,
+                                            fromAccount: accountsData[0]?.id || '',
+                                            toAccount: '',
+                                            date: new Date().toISOString().slice(0, 10),
+                                            time: formatTime24h()
+                                        });
+                                        setShowAddTx(true);
+                                    }}
+                                    className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black rounded-xl text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer"
+                                >
+                                    <i className="fas fa-paper-plane"></i>
+                                    <span>Lập Lệnh</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Lịch sử giao dịch 60 ngày */}
+                        <div className="flex-1">
+                            <h4 className="text-xs font-black text-zinc-300 uppercase tracking-wider mb-2.5">
+                                Lịch Sử Giao Dịch ({partner60DayTxs.length} phát sinh)
+                            </h4>
+                            {partner60DayTxs.length === 0 ? (
+                                <div className="text-center py-12 text-zinc-500 text-xs italic bg-[#121214] rounded-2xl border border-white/[0.04]">
+                                    Chưa có giao dịch nào khớp với tên đối tác trong 60 ngày gần nhất.
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {partner60DayTxs.map(t => (
+                                        <div key={t.id} className="p-3 bg-[#121214] rounded-2xl border border-white/[0.04] text-xs hover:border-white/[0.1] transition-all">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="font-bold text-white">{t.title}</span>
+                                                <span className={`font-mono font-black ${t.type === 'Thu' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                    {t.type === 'Thu' ? '+' : '-'}{formatFinanceMoney(t.amount)}đ
+                                                </span>
+                                            </div>
+                                            <div className="text-[10.5px] text-zinc-400 flex items-center justify-between">
+                                                <span>{formatDateTime24h(t.date, t.time)} · {t.category}</span>
+                                                <span className="font-mono text-zinc-500">{t.id}</span>
+                                            </div>
+                                            {t.note && <div className="text-[10px] text-zinc-500 mt-1 italic">{t.note}</div>}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

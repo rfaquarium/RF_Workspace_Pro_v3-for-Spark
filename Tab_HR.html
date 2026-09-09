@@ -3949,60 +3949,60 @@
         return (
             <div className={"w-full space-y-4 pb-6 md:pb-6 animate-fade-in relative"}>
 
-                {/* 1. SEGMENTED CONTROL PHẲNG MỜ (HALLMARK ROYAL WORKBENCH & LINEAR UX) */}
+                {/* 1. SEGMENTED CONTROL (FOUR SEASONS SOLID MATTE) */}
                 <div className="flex justify-center mb-3">
-                    <div className="inline-flex bg-[#121214] p-1 rounded-xl border border-white/[0.08] shadow-sm">
+                    <div className="inline-flex bg-[#202228] p-1 rounded-2xl gap-1 border-0 shadow-md">
                         <button
                             type="button"
                             onClick={() => setSubTab('ATTENDANCE')}
-                            className={`px-4 py-2 rounded-lg text-[12px] font-black uppercase transition-all duration-200 flex items-center gap-2 cursor-pointer ${
+                            className={`px-4 py-2 rounded-xl text-[12px] font-bold uppercase transition-all flex items-center gap-2 cursor-pointer border-0 ${
                                 subTab === 'ATTENDANCE'
-                                    ? 'bg-white/[0.08] text-sky-400 border border-white/10 shadow-sm'
-                                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.03]'
+                                    ? 'bg-[#282b33] text-white font-black shadow-none'
+                                    : 'text-zinc-400 hover:text-white bg-transparent'
                             }`}
                         >
-                            <i className="fas fa-clock text-[12px]"></i>
+                            <i className="fas fa-clock text-[12px] text-[#2E9599]"></i>
                             <span>Chấm Công</span>
                         </button>
                         <button
                             type="button"
                             onClick={() => setSubTab('KPI')}
-                            className={`px-4 py-2 rounded-lg text-[12px] font-black uppercase transition-all duration-200 flex items-center gap-2 cursor-pointer ${
+                            className={`px-4 py-2 rounded-xl text-[12px] font-bold uppercase transition-all flex items-center gap-2 cursor-pointer border-0 ${
                                 subTab === 'KPI'
-                                    ? 'bg-white/[0.08] text-amber-400 border border-white/10 shadow-sm'
-                                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.03]'
+                                    ? 'bg-[#282b33] text-white font-black shadow-none'
+                                    : 'text-zinc-400 hover:text-white bg-transparent'
                             }`}
                         >
-                            <i className="fas fa-bullseye text-[12px]"></i>
+                            <i className="fas fa-bullseye text-[12px] text-[#F7DC68]"></i>
                             <span>Nhiệm Vụ</span>
                         </button>
                         <button
                             type="button"
                             onClick={() => setSubTab('PAYROLL')}
-                            className={`px-4 py-2 rounded-lg text-[12px] font-black uppercase transition-all duration-200 flex items-center gap-2 cursor-pointer ${
+                            className={`px-4 py-2 rounded-xl text-[12px] font-bold uppercase transition-all flex items-center gap-2 cursor-pointer border-0 ${
                                 subTab === 'PAYROLL'
-                                    ? 'bg-white/[0.08] text-emerald-400 border border-white/10 shadow-sm'
-                                    : 'text-zinc-400 hover:text-white hover:bg-white/[0.03]'
+                                    ? 'bg-[#282b33] text-white font-black shadow-none'
+                                    : 'text-zinc-400 hover:text-white bg-transparent'
                             }`}
                         >
-                            <i className="fas fa-file-invoice-dollar text-[12px]"></i>
+                            <i className="fas fa-file-invoice-dollar text-[12px] text-[#F46C3F]"></i>
                             <span>Bảng Lương</span>
                         </button>
                     </div>
                 </div>
 
-                {/* 2. HÀNG PHẲNG NGANG DUY NHẤT: BỘ LỌC KỲ & CÁC NÚT HÀNH ĐỘNG */}
-                <div className="flex flex-wrap items-center justify-between gap-2.5 bg-[#121214] px-3 py-2 rounded-xl border border-white/[0.08] shadow-sm mb-4">
+                {/* 2. HÀNG PHẲNG NGANG: BỘ LỌC KỲ & CÁC NÚT HÀNH ĐỘNG (FOUR SEASONS SOLID MATTE) */}
+                <div className="flex flex-wrap items-center justify-between gap-2.5 bg-[#202228] px-3 py-2.5 rounded-2xl border-0 shadow-md mb-4">
                     {/* BỘ LỌC KỲ */}
                     <div className="flex items-center gap-2 flex-wrap">
-                        <div className="flex items-center gap-1.5 text-[11px] font-black text-zinc-400 uppercase tracking-wider pl-1">
-                            <i className="fas fa-calendar-alt text-[#00a8e8]"></i>
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold text-zinc-400 uppercase tracking-wider pl-1">
+                            <i className="fas fa-calendar-alt text-[#2E9599]"></i>
                             <span className="hidden sm:inline">Kỳ Báo Cáo:</span>
                         </div>
                         <select
                             value={filter}
                             onChange={e => { setFilter(e.target.value); if (e.target.value !== 'Chọn Tháng') setCustomMonth(''); }}
-                            className="h-9 px-3 bg-[#0a0a0a] rounded-lg border border-white/[0.08] text-[11px] font-black uppercase tracking-wider outline-none text-white focus:border-[#00a8e8] transition-colors cursor-pointer"
+                            className="h-9 px-3 bg-[#18191d] rounded-xl text-[11px] font-bold uppercase tracking-wider outline-none text-white border-0 transition-colors cursor-pointer"
                         >
                             <option value="Tháng Này">Tháng Này</option>
                             <option value="Tháng Trước">Tháng Trước</option>
@@ -4013,10 +4013,10 @@
                                 type="month"
                                 value={customMonth}
                                 onChange={e => setCustomMonth(e.target.value)}
-                                className="h-9 px-2.5 bg-[#0a0a0a] rounded-lg border border-white/[0.08] text-[11px] font-black uppercase outline-none text-[#00a8e8] focus:border-[#00a8e8] transition-colors"
+                                className="h-9 px-2.5 bg-[#18191d] rounded-xl text-[11px] font-bold uppercase outline-none text-[#2E9599] border-0 transition-colors"
                             />
                         )}
-                        <span className="text-[10px] font-black text-amber-400/90 bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/20 font-mono">
+                        <span className="text-[10px] font-bold text-[#F7DC68] bg-[#18191d] px-2.5 py-1 rounded-xl font-mono border-0">
                             {periodLabel}
                         </span>
                     </div>
@@ -4027,7 +4027,7 @@
                             <button
                                 type="button"
                                 onClick={handlePrintAttendanceMatrix}
-                                className="h-9 px-3 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 text-[11px] font-black uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+                                className="h-9 px-3 rounded-xl bg-[#18191d] hover:bg-[#282b33] text-[#2E9599] text-[11px] font-bold uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm border-0"
                                 title="In Bảng Chấm Công Ma Trận Lịch Tháng (A4 Ngang)"
                             >
                                 <i className="fas fa-print text-xs"></i>
@@ -4038,7 +4038,7 @@
                             <button
                                 type="button"
                                 onClick={handlePrintKpiTaskReport}
-                                className="h-9 px-3 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[11px] font-black uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+                                className="h-9 px-3 rounded-xl bg-[#18191d] hover:bg-[#282b33] text-[#F7DC68] text-[11px] font-bold uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm border-0"
                                 title="In Báo Cáo Nhiệm Vụ & Tiến Độ KPI Toàn Xưởng (A4 Dọc)"
                             >
                                 <i className="fas fa-print text-xs"></i>
@@ -4049,7 +4049,7 @@
                             <button
                                 type="button"
                                 onClick={handleExportPayrollExcel}
-                                className="h-9 px-3 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px] font-black uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+                                className="h-9 px-3 rounded-xl bg-[#18191d] hover:bg-[#282b33] text-[#2E9599] text-[11px] font-bold uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm border-0"
                                 title="Xuất bảng lương ra Excel (.csv)"
                             >
                                 <i className="fas fa-file-excel text-xs"></i>
@@ -4059,7 +4059,7 @@
                         <button
                             type="button"
                             onClick={() => setShowLeaveModal(true)}
-                            className="h-9 px-3 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-[11px] font-black uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+                            className="h-9 px-3 rounded-xl bg-[#18191d] hover:bg-[#282b33] text-[#A7226F] text-[11px] font-bold uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm border-0"
                             title="Báo Nghỉ Phép"
                         >
                             <i className="fas fa-calendar-minus text-xs"></i>
@@ -4070,7 +4070,7 @@
                                 <button
                                     type="button"
                                     onClick={() => typeof openTaskModalStandalone === 'function' ? openTaskModalStandalone() : (window.openTaskModalStandalone && window.openTaskModalStandalone())}
-                                    className="h-9 px-3 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px] font-black uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+                                    className="h-9 px-3.5 rounded-xl bg-[#F46C3F] hover:bg-[#ff7d52] text-white text-[11px] font-bold uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm border-0"
                                     title="Giao Việc Mới"
                                 >
                                     <i className="fas fa-plus text-xs"></i>
@@ -4098,7 +4098,7 @@
                                         setKpiCycle('MONTH');
                                         setShowKPIModal(true);
                                     }}
-                                    className="h-9 px-3 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[11px] font-black uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
+                                    className="h-9 px-3 rounded-xl bg-[#18191d] hover:bg-[#282b33] text-[#F7DC68] text-[11px] font-bold uppercase flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm border-0"
                                     title="Tạo KPI Mới"
                                 >
                                     <i className="fas fa-fire text-xs"></i>
@@ -4109,7 +4109,7 @@
                         <button
                             type="button"
                             onClick={() => setShowQuickNotes(prev => !prev)}
-                            className={`h-9 px-2.5 rounded-lg flex items-center justify-center transition-all active:scale-95 cursor-pointer border ${showQuickNotes ? 'bg-amber-500/20 text-amber-300 border-amber-500/50' : 'bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white border-white/[0.08]'}`}
+                            className={`h-9 px-2.5 rounded-xl flex items-center justify-center transition-all active:scale-95 cursor-pointer border-0 ${showQuickNotes ? 'bg-[#F7DC68] text-zinc-950' : 'bg-[#18191d] hover:bg-[#282b33] text-zinc-400 hover:text-white'}`}
                             title="Ghi chú & nhắc việc nhân sự"
                         >
                             <i className="fas fa-sticky-note text-xs"></i>
@@ -4138,37 +4138,37 @@
                     return (
                         <div className="space-y-4">
                             {/* VIEW TOGGLE BAR */}
-                            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#111] p-2 rounded-2xl border border-[#2a2a2a] shadow-inner">
+                            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-[#202228] p-2 rounded-2xl border-0 shadow-md">
                                 <div className="flex items-center gap-2 pl-2">
-                                    <i className="fas fa-calendar-check text-[#00a8e8]"></i>
-                                    <span className="text-[11px] font-black text-gray-300 uppercase tracking-wider">THEO DÕI CHẤM CÔNG & NGHỈ PHÉP:</span>
-                                    <span className="text-[10px] font-black text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20">{periodLabel}</span>
+                                    <i className="fas fa-calendar-check text-[#2E9599]"></i>
+                                    <span className="text-[11px] font-bold text-zinc-300 uppercase tracking-wider">THEO DÕI CHẤM CÔNG & NGHỈ PHÉP:</span>
+                                    <span className="text-[10px] font-bold text-[#F7DC68] bg-[#18191d] px-2 py-0.5 rounded-lg border-0">{periodLabel}</span>
                                 </div>
                                 <div className="flex gap-1.5 w-full sm:w-auto items-center flex-wrap">
                                     <button
                                         type="button"
                                         onClick={toggleHideResigned}
-                                        className={`px-3 py-1.5 rounded-xl border text-[11px] font-black uppercase flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer shrink-0 ${
+                                        className={`px-3 py-1.5 rounded-xl border-0 text-[11px] font-bold uppercase flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer shrink-0 ${
                                             hideResigned 
-                                                ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.2)]' 
-                                                : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
+                                                ? 'bg-[#18191d] text-[#F7DC68]' 
+                                                : 'bg-[#18191d] text-zinc-400 hover:text-white'
                                         }`}
                                         title={hideResigned ? "Đang BẬT bộ lọc ẩn nhân sự đã nghỉ. Bấm để hiển thị toàn bộ." : "Đang TẮT bộ lọc. Bấm để ẩn nhân sự đã nghỉ việc."}
                                     >
-                                        <i className={`fas ${hideResigned ? 'fa-eye-slash text-amber-400' : 'fa-eye text-zinc-400'} text-[11px]`}></i>
+                                        <i className={`fas ${hideResigned ? 'fa-eye-slash text-[#F7DC68]' : 'fa-eye text-zinc-400'} text-[11px]`}></i>
                                         <span>{hideResigned ? 'Đang Ẩn NV Nghỉ' : 'Hiện Tất Cả NV'}</span>
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setAttViewMode('CARDS')}
-                                        className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer ${attViewMode === 'CARDS' ? 'bg-[#00a8e8] text-white shadow-[0_0_12px_rgba(0,168,232,0.3)] scale-[1.02]' : 'bg-[#121214] text-gray-400 hover:text-white border border-white/5'}`}
+                                        className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-xl text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0 ${attViewMode === 'CARDS' ? 'bg-[#282b33] text-white shadow-none' : 'bg-[#18191d] text-zinc-400 hover:text-white'}`}
                                     >
                                         <i className="fas fa-th-large"></i> Danh Sách Thẻ
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setAttViewMode('MATRIX')}
-                                        className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-xl text-[11px] font-black uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer ${attViewMode === 'MATRIX' ? 'bg-[#00a8e8] text-white shadow-[0_0_12px_rgba(0,168,232,0.3)] scale-[1.02]' : 'bg-[#121214] text-gray-400 hover:text-white border border-white/5'}`}
+                                        className={`flex-1 sm:flex-none px-3.5 py-1.5 rounded-xl text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer border-0 ${attViewMode === 'MATRIX' ? 'bg-[#282b33] text-white shadow-none' : 'bg-[#18191d] text-zinc-400 hover:text-white'}`}
                                     >
                                         <i className="fas fa-calendar-alt"></i> Ma Trận Lịch Tháng
                                     </button>
@@ -4361,23 +4361,23 @@
                                     )}
 
                                     <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-                                        {/* CỘT TRÁI: THẺ CHẤM CÔNG NGỮ CẢNH TỰ NHẬN DIỆN */}
+                                        {/* CỘT TRÁI: THẺ CHẤM CÔNG NGỮ CẢNH TỰ NHẬN DIỆN (FOUR SEASONS SOLID MATTE) */}
                                         <div className="xl:col-span-5 space-y-4">
-                                            <div className="bg-[#121214] border border-white/[0.08] rounded-2xl p-4 shadow-sm space-y-4">
-                                                <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+                                            <div className="bg-[#202228] border-0 rounded-2xl p-4 shadow-md space-y-4">
+                                                <div className="flex items-center justify-between border-b border-white/[0.04] pb-3">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-pulse"></span>
-                                                        <span className="text-[12px] font-black uppercase text-white tracking-wider">Chấm Công Vào / Ra Ca</span>
+                                                        <span className="w-2.5 h-2.5 rounded-full bg-[#2E9599]"></span>
+                                                        <span className="text-[12px] font-bold uppercase text-white tracking-wider">Chấm Công Vào / Ra Ca</span>
                                                     </div>
                                                     <div className="flex items-center gap-1.5 text-[11px] font-mono">
                                                         <span className="text-zinc-400">Ca:</span>
-                                                        <span className="px-2 py-0.5 rounded-md bg-sky-500/15 border border-sky-500/30 text-sky-400 font-bold uppercase">
+                                                        <span className="px-2 py-0.5 rounded-lg bg-[#18191d] text-[#2E9599] font-bold uppercase border-0">
                                                             Ca {activeShift} ({activeShift === 'Sáng' ? '06:00-13:00' : activeShift === 'Chiều' ? '13:00-19:00' : '19:00-06:00'})
                                                         </span>
                                                     </div>
                                                 </div>
 
-                                                {/* NÚT NGỮ CẢNH TỰ NHẬN DIỆN (LINEAR UX) */}
+                                                {/* NÚT NGỮ CẢNH TỰ NHẬN DIỆN (FOUR SEASONS SOLID BUTTONS) */}
                                                 {(() => {
                                                     const curShift = activeShift || 'Sáng';
                                                     const curRec = (curShift === 'Sáng' ? morningRecord : (curShift === 'Chiều' ? afternoonRecord : eveningRecord));
@@ -4390,7 +4390,7 @@
                                                             <button
                                                                 type="button"
                                                                 onClick={() => handleCheckInOut('IN', curShift)}
-                                                                className="w-full py-4 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[13px] uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] shadow-lg shadow-emerald-950/40 cursor-pointer"
+                                                                className="w-full py-4 px-6 rounded-xl bg-[#2E9599] hover:bg-[#38a8ac] text-white font-black text-[13px] uppercase tracking-wider flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] shadow-md cursor-pointer border-0"
                                                             >
                                                                 <i className="fas fa-sign-in-alt text-base"></i>
                                                                 <span>👉 VÀO CA {curShift.toUpperCase()}</span>
@@ -5551,50 +5551,44 @@
                                             onClick={toggleHideResigned}
                                             className={`px-3 py-1.5 rounded-xl border text-[10.5px] font-black uppercase flex items-center gap-1.5 transition-all shadow-sm active:scale-95 cursor-pointer shrink-0 ${
                                                 hideResigned 
-                                                    ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.2)]' 
-                                                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
+                                                    ? 'bg-[#282b33] text-white border-zinc-700' 
+                                                    : 'bg-[#18191d] text-zinc-400 border-zinc-800 hover:bg-[#202228]'
                                             }`}
                                             title={hideResigned ? "Đang BẬT bộ lọc ẩn nhân sự đã nghỉ. Bấm để hiển thị toàn bộ." : "Đang TẮT bộ lọc. Bấm để ẩn nhân sự đã nghỉ việc."}
                                         >
-                                            <i className={`fas ${hideResigned ? 'fa-eye-slash text-amber-400' : 'fa-eye text-zinc-400'} text-[10px]`}></i>
+                                            <i className={`fas ${hideResigned ? 'fa-eye-slash text-zinc-300' : 'fa-eye text-zinc-500'} text-[10px]`}></i>
                                             <span>{hideResigned ? 'Đang Ẩn NV Nghỉ' : 'Hiện Tất Cả NV'}</span>
                                         </button>
                                         {isBoss && (
-                                            <button onClick={handleCloseMonth} disabled={closingMonth} className={"text-[10.5px] bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white px-3 py-1.5 rounded-xl border border-rose-500/40 font-black transition-all shadow-sm flex items-center gap-1 cursor-pointer"}>
-                                                {closingMonth ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-lock"></i>}
+                                            <button onClick={handleCloseMonth} disabled={closingMonth} className={"text-[10.5px] bg-[#202228] text-zinc-300 hover:bg-[#282b33] px-3 py-1.5 rounded-xl border-0 font-bold transition-all shadow-sm flex items-center gap-1 cursor-pointer"}>
+                                                {closingMonth ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-lock text-zinc-500"></i>}
                                                 <span>{closingMonth ? 'Đang xử lý...' : 'Chốt Sổ Cuối Tháng'}</span>
                                             </button>
                                         )}
-                                        <div className={"text-[10px] text-gray-500 font-bold bg-[#111] px-2 py-1 rounded border border-[#222]"}>
+                                        <div className={"text-[10px] text-zinc-500 font-bold bg-[#18191d] px-2 py-1 rounded border-0"}>
                                             {payroll.filter(p => !hideResigned || !isStaffResignedOrInactive(p.user) || p.totalGateHours > 0 || p.conCanTra > 0).length} Nhân sự
                                         </div>
                                     </div>
                                 </div>
                                 <div className={"grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1"}>
-                                    <div className={"bg-[#0b0b0e] p-3.5 rounded-xl border border-white/[0.06]"}>
+                                    <div className={"bg-[#18191d] p-3.5 rounded-2xl border-0"}>
                                         <div className={"text-[10px] text-zinc-400 uppercase font-bold mb-1 flex items-center gap-1.5"}>
-                                            <i className="fas fa-coins text-amber-400"></i> Lương Lũy Kế Thực Tế Đến Hôm Nay
+                                            <i className="fas fa-coins text-zinc-500"></i> Lương Lũy Kế Thực Tế
                                         </div>
-                                        <div className={"text-[22px] font-black text-amber-400 font-mono"}>
+                                        <div className={"text-[22px] font-black text-white font-mono"}>
                                             {(isBoss || isAdmin || ['KẾ TOÁN', 'QUẢN LÝ NHÂN SỰ', 'NHÂN SỰ', 'TỐI CAO', 'FOUNDER', 'ADMIN', 'QUẢN LÝ CẤP TRUNG'].includes(String(currentRole).toUpperCase()))
                                                 ? `${formatMoney(payroll.reduce((sum, p) => sum + cleanNumber(p.tongThuNhap), 0))} đ`
                                                 : '*****'}
                                         </div>
-                                        <div className={"text-[9px] text-zinc-500 mt-1"}>
-                                            * Thu nhập tích lũy theo thời gian làm việc & KPI đã hoàn thành thực tế
-                                        </div>
                                     </div>
-                                    <div className={"bg-[#0b0b0e] p-3.5 rounded-xl border border-white/[0.06]"}>
+                                    <div className={"bg-[#18191d] p-3.5 rounded-2xl border-0"}>
                                         <div className={"text-[10px] text-zinc-400 uppercase font-bold mb-1 flex items-center gap-1.5"}>
-                                            <i className="fas fa-hand-holding-usd text-emerald-400"></i> Thực Tế Còn Cần Chi Trả
+                                            <i className="fas fa-hand-holding-usd text-zinc-500"></i> Thực Tế Còn Cần Chi Trả
                                         </div>
-                                        <div className={"text-[22px] font-black text-emerald-400 font-mono"}>
+                                        <div className={"text-[22px] font-black text-white font-mono"}>
                                             {(isBoss || isAdmin || ['KẾ TOÁN', 'QUẢN LÝ NHÂN SỰ', 'NHÂN SỰ', 'TỐI CAO', 'FOUNDER', 'ADMIN', 'QUẢN LÝ CẤP TRUNG'].includes(String(currentRole).toUpperCase()))
                                                 ? `${formatMoney(payroll.reduce((sum, p) => sum + cleanNumber(p.conCanTra), 0))} đ`
                                                 : '*****'}
-                                        </div>
-                                        <div className={"text-[9px] text-zinc-500 mt-1"}>
-                                            * Sau khi trừ tạm ứng, quỹ công đoàn & các khoản khấu trừ / KCS phạt
                                         </div>
                                     </div>
                                 </div>
@@ -5602,15 +5596,15 @@
 
                             <div className={"grid grid-cols-1 lg:grid-cols-2 gap-4 mt-5"}>
                                 {payroll.filter(p => !hideResigned || !isStaffResignedOrInactive(p.user) || p.totalGateHours > 0 || p.conCanTra > 0).map(p => (
-                                    <div key={p.user} className={`bg-[#121215] border ${expandedPayroll === p.user ? 'border-sky-500/40 shadow-[0_0_15px_rgba(14,165,233,0.12)]' : 'border-white/[0.08] hover:border-white/[0.16]'} rounded-2xl p-3.5 sm:p-4 relative transition-all duration-200 overflow-hidden flex flex-col`}>
+                                    <div key={p.user} className={`bg-[#18191d] border ${expandedPayroll === p.user ? 'border-zinc-700' : 'border-0'} rounded-2xl p-3.5 sm:p-4 relative transition-all duration-200 overflow-hidden flex flex-col`}>
                                         {canManagePayroll && (erpData?.BonusPenalty || []).filter(b => b.user === p.user && b.type === 'Yêu Cầu Tạm Ứng' && b.orderCode === 'Chờ Duyệt').map(req => (
-                                            <div key={req.id} className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-3 mb-3 flex justify-between items-center animate-fade-in shadow-sm">
+                                            <div key={req.id} className="bg-[#202228] border-0 rounded-xl p-3 mb-3 flex justify-between items-center animate-fade-in shadow-sm">
                                                 <div>
-                                                    <div className="text-rose-400 font-bold text-[11.5px]"><i className="fas fa-hand-holding-usd mr-1"></i> Yêu cầu tạm ứng: {formatMoney(req.amount)}đ</div>
-                                                    <div className="text-zinc-400 text-[10.5px] mt-0.5">Lý do: {req.note}</div>
+                                                    <div className="text-zinc-200 font-bold text-[11.5px]"><i className="fas fa-hand-holding-usd mr-1 text-zinc-500"></i> Yêu cầu tạm ứng: {formatMoney(req.amount)}đ</div>
+                                                    <div className="text-zinc-500 text-[10.5px] mt-0.5">Lý do: {req.note}</div>
                                                 </div>
                                                 <div className="flex gap-2">
-                                                    <button onClick={(e) => { e.stopPropagation(); pushDeltas({ deletes: { BonusPenalty: [req.id] } }, 'Đã từ chối', 'fa-times') }} className="px-2.5 py-1 bg-zinc-900 border border-white/10 text-zinc-400 rounded-lg text-[10px] hover:text-white transition-colors cursor-pointer"><i className="fas fa-times"></i> Từ chối</button>
+                                                    <button onClick={(e) => { e.stopPropagation(); pushDeltas({ deletes: { BonusPenalty: [req.id] } }, 'Đã từ chối', 'fa-times') }} className="px-2.5 py-1 bg-[#18191d] text-zinc-400 rounded-lg text-[10px] hover:text-white transition-colors cursor-pointer"><i className="fas fa-times"></i> Từ chối</button>
                                                     <button onClick={(e) => {
                                                         e.stopPropagation();
                                                         const defaultAcc = (erpData?.Accounts || []).find(a => (a.accountName || a.name) === 'Công Ty') || (erpData?.Accounts || [])[0];
@@ -5622,7 +5616,7 @@
                                                             accountId: defaultAcc?.id || '',
                                                             requestId: req.id
                                                         });
-                                                    }} className="px-3 py-1 bg-gradient-to-r from-rose-500 to-red-500 text-white rounded-lg text-[10.5px] font-black shadow-sm hover:scale-105 active:scale-95 transition-transform cursor-pointer">DUYỆT</button>
+                                                    }} className="px-3 py-1 bg-zinc-800 text-white rounded-lg text-[10.5px] font-bold cursor-pointer">DUYỆT</button>
                                                 </div>
                                             </div>
                                         ))}
@@ -5630,130 +5624,129 @@
                                         {/* HÀNG NÉN GỌN 1 DÒNG LINEAR UX */}
                                         <div onClick={() => setExpandedPayroll(expandedPayroll === p.user ? null : p.user)} className={"flex justify-between items-center cursor-pointer group select-none gap-2"}>
                                             <div className={"flex items-center gap-2.5 min-w-0 flex-1"}>
-                                                {renderSafeAvatar(p.user, "w-10 h-10 rounded-full border border-white/10 shrink-0")}
+                                                {renderSafeAvatar(p.user, "w-10 h-10 rounded-full border border-zinc-800 shrink-0")}
                                                 <div className="min-w-0 flex-1">
-                                                    <div className={"font-black text-[13.5px] text-white group-hover:text-sky-400 transition-colors flex items-center gap-1.5 truncate"}>
+                                                    <div className={"font-black text-[13.5px] text-white group-hover:text-zinc-300 transition-colors flex items-center gap-1.5 truncate"}>
                                                         <span className="truncate">{p.user}</span>
                                                         {p.isLocked && (
-                                                            <span className="px-1.5 py-0.5 text-[8.5px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-md shrink-0 inline-flex items-center gap-1" title={`Đã khóa sổ chính thức vào ${p.lockedAt || ''}`}>
+                                                            <span className="px-1.5 py-0.5 text-[8.5px] font-bold bg-[#202228] text-zinc-400 rounded-md shrink-0 inline-flex items-center gap-1" title={`Đã khóa sổ chính thức vào ${p.lockedAt || ''}`}>
                                                                 <i className="fas fa-lock text-[8px]"></i> ĐÃ KHÓA
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <div className={"text-[10px] text-zinc-400 truncate mt-0.5"}>{p.role}</div>
+                                                    <div className={"text-[10px] text-zinc-500 truncate mt-0.5"}>{p.role}</div>
                                                 </div>
                                             </div>
 
                                             <div className={"flex items-center gap-3 shrink-0"}>
-                                                {/* CỘT LƯƠNG LŨY KẾ THỰC TẾ */}
+                                                {/* CỘT LŨY KẾ ĐẾN NAY */}
                                                 <div className="text-right hidden sm:block">
-                                                    <div className="text-[9px] text-zinc-400 uppercase font-bold tracking-wider">Lũy kế đến nay</div>
-                                                    <div className="text-[14px] font-black text-amber-300 font-mono leading-tight mt-0.5">
+                                                    <div className="text-[9px] text-zinc-500 uppercase font-bold tracking-wider">Lũy kế đến nay</div>
+                                                    <div className="text-[14px] font-black text-white font-mono leading-tight mt-0.5">
                                                         {formatMoney(p.tongThuNhap)}đ
                                                     </div>
                                                 </div>
 
                                                 {/* CỘT CÒN CẦN TRẢ / THỰC NHẬN */}
                                                 <div className="text-right">
-                                                    <div className="text-[9px] uppercase font-bold tracking-wider text-zinc-400">
-                                                        {p.conCanTra < 0 ? <span className="text-rose-400 font-black">Âm lương</span> : 'Còn cần trả'}
+                                                    <div className="text-[9px] uppercase font-bold tracking-wider text-zinc-500">
+                                                        {p.conCanTra < 0 ? <span className="text-rose-500 font-black">Âm lương</span> : 'Còn cần trả'}
                                                     </div>
-                                                    <div className={`text-[15px] font-black font-mono leading-tight mt-0.5 ${p.conCanTra < 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                                    <div className={`text-[15px] font-black font-mono leading-tight mt-0.5 ${p.conCanTra < 0 ? 'text-rose-500' : 'text-white'}`}>
                                                         {p.conCanTra < 0 ? `-${formatMoney(Math.abs(p.conCanTra))}` : formatMoney(p.conCanTra)}đ
                                                     </div>
                                                 </div>
 
-                                                <div className={`w-6 h-6 shrink-0 rounded-lg flex items-center justify-center transition-all duration-200 border ${expandedPayroll === p.user ? "bg-sky-500/20 text-sky-400 border-sky-500/40 rotate-180" : "bg-zinc-900 text-zinc-400 border-zinc-800 group-hover:text-white"}`}>
+                                                <div className={`w-6 h-6 shrink-0 rounded-lg flex items-center justify-center transition-all duration-200 border-0 ${expandedPayroll === p.user ? "bg-[#282b33] text-white rotate-180" : "bg-[#18191d] text-zinc-400 group-hover:text-white"}`}>
                                                     <i className="fas fa-chevron-down text-[9px]"></i>
                                                 </div>
                                             </div>
                                         </div>
 
                                         {expandedPayroll === p.user && (
-                                            <div className={"mt-3.5 pt-3.5 border-t border-white/[0.06] animate-fade-in"}>
+                                            <div className={"mt-3.5 pt-3.5 border-t border-white/[0.04] animate-fade-in"}>
 
                                                 {/* NHÓM NÚT XEM TRƯỚC / GHI NHẬN XÉT / IN PHIẾU LƯƠNG */}
                                                 <div className={"flex justify-end mb-3 gap-2"}>
-                                                    <button onClick={(e) => handleViewPayslipPreview(e, p)} className={"bg-gradient-to-r from-emerald-500 to-[#10b981] text-white font-black py-1.5 px-3 rounded-lg text-[10px] uppercase shadow-md active:scale-95 flex items-center gap-1 hover:brightness-110 transition-all"}><i className={"fas fa-eye mr-1"}></i> XEM PHIẾU LƯƠNG</button>
+                                                    <button onClick={(e) => handleViewPayslipPreview(e, p)} className={"bg-[#202228] hover:bg-[#282b33] text-zinc-200 border-0 font-bold py-1.5 px-3 rounded-xl text-[10px] uppercase shadow-sm active:scale-95 flex items-center gap-1.5 transition-all"}><i className={"fas fa-eye text-zinc-400"}></i> Xem Phiếu Lương</button>
                                                     {canPrintPayslip && (
                                                         <>
-                                                            <button onClick={(e) => handleAddPrintComment(e, p)} className={"bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-black py-1.5 px-3 rounded-lg text-[10px] uppercase shadow-md active:scale-95 flex items-center gap-1"}><i className={"fas fa-comment-dots mr-1"}></i> GHI NHẬN XÉT</button>
-                                                            <button onClick={() => handlePrintPayslip(p)} className={"bg-gradient-to-r from-amber-500 to-[#d4af37] text-black font-black py-1.5 px-4 rounded-lg text-[10px] uppercase shadow-md active:scale-95 flex items-center gap-1"}><i className={"fas fa-print mr-1"}></i> IN PHIẾU LƯƠNG</button>
+                                                            <button onClick={(e) => handleAddPrintComment(e, p)} className={"bg-[#202228] hover:bg-[#282b33] text-zinc-200 border-0 font-bold py-1.5 px-3 rounded-xl text-[10px] uppercase shadow-sm active:scale-95 flex items-center gap-1.5 transition-all"}><i className={"fas fa-comment-dots text-zinc-400"}></i> Ghi Nhận Xét</button>
+                                                            <button onClick={() => handlePrintPayslip(p)} className={"bg-[#202228] hover:bg-[#282b33] text-zinc-200 border-0 font-bold py-1.5 px-4 rounded-xl text-[10px] uppercase shadow-sm active:scale-95 flex items-center gap-1.5 transition-all"}><i className={"fas fa-print text-zinc-400"}></i> In Phiếu Lương</button>
                                                         </>
                                                     )}
                                                 </div>
 
-                                                <div className={"space-y-2 text-[11px] bg-[#0a0a0a] p-3 rounded-xl border border-[#222]"}>
-                                                    <div className={"flex justify-between items-center group"}><span className={"text-gray-400 font-bold"}>Lương Thời Gian:</span><span className={"text-white font-black"}>{formatMoney(p.luongChinh)}đ {isBoss && <i onClick={(e) => handleDirectEdit(e, p, 'baseSalary', 'Lương Cơ Bản', p.baseSalary)} className="fas fa-edit text-gray-500 hover:text-blue-400 cursor-pointer ml-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Sửa lương cơ bản (dữ liệu gốc)"></i>}</span></div>
+                                                <div className={"space-y-2 text-[11px] bg-[#18191d] p-3.5 rounded-2xl border-0 shadow-inner"}>
+                                                    <div className={"flex justify-between items-center group"}><span className={"text-zinc-400 font-bold"}>Lương Thời Gian:</span><span className={"text-white font-mono font-black"}>{formatMoney(p.luongChinh)}đ {isBoss && <i onClick={(e) => handleDirectEdit(e, p, 'baseSalary', 'Lương Cơ Bản', p.baseSalary)} className="fas fa-edit text-zinc-500 hover:text-zinc-300 cursor-pointer ml-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Sửa lương cơ bản (dữ liệu gốc)"></i>}</span></div>
 
                                                     {/* TIẾN TRÌNH KPI (Tất cả KPI giao trong kỳ) */}
-                                                    <div className={"mt-2 mb-2 p-2.5 bg-gradient-to-r from-[#1a1a1a] to-[#0f0f0f] rounded-xl border border-[#333] shadow-inner transition-all"}>
+                                                    <div className={"mt-2 mb-2 p-3 bg-[#202228] rounded-xl border-0 shadow-sm transition-all"}>
                                                         <div
                                                             onClick={(e) => toggleSection(p.user, 'tien_trinh_kpi', e)}
                                                             className={"flex justify-between items-center mb-2 cursor-pointer hover:opacity-80"}
                                                         >
-                                                            <span className={"text-[10px] font-black text-[#a855f7] uppercase tracking-widest"}><i className="fas fa-chart-line mr-1"></i> Tiến Trình KPI</span>
+                                                            <span className={"text-[10px] font-bold text-zinc-300 uppercase tracking-wider"}><i className="fas fa-chart-line mr-1 text-[#2E9599]"></i> Tiến Trình KPI</span>
                                                             <div className={"flex items-center gap-2"}>
-                                                                <span className={"text-[10px] font-black text-gray-400"}>{formatMoney(p.funcSalary)} / {formatMoney(p.funcSalaryTarget)}đ</span>
-                                                                <i className={`fas fa-chevron-${openSection[`${p.user}_tien_trinh_kpi`] ? 'up' : 'down'} text-gray-500 text-[9px]`}></i>
+                                                                <span className={"text-[10px] font-mono font-bold text-zinc-300"}>{formatMoney(p.funcSalary)} / {formatMoney(p.funcSalaryTarget)}đ</span>
+                                                                <i className={`fas fa-chevron-${openSection[`${p.user}_tien_trinh_kpi`] ? 'up' : 'down'} text-zinc-500 text-[9px]`}></i>
                                                             </div>
                                                         </div>
-                                                        <div className={"w-full bg-[#0a0a0a] rounded-full h-1.5 overflow-hidden border border-[#222]"}>
-                                                            <div className={"bg-gradient-to-r from-[#a855f7] to-[#d8b4fe] h-1.5 rounded-full transition-all duration-1000 relative"} style={{ width: `${p.funcSalaryTarget > 0 ? Math.min(100, (p.funcSalary / p.funcSalaryTarget) * 100) : 0}%` }}>
-                                                                <div className={"absolute top-0 right-0 bottom-0 left-0 bg-white/20 animate-pulse"}></div>
+                                                        <div className={"w-full bg-[#18191d] rounded-full h-1.5 overflow-hidden border-0"}>
+                                                            <div className={"bg-[#2E9599] h-1.5 rounded-full transition-all duration-1000 relative"} style={{ width: `${p.funcSalaryTarget > 0 ? Math.min(100, (p.funcSalary / p.funcSalaryTarget) * 100) : 0}%` }}>
                                                             </div>
                                                         </div>
 
                                                         {openSection[`${p.user}_tien_trinh_kpi`] ? (
-                                                            <div className={"mt-3 pt-3 border-t border-[#222] animate-fade-in space-y-1.5"}>
+                                                            <div className={"mt-3 pt-3 border-t border-white/[0.04] animate-fade-in space-y-1.5"}>
                                                                 {p.allAssignedKpis?.length > 0 ? p.allAssignedKpis.map((k, idx) => {
                                                                     const isClaimed = k.isClaimed === true || String(k.isClaimed).toLowerCase() === 'true';
                                                                     return (
-                                                                        <div key={idx} className={`flex justify-between items-center text-[10px] p-2 rounded-lg border ${isClaimed ? 'bg-amber-500/10 border-amber-500/30' : 'bg-[#111] border-[#222]'}`}>
-                                                                            <span className={`truncate flex-1 pr-2 ${isClaimed ? 'text-amber-400 font-black' : 'text-gray-400'}`}>
-                                                                                <i className={`fas ${isClaimed ? 'fa-check-circle' : 'fa-circle'} mr-1.5 opacity-80`}></i>
+                                                                        <div key={idx} className={`flex justify-between items-center text-[10px] p-2 rounded-lg border-0 ${isClaimed ? 'bg-[#18191d]' : 'bg-[#18191d]'}`}>
+                                                                            <span className={`truncate flex-1 pr-2 ${isClaimed ? 'text-zinc-200 font-bold' : 'text-zinc-400'}`}>
+                                                                                <i className={`fas ${isClaimed ? 'fa-check-circle text-[#2E9599]' : 'fa-circle text-zinc-600'} mr-1.5`}></i>
                                                                                 {k.kpiName}
                                                                             </span>
-                                                                            <span className={`font-black ${isClaimed ? 'text-amber-400' : 'text-gray-500'}`}>
+                                                                            <span className={`font-mono font-bold ${isClaimed ? 'text-white' : 'text-zinc-500'}`}>
                                                                                 +{formatMoney(k.reward)}đ
                                                                             </span>
                                                                         </div>
                                                                     );
                                                                 }) : (
-                                                                    <div className={"text-[10px] text-gray-500 italic text-center py-2"}>Chưa có KPI nào được giao trong kỳ này</div>
+                                                                    <div className={"text-[10px] text-zinc-500 italic text-center py-2"}>Chưa có KPI nào được giao trong kỳ này</div>
                                                                 )}
                                                             </div>
                                                         ) : (
-                                                            <div className={"flex justify-between items-center mt-2 pt-1.5 border-t border-[#222] group"}>
-                                                                <span className={"text-[9px] text-gray-500 font-bold"}>Giải ngân thực tế:</span>
-                                                                <span className={"text-[#60a5fa] font-black text-[11px]"}>+{formatMoney(p.funcSalary)}đ</span>
+                                                            <div className={"flex justify-between items-center mt-2 pt-1.5 border-t border-white/[0.04] group"}>
+                                                                <span className={"text-[9px] text-zinc-400 font-bold"}>Giải ngân thực tế:</span>
+                                                                <span className={"text-white font-mono font-black text-[11px]"}>+{formatMoney(p.funcSalary)}đ</span>
                                                             </div>
                                                         )}
                                                     </div>
 
-                                                    <div className={"flex justify-between items-center group"}><span className={"text-gray-400 font-bold"}>Phụ Cấp Xăng Xe:</span><span className={"text-[#60a5fa] font-black"}>{p.allowanceConfig > 0 ? '+' : ''}{formatMoney(p.allowanceConfig)}đ {isBoss && <i onClick={(e) => handleDirectEdit(e, p, 'allowance', 'Phụ Cấp Xăng Xe', p.allowanceConfig)} className="fas fa-edit text-gray-500 hover:text-blue-400 cursor-pointer ml-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Sửa phụ cấp xăng xe (dữ liệu gốc)"></i>}</span></div>
+                                                    <div className={"flex justify-between items-center group"}><span className={"text-zinc-400 font-bold"}>Phụ Cấp Xăng Xe:</span><span className={"text-white font-mono font-black"}>{p.allowanceConfig > 0 ? '+' : ''}{formatMoney(p.allowanceConfig)}đ {isBoss && <i onClick={(e) => handleDirectEdit(e, p, 'allowance', 'Phụ Cấp Xăng Xe', p.allowanceConfig)} className="fas fa-edit text-zinc-500 hover:text-zinc-300 cursor-pointer ml-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Sửa phụ cấp xăng xe (dữ liệu gốc)"></i>}</span></div>
 
                                                     <div className={"space-y-2 mt-3"}>
                                                         {/* KPI SẢN XUẤT */}
-                                                        <div className={"border border-[#333] rounded-xl overflow-hidden transition-all shadow-inner"}>
-                                                            <div onClick={(e) => toggleSection(p.user, 'kpi_sx', e)} className={"bg-[#1a1a1a] p-2 flex justify-between items-center cursor-pointer hover:bg-[#222]"}>
-                                                                <span className={"text-[#10b981] font-bold text-[10px] uppercase"}><i className={"fas fa-hammer mr-1"}></i> KPI Sản Xuất</span>
-                                                                <div className={"flex items-center gap-2"}><span className={"text-[#10b981] font-black"}>{p.kpiSanXuatDetails?.length > 0 ? '+' : ''}{formatMoney(p.kpiSanXuatDetails?.reduce((s, d) => s + d.amount, 0))}đ</span><i className={`fas fa-chevron-${openSection[`${p.user}_kpi_sx`] ? 'up' : 'down'} text-gray-500 text-[9px]`}></i></div>
+                                                        <div className={"bg-[#202228] rounded-xl overflow-hidden transition-all border-0 shadow-sm"}>
+                                                            <div onClick={(e) => toggleSection(p.user, 'kpi_sx', e)} className={"p-2.5 flex justify-between items-center cursor-pointer hover:bg-[#282b33]"}>
+                                                                <span className={"text-zinc-300 font-bold text-[10px] uppercase tracking-wider"}><i className={"fas fa-hammer mr-1 text-zinc-400"}></i> KPI Sản Xuất</span>
+                                                                <div className={"flex items-center gap-2"}><span className={"text-white font-mono font-black text-[11px]"}>{p.kpiSanXuatDetails?.length > 0 ? '+' : ''}{formatMoney(p.kpiSanXuatDetails?.reduce((s, d) => s + d.amount, 0))}đ</span><i className={`fas fa-chevron-${openSection[`${p.user}_kpi_sx`] ? 'up' : 'down'} text-zinc-500 text-[9px]`}></i></div>
                                                             </div>
                                                             {openSection[`${p.user}_kpi_sx`] && (
-                                                                <div className={"bg-[#0a0a0a] p-2 border-t border-[#333] animate-fade-in"}>
-                                                                    {(!p.kpiSanXuatDetails || p.kpiSanXuatDetails.length === 0) ? <div className={"text-gray-500 italic text-[9px] pl-1"}>Chưa có dữ liệu</div> : (
-                                                                        <div className={"pl-2 border-l border-[#333] space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2 py-1"}>
+                                                                <div className={"bg-[#18191d] p-2.5 border-t border-white/[0.04] animate-fade-in"}>
+                                                                    {(!p.kpiSanXuatDetails || p.kpiSanXuatDetails.length === 0) ? <div className={"text-zinc-500 italic text-[9px] pl-1"}>Chưa có dữ liệu</div> : (
+                                                                        <div className={"space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1 py-1"}>
                                                                             {p.kpiSanXuatDetails.map((detail, idx) => {
                                                                                 const isIntlItem = Boolean(detail.isX3);
                                                                                 return (
-                                                                                    <div key={idx} className={"flex justify-between items-center text-[10px] border-b border-[#222] pb-1.5 last:border-0"}>
-                                                                                        <span className={`truncate pr-2 flex-1 ${isIntlItem ? 'text-amber-300 font-black bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/30' : 'text-gray-300'}`}>
-                                                                                            <span className={"text-zinc-600 font-bold mr-1.5"}>[{detail.time?.slice(5, 10)}]</span>
+                                                                                    <div key={idx} className={"flex justify-between items-center text-[10px] border-b border-white/[0.04] pb-1.5 last:border-0"}>
+                                                                                        <span className={`truncate pr-2 flex-1 text-zinc-300`}>
+                                                                                            <span className={"text-zinc-500 font-mono font-bold mr-1.5"}>[{detail.time?.slice(5, 10)}]</span>
                                                                                             {detail.name}
-                                                                                            {isIntlItem && <span className="ml-1.5 px-1.5 py-0.2 bg-[#d4af37] text-black text-[8px] font-black rounded uppercase shadow-sm">x3 THƯỞNG</span>}
+                                                                                            {isIntlItem && <span className="ml-1.5 px-1.5 py-0.2 bg-[#282b33] text-zinc-300 text-[8px] font-bold rounded uppercase">x3 Thưởng</span>}
                                                                                         </span>
-                                                                                        <span className={"font-black text-[#10b981]"}>+{formatMoney(detail.amount)}</span>
+                                                                                        <span className={"font-mono font-bold text-white"}>+{formatMoney(detail.amount)}</span>
                                                                                     </div>
                                                                                 );
                                                                             })}
@@ -5764,25 +5757,25 @@
                                                         </div>
 
                                                         {/* KPI ĐÓNG GÓI */}
-                                                        <div className={"border border-[#333] rounded-xl overflow-hidden transition-all shadow-inner"}>
-                                                            <div onClick={(e) => toggleSection(p.user, 'kpi_dg', e)} className={"bg-[#1a1a1a] p-2 flex justify-between items-center cursor-pointer hover:bg-[#222]"}>
-                                                                <span className={"text-[#3b82f6] font-bold text-[10px] uppercase"}><i className={"fas fa-box mr-1"}></i> KPI Đóng Gói</span>
-                                                                <div className={"flex items-center gap-2"}><span className={"text-[#3b82f6] font-black"}>{p.kpiDongGoiDetails?.length > 0 ? '+' : ''}{formatMoney(p.kpiDongGoiDetails?.reduce((s, d) => s + d.amount, 0))}đ</span><i className={`fas fa-chevron-${openSection[`${p.user}_kpi_dg`] ? 'up' : 'down'} text-gray-500 text-[9px]`}></i></div>
+                                                        <div className={"bg-[#202228] rounded-xl overflow-hidden transition-all border-0 shadow-sm"}>
+                                                            <div onClick={(e) => toggleSection(p.user, 'kpi_dg', e)} className={"p-2.5 flex justify-between items-center cursor-pointer hover:bg-[#282b33]"}>
+                                                                <span className={"text-zinc-300 font-bold text-[10px] uppercase tracking-wider"}><i className={"fas fa-box mr-1 text-zinc-400"}></i> KPI Đóng Gói</span>
+                                                                <div className={"flex items-center gap-2"}><span className={"text-white font-mono font-black text-[11px]"}>{p.kpiDongGoiDetails?.length > 0 ? '+' : ''}{formatMoney(p.kpiDongGoiDetails?.reduce((s, d) => s + d.amount, 0))}đ</span><i className={`fas fa-chevron-${openSection[`${p.user}_kpi_dg`] ? 'up' : 'down'} text-zinc-500 text-[9px]`}></i></div>
                                                             </div>
                                                             {openSection[`${p.user}_kpi_dg`] && (
-                                                                <div className={"bg-[#0a0a0a] p-2 border-t border-[#333] animate-fade-in"}>
-                                                                    {(!p.kpiDongGoiDetails || p.kpiDongGoiDetails.length === 0) ? <div className={"text-gray-500 italic text-[9px] pl-1"}>Chưa có dữ liệu</div> : (
-                                                                        <div className={"pl-2 border-l border-[#333] space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2 py-1"}>
+                                                                <div className={"bg-[#18191d] p-2.5 border-t border-white/[0.04] animate-fade-in"}>
+                                                                    {(!p.kpiDongGoiDetails || p.kpiDongGoiDetails.length === 0) ? <div className={"text-zinc-500 italic text-[9px] pl-1"}>Chưa có dữ liệu</div> : (
+                                                                        <div className={"space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1 py-1"}>
                                                                             {p.kpiDongGoiDetails.map((detail, idx) => {
                                                                                 const isIntlItem = Boolean(detail.isX3);
                                                                                 return (
-                                                                                    <div key={idx} className={"flex justify-between items-center text-[10px] border-b border-[#222] pb-1.5 last:border-0"}>
-                                                                                        <span className={`truncate pr-2 flex-1 ${isIntlItem ? 'text-amber-300 font-black bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/30' : 'text-gray-300'}`}>
-                                                                                            <span className={"text-zinc-600 font-bold mr-1.5"}>[{detail.time?.slice(5, 10)}]</span>
+                                                                                    <div key={idx} className={"flex justify-between items-center text-[10px] border-b border-white/[0.04] pb-1.5 last:border-0"}>
+                                                                                        <span className={`truncate pr-2 flex-1 text-zinc-300`}>
+                                                                                            <span className={"text-zinc-500 font-mono font-bold mr-1.5"}>[{detail.time?.slice(5, 10)}]</span>
                                                                                             {detail.name}
-                                                                                            {isIntlItem && <span className="ml-1.5 px-1.5 py-0.2 bg-[#d4af37] text-black text-[8px] font-black rounded uppercase shadow-sm">x3 THƯỞNG</span>}
+                                                                                            {isIntlItem && <span className="ml-1.5 px-1.5 py-0.2 bg-[#282b33] text-zinc-300 text-[8px] font-bold rounded uppercase">x3 Thưởng</span>}
                                                                                         </span>
-                                                                                        <span className={"font-black text-[#3b82f6]"}>+{formatMoney(detail.amount)}</span>
+                                                                                        <span className={"font-mono font-bold text-white"}>+{formatMoney(detail.amount)}</span>
                                                                                     </div>
                                                                                 );
                                                                             })}
@@ -5793,19 +5786,19 @@
                                                         </div>
 
                                                         {/* KPI BÁN HÀNG */}
-                                                        <div className={"border border-[#333] rounded-xl overflow-hidden transition-all shadow-inner"}>
-                                                            <div onClick={(e) => toggleSection(p.user, 'kpi_bh', e)} className={"bg-[#1a1a1a] p-2 flex justify-between items-center cursor-pointer hover:bg-[#222]"}>
-                                                                <span className={"text-purple-400 font-bold text-[10px] uppercase"}><i className={"fas fa-shopping-cart mr-1"}></i> KPI Bán Hàng</span>
-                                                                <div className={"flex items-center gap-2"}><span className={"text-purple-400 font-black"}>{p.kpiBanHangDetails?.length > 0 ? '+' : ''}{formatMoney(p.kpiBanHangDetails?.reduce((s, d) => s + d.amount, 0))}đ</span><i className={`fas fa-chevron-${openSection[`${p.user}_kpi_bh`] ? 'up' : 'down'} text-gray-500 text-[9px]`}></i></div>
+                                                        <div className={"bg-[#202228] rounded-xl overflow-hidden transition-all border-0 shadow-sm"}>
+                                                            <div onClick={(e) => toggleSection(p.user, 'kpi_bh', e)} className={"p-2.5 flex justify-between items-center cursor-pointer hover:bg-[#282b33]"}>
+                                                                <span className={"text-zinc-300 font-bold text-[10px] uppercase tracking-wider"}><i className={"fas fa-shopping-cart mr-1 text-zinc-400"}></i> KPI Bán Hàng</span>
+                                                                <div className={"flex items-center gap-2"}><span className={"text-white font-mono font-black text-[11px]"}>{p.kpiBanHangDetails?.length > 0 ? '+' : ''}{formatMoney(p.kpiBanHangDetails?.reduce((s, d) => s + d.amount, 0))}đ</span><i className={`fas fa-chevron-${openSection[`${p.user}_kpi_bh`] ? 'up' : 'down'} text-zinc-500 text-[9px]`}></i></div>
                                                             </div>
                                                             {openSection[`${p.user}_kpi_bh`] && (
-                                                                <div className={"bg-[#0a0a0a] p-2 border-t border-[#333] animate-fade-in"}>
-                                                                    {(!p.kpiBanHangDetails || p.kpiBanHangDetails.length === 0) ? <div className={"text-gray-500 italic text-[9px] pl-1"}>Chưa có dữ liệu</div> : (
-                                                                        <div className={"pl-2 border-l border-[#333] space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2 py-1"}>
+                                                                <div className={"bg-[#18191d] p-2.5 border-t border-white/[0.04] animate-fade-in"}>
+                                                                    {(!p.kpiBanHangDetails || p.kpiBanHangDetails.length === 0) ? <div className={"text-zinc-500 italic text-[9px] pl-1"}>Chưa có dữ liệu</div> : (
+                                                                        <div className={"space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1 py-1"}>
                                                                             {p.kpiBanHangDetails.map((detail, idx) => (
-                                                                                <div key={idx} className={"flex justify-between items-center text-[10px] border-b border-[#222] pb-1.5 last:border-0"}>
-                                                                                    <span className={`truncate pr-2 flex-1 text-gray-300`}><span className={"text-zinc-600 font-bold mr-1.5"}>[{detail.time?.slice(5, 10)}]</span>{detail.name}</span>
-                                                                                    <span className={"font-black text-purple-400"}>+{formatMoney(detail.amount)}</span>
+                                                                                <div key={idx} className={"flex justify-between items-center text-[10px] border-b border-white/[0.04] pb-1.5 last:border-0"}>
+                                                                                    <span className={`truncate pr-2 flex-1 text-zinc-300`}><span className={"text-zinc-500 font-mono font-bold mr-1.5"}>[{detail.time?.slice(5, 10)}]</span>{detail.name}</span>
+                                                                                    <span className={"font-mono font-bold text-white"}>+{formatMoney(detail.amount)}</span>
                                                                                 </div>
                                                                             ))}
                                                                         </div>
@@ -5815,19 +5808,19 @@
                                                         </div>
 
                                                         {/* THƯỞNG KHÁC */}
-                                                        <div className={"border border-[#333] rounded-xl overflow-hidden transition-all shadow-inner"}>
-                                                            <div onClick={(e) => toggleSection(p.user, 'thuong', e)} className={"bg-[#1a1a1a] p-2 flex justify-between items-center cursor-pointer hover:bg-[#222]"}>
-                                                                <span className={"text-amber-400 font-bold text-[10px] uppercase"}><i className={"fas fa-gift mr-1"}></i> Thưởng / Phụ cấp khác</span>
-                                                                <div className={"flex items-center gap-2"}><span className={"text-amber-400 font-black"}>{p.thuongDetails?.length > 0 ? '+' : ''}{formatMoney(p.thuongDetails?.reduce((s, d) => s + d.amount, 0))}đ</span><i className={`fas fa-chevron-${openSection[`${p.user}_thuong`] ? 'up' : 'down'} text-gray-500 text-[9px]`}></i></div>
+                                                        <div className={"bg-[#202228] rounded-xl overflow-hidden transition-all border-0 shadow-sm"}>
+                                                            <div onClick={(e) => toggleSection(p.user, 'thuong', e)} className={"p-2.5 flex justify-between items-center cursor-pointer hover:bg-[#282b33]"}>
+                                                                <span className={"text-zinc-300 font-bold text-[10px] uppercase tracking-wider"}><i className={"fas fa-gift mr-1 text-zinc-400"}></i> Thưởng / Phụ Cấp Khác</span>
+                                                                <div className={"flex items-center gap-2"}><span className={"text-white font-mono font-black text-[11px]"}>{p.thuongDetails?.length > 0 ? '+' : ''}{formatMoney(p.thuongDetails?.reduce((s, d) => s + d.amount, 0))}đ</span><i className={`fas fa-chevron-${openSection[`${p.user}_thuong`] ? 'up' : 'down'} text-zinc-500 text-[9px]`}></i></div>
                                                             </div>
                                                             {openSection[`${p.user}_thuong`] && (
-                                                                <div className={"bg-[#0a0a0a] p-2 border-t border-[#333] animate-fade-in"}>
-                                                                    {(!p.thuongDetails || p.thuongDetails.length === 0) ? <div className={"text-gray-500 italic text-[9px] pl-1"}>Chưa có dữ liệu</div> : (
-                                                                        <div className={"pl-2 border-l border-[#333] space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-2 py-1"}>
+                                                                <div className={"bg-[#18191d] p-2.5 border-t border-white/[0.04] animate-fade-in"}>
+                                                                    {(!p.thuongDetails || p.thuongDetails.length === 0) ? <div className={"text-zinc-500 italic text-[9px] pl-1"}>Chưa có dữ liệu</div> : (
+                                                                        <div className={"space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar pr-1 py-1"}>
                                                                             {p.thuongDetails.map((detail, idx) => (
-                                                                                <div key={idx} className={"flex justify-between items-center text-[10px] border-b border-[#222] pb-1.5 last:border-0"}>
-                                                                                    <span className={`truncate pr-2 flex-1 text-gray-300`}><span className={"text-zinc-600 font-bold mr-1.5"}>{detail.time ? `[${detail.time.slice(5, 10)}]` : ''}</span>{detail.name}</span>
-                                                                                    <span className={"font-black text-amber-400 flex items-center gap-1 group"}>+{formatMoney(detail.amount)} {canManagePayroll && <i onClick={(e) => handleDirectBonusEdit(e, p, detail.name, detail.amount)} className="fas fa-edit text-gray-500 hover:text-amber-400 cursor-pointer ml-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Sửa (Dữ liệu gốc)"></i>}</span>
+                                                                                <div key={idx} className={"flex justify-between items-center text-[10px] border-b border-white/[0.04] pb-1.5 last:border-0"}>
+                                                                                    <span className={`truncate pr-2 flex-1 text-zinc-300`}><span className={"text-zinc-500 font-mono font-bold mr-1.5"}>{detail.time ? `[${detail.time.slice(5, 10)}]` : ''}</span>{detail.name}</span>
+                                                                                    <span className={"font-mono font-bold text-white flex items-center gap-1 group"}>+{formatMoney(detail.amount)} {canManagePayroll && <i onClick={(e) => handleDirectBonusEdit(e, p, detail.name, detail.amount)} className="fas fa-edit text-zinc-500 hover:text-zinc-300 cursor-pointer ml-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Sửa (Dữ liệu gốc)"></i>}</span>
                                                                                 </div>
                                                                             ))}
                                                                         </div>
@@ -5838,36 +5831,36 @@
                                                     </div>
 
                                                     {/* PHÍ CÔNG ĐOÀN (KHOẢN TRỪ CỐ ĐỊNH HÀNG THÁNG) */}
-                                                    <div className={"bg-[#141414] p-2.5 rounded-xl border border-[#2a2a2a] flex justify-between items-center my-1.5 shadow-inner"}>
-                                                        <span className={"text-rose-400 font-bold text-[11px] flex items-center gap-1.5"}>
-                                                            <i className={"fas fa-hand-holding-heart text-rose-500 text-[12px]"}></i> Phí Công Đoàn <span className={"text-[9px] text-zinc-500 font-normal"}>(Trừ cố định)</span>:
+                                                    <div className={"bg-[#202228] p-3 rounded-xl border-0 flex justify-between items-center my-1.5 shadow-sm"}>
+                                                        <span className={"text-zinc-400 font-bold text-[11px] flex items-center gap-1.5"}>
+                                                            <i className={"fas fa-hand-holding-heart text-zinc-500 text-[12px]"}></i> Phí Công Đoàn <span className={"text-[9px] text-zinc-500 font-normal"}>(Trừ cố định)</span>:
                                                         </span>
-                                                        <span className={"text-rose-500 font-black text-[12px] font-mono"}>-{formatMoney(p.phiCongDoan)}đ</span>
+                                                        <span className={"text-rose-400 font-mono font-black text-[12px]"}>-{formatMoney(p.phiCongDoan)}đ</span>
                                                     </div>
 
                                                     {/* KHỐI KHẤU TRỪ & KCS PHẠT (CÁC KHOẢN BIẾN ĐỘNG / VI PHẠM PHÁT SINH) */}
-                                                    <div className={"border border-[#333] rounded-xl overflow-hidden my-2 transition-all shadow-inner"}>
-                                                        <div onClick={(e) => toggleSection(p.user, 'penalty', e)} className={"bg-[#1a1a1a] p-2.5 flex justify-between items-center cursor-pointer hover:bg-[#222] active:bg-[#333]"}>
-                                                            <span className={"text-rose-500 font-black tracking-wide text-[11px]"}><i className={"fas fa-exclamation-triangle mr-1"}></i> Khấu Trừ & KCS Phạt:</span>
-                                                            <div className={"flex items-center gap-2"}>
-                                                                <span className={"text-rose-500 font-black text-[12px]"}>-{formatMoney(Math.max(0, cleanNumber(p.tongGiamTru - p.phiCongDoan)))}đ</span>
-                                                                <i className={`fas fa-chevron-${openSection[`${p.user}_penalty`] ? 'up' : 'down'} text-gray-500 text-[10px] w-4 text-right transition-transform`}></i>
+                                                    <div className={"bg-[#202228] rounded-xl overflow-hidden my-2 transition-all border-0 shadow-sm"}>
+                                                        <div onClick={(e) => toggleSection(p.user, 'penalty', e)} className={"p-3 flex justify-between items-center cursor-pointer hover:bg-[#282b33]"}>
+                                                            <span className={"text-zinc-400 font-bold text-[11px] uppercase tracking-wider"}><i className={"fas fa-exclamation-triangle mr-1 text-zinc-500"}></i> Khấu Trừ & KCS Phạt:</span>
+                                                            <div className={"flex items-center gap-2 text-right"}>
+                                                                <span className={"text-rose-400 font-mono font-black text-[12px]"}>-{formatMoney(Math.max(0, cleanNumber(p.tongGiamTru - p.phiCongDoan)))}đ</span>
+                                                                <i className={`fas fa-chevron-${openSection[`${p.user}_penalty`] ? 'up' : 'down'} text-zinc-500 text-[10px] w-4 text-right transition-transform`}></i>
                                                             </div>
                                                         </div>
                                                         {openSection[`${p.user}_penalty`] && (
-                                                            <div className={"bg-[#0a0a0a] p-2 border-t border-[#333] animate-fade-in"}>
-                                                                <div className={"pl-2 border-l border-[#333] space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2 py-1"}>
+                                                            <div className={"bg-[#18191d] p-2.5 border-t border-white/[0.04] animate-fade-in"}>
+                                                                <div className={"space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar pr-1 py-1"}>
                                                                     {/* 1. Tạm ứng trong kỳ */}
                                                                     {p.tamUngDetails?.map((detail, idx) => (
-                                                                        <div key={`tu_${idx}`} className={"flex justify-between items-center text-[10px] border-b border-[#222] pb-1.5 last:border-0 last:pb-0 group"}>
-                                                                            <span className={"text-amber-300 font-bold truncate pr-2 flex-1"} title={detail.name}>
-                                                                                <span className={"text-zinc-600 font-bold mr-1.5"}>{detail.time ? `[${detail.time.slice(5)}]` : ''}</span>
-                                                                                <i className="fas fa-hand-holding-usd mr-1 text-amber-400"></i>{detail.name}
+                                                                        <div key={`tu_${idx}`} className={"flex justify-between items-center text-[10px] border-b border-white/[0.04] pb-1.5 last:border-0 last:pb-0 group"}>
+                                                                            <span className={"text-zinc-300 font-medium truncate pr-2 flex-1"} title={detail.name}>
+                                                                                <span className={"text-zinc-500 font-mono font-bold mr-1.5"}>{detail.time ? `[${detail.time.slice(5)}]` : ''}</span>
+                                                                                <i className="fas fa-hand-holding-usd mr-1 text-zinc-500"></i>{detail.name}
                                                                             </span>
-                                                                            <span className={"font-black shrink-0 text-rose-500 flex items-center gap-1.5"}>
+                                                                            <span className={"font-mono font-bold shrink-0 text-rose-400 flex items-center gap-1.5"}>
                                                                                 -{formatMoney(detail.amount)}
                                                                                 {canManagePayroll && (
-                                                                                    <i onClick={(e) => { e.stopPropagation(); handleDeleteDeduction(detail, p.user); }} className="fas fa-trash-alt text-gray-500 hover:text-red-400 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity ml-1" title="Xoá khoản tạm ứng này"></i>
+                                                                                    <i onClick={(e) => { e.stopPropagation(); handleDeleteDeduction(detail, p.user); }} className="fas fa-trash-alt text-zinc-500 hover:text-rose-400 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity ml-1" title="Xoá khoản tạm ứng này"></i>
                                                                                 )}
                                                                             </span>
                                                                         </div>
@@ -5875,32 +5868,13 @@
 
                                                                     {/* 2. Chi phí bảo hành đền bù */}
                                                                     {p.chiPhiBaoHanhDetails?.map((detail, idx) => (
-                                                                        <div key={`bh_${idx}`} className={"flex justify-between items-center text-[10px] border-b border-[#222] pb-1.5 last:border-0 last:pb-0 group"}>
-                                                                            <span className={"text-gray-300 truncate pr-2 flex-1"} title={detail.name}>
-                                                                                <span className={"text-zinc-600 font-bold mr-1.5"}>{detail.time ? `[${detail.time.slice(5)}]` : ''}</span>
+                                                                        <div key={`bh_${idx}`} className={"flex justify-between items-center text-[10px] border-b border-white/[0.04] pb-1.5 last:border-0 last:pb-0 group"}>
+                                                                            <span className={"text-zinc-300 truncate pr-2 flex-1"} title={detail.name}>
+                                                                                <span className={"text-zinc-500 font-mono font-bold mr-1.5"}>{detail.time ? `[${detail.time.slice(5)}]` : ''}</span>
                                                                                 {detail.name}
                                                                             </span>
-                                                                            <span className={"font-black shrink-0 text-rose-500 flex items-center gap-1.5"}>
+                                                                            <span className={"font-mono font-bold shrink-0 text-rose-400"}>
                                                                                 -{formatMoney(detail.amount)}
-                                                                                {canManagePayroll && (
-                                                                                    <i onClick={(e) => { e.stopPropagation(); handleDeleteDeduction(detail, p.user); }} className="fas fa-trash-alt text-gray-500 hover:text-red-400 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity ml-1" title="Xoá khoản bảo hành này"></i>
-                                                                                )}
-                                                                            </span>
-                                                                        </div>
-                                                                    ))}
-
-                                                                    {/* 3. Khoản giảm trừ khác / Cho vay */}
-                                                                    {p.giamTruKhacDetails?.map((detail, idx) => (
-                                                                        <div key={`gt_${idx}`} className={"flex justify-between items-center text-[10px] border-b border-[#222] pb-1.5 last:border-0 last:pb-0 group"}>
-                                                                            <span className={"text-gray-300 truncate pr-2 flex-1"} title={detail.name}>
-                                                                                <span className={"text-zinc-600 font-bold mr-1.5"}>{detail.time ? `[${detail.time.slice(5)}]` : ''}</span>
-                                                                                {detail.name}
-                                                                            </span>
-                                                                            <span className={"font-black shrink-0 text-rose-500 flex items-center gap-1.5"}>
-                                                                                -{formatMoney(detail.amount)}
-                                                                                {canManagePayroll && (
-                                                                                    <i onClick={(e) => { e.stopPropagation(); handleDeleteDeduction(detail, p.user); }} className="fas fa-trash-alt text-gray-500 hover:text-red-400 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity ml-1" title="Xoá khoản giảm trừ / cho vay này"></i>
-                                                                                )}
                                                                             </span>
                                                                         </div>
                                                                     ))}

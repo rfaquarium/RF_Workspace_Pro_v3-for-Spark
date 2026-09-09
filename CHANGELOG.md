@@ -2,6 +2,28 @@
 
 Tài liệu lưu trữ toàn bộ lịch sử phát hành, nâng cấp kiến trúc, tối ưu nghiệp vụ và sửa lỗi của hệ điều hành `RF_Workspace_Pro`.
 
+## [v2.46.0] - 2026-09-09
+
+### 🪨 Tách Biệt Tuyệt Đối Định Mức Vật Tư BOM Layout & Bể Kính, Chấm Dứt Hiện Tượng Layout Trừ Kính & Keo Silicone
+- **Bối cảnh & Phân tích nguyên nhân gốc rễ (Root Cause Analysis - RCA)**:
+  - **Triệu chứng sự cố**: Khi người dùng hoặc quản lý xưởng mở Drawer chi tiết của một sản phẩm Layout (ví dụ: `Biotop Cuội ver.1 - 30x20x20cm`), hệ thống hiển thị bảng `ĐỊNH MỨC TIÊU HAO VẬT TƯ (UOM)` với các chỉ số: `Diện Tích Kính: 0.273 m²` và `Keo Silicone: 27 ml (0.09 chai)`. Trên danh sách bảng sản xuất cũng hiển thị thông số `30x20x20cm • 0.273m² (5%)`.
+  - **Tầng 1 (Thao tác & Nghiệp vụ Xưởng)**: Gây hiểu lầm nghiêm trọng cho quản đốc và thợ xưởng là hàng Layout đang bị trừ kính và silicon, trong khi thực tế sản phẩm Layout chỉ tiêu hao Đá, Lũa, Keo 502, Bột đá, Fomex, Rêu từ cấu hình `BOM_Config`.
+  - **Tầng 2 (Quy trình phần mềm)**: Khâu bóc tách kích thước `parseDimensionsFromName` nhận diện chuỗi regex `30x20x20` có trong tên Layout và trả về đối tượng `_dimensions` (gồm diện tích kính 5 mặt `areaM2` và keo `glueMl`). Giao diện Drawer chi tiết và Table Row render `_dimensions` vô điều kiện mà không kiểm tra xem sản phẩm có phải là Bể Kính hay không.
+  - **Tầng 3 (Dữ liệu & Logic nhận diện)**: Trong hàm `getProductBOMAndCosts` và `listWithComputed`, điều kiện nhận diện Bể Kính được xét trước hoặc dùng chuỗi `searchStr.includes('bể')` mà không ưu tiên lọc từ khóa Layout trước.
+- **Nâng Cấp Kiến Trúc & Giải Pháp Kỹ Thuật**:
+  1. **Ưu Tiên Phân Loại Layout Trước Bể Kính Tuyệt Đối**:
+     - Quy tắc nhận diện chuẩn: Kiểm tra toàn bộ từ khóa Layout (`layout`, `biotop`, `rừng`, `cuội`, `đá`, `lũa`, `bonsai`, `cầu vồng`, `đảo bay`, `tiểu cảnh`, `vách`, `hẻm`, `hang`, `nhất trụ`, `núi`...) trước.
+     - Chỉ khi không phải Layout và tên/loại có chứa `bể kính`, `hồ kính`, `dán bể`, `tank`... mới được phân loại là `Bể Kính`.
+  2. **Tách Biệt Giao Diện Drawer Chi Tiết Sản Xuất**:
+     - **Bể Kính**: Hiển thị bảng UOM tiêu hao chuẩn `Diện Tích Kính (m²)` và `Keo Silicone (ml/chai)`.
+     - **Layout**: Hiển thị bảng `QUY CÁCH SẢN PHẨM LAYOUT` với `Kích Thước Khung Phôi` và `Phân Loại Vật Liệu: Đá / Lũa / Keo 502 (BOM)`.
+  3. **Làm Sạch Bảng Danh Sách Sản Xuất**:
+     - Chỉ hiển thị diện tích kính `m² (5%)` cho sản phẩm có `_computedType === 'Bể Kính'`. Sản phẩm Layout chỉ hiển thị kích thước quy cách gọn gàng.
+  4. **Đảm Bảo Tính Toàn Vẹn & Khớp Schema**:
+     - Không làm thay đổi luồng Optimistic UI, không ảnh hưởng tới bảng `Production`, `BOM_Config`, `ImportExport`.
+
+---
+
 ## [v2.45.11] - 2026-09-07
 
 ### 📦 Khắc Phục Triệt Để Lỗi Lưu Phiếu Kho (totalDebtAdd) & Đồng Bộ Tức Thì Nhà Cung Cấp Mới

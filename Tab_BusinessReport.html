@@ -1,8 +1,8 @@
 <script type="text/babel">
-// -------------------------------------------------------------------------
+// =========================================================================
 // 📊 MODULE: BÁO CÁO KẾT QUẢ KINH DOANH & P&L TOÀN DOANH NGHIỆP (Tab_BusinessReport.html)
-// RICH FISH AQUARIUM - EXECUTIVE P&L SUITE (2026 EDITION)
-// -------------------------------------------------------------------------
+// RICH FISH AQUARIUM - EXECUTIVE P&L SUITE (HALLMARK ROYAL WORKBENCH v3.0)
+// =========================================================================
 
 const ReportMetricField = React.memo(({ label, field, value, isEditing, disabled, onChange, color, canView = true }) => (
     <div className={`p-3 rounded-xl border transition-all ${
@@ -19,7 +19,7 @@ const ReportMetricField = React.memo(({ label, field, value, isEditing, disabled
             />
         ) : (
             <div className={`text-[15px] font-mono font-black ${color} truncate`}>
-                {field === 'orderCount' ? (value || 0) : (canView ? formatFinanceMoney(value) + 'đ' : '******')}
+                {field === 'orderCount' ? (value || 0) : (canView ? (Number(value) || 0).toLocaleString('vi-VN') + 'đ' : '******')}
             </div>
         )}
     </div>
@@ -37,22 +37,8 @@ const BusinessReportTab = React.memo(function BusinessReportTab({ erpData, pushD
         return isBoss;
     }, [propHasPerm, currentRole, currentUser, isBoss]);
 
-    const canViewFinanceReport = hasPerm('REPORT_FINANCE_VIEW'); // Tiến & Trang
-
-    // Bảo mật phân quyền tuyệt đối
-    if (!canViewFinanceReport) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center animate-fade-in p-6">
-                <div className="w-20 h-20 rounded-2xl bg-rose-950/40 border border-rose-500/30 flex items-center justify-center mb-4 shadow-lg shadow-rose-950/20">
-                    <i className="fas fa-lock text-3xl text-rose-400"></i>
-                </div>
-                <h2 className="text-xl font-bold text-rose-400 uppercase tracking-widest mb-2">Khu Vực Tuyệt Mật</h2>
-                <p className="text-[12px] font-medium text-zinc-400 max-w-sm leading-relaxed">
-                    Báo cáo P&L Kết Quả Kinh Doanh chỉ dành riêng cho quyền quản trị <b className="text-rose-400">TỐI CAO</b> và <b className="text-amber-400">KẾ TOÁN</b>.
-                </p>
-            </div>
-        );
-    }
+    // Phân quyền bảo mật: Chỉ Boss và Kế toán
+    const canViewFinanceReport = isBoss || currentRole === 'TỐI CAO' || ['KẾ TOÁN', 'KIỂM TOÁN'].includes(currentRole) || hasPerm('REPORT_FINANCE_VIEW') || hasPerm('FINANCE_ADMIN');
 
     const REPORT_CHANNELS = [
         { id: 'Shopee VN', name: 'Shopee VN', icon: 'fa-shopping-bag', color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/30' },
@@ -63,7 +49,13 @@ const BusinessReportTab = React.memo(function BusinessReportTab({ erpData, pushD
         { id: 'Xuất Khẩu', name: 'Xuất Khẩu (USD)', icon: 'fa-globe-americas', color: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30' }
     ];
 
-    // Dynamic Periods list
+    // Format tiền tệ
+    const formatMoney = (val) => {
+        const num = Math.round(Number(val || 0));
+        return num.toLocaleString('vi-VN');
+    };
+
+    // Danh sách kỳ báo cáo động
     const filterOptions = React.useMemo(() => {
         const currentM = new Date().getMonth() + 1;
         const baseMonths = [];
@@ -86,12 +78,15 @@ const BusinessReportTab = React.memo(function BusinessReportTab({ erpData, pushD
     }, [erpData?.ProfitReports]);
 
     const [filter, setFilter] = React.useState(() => `Tháng ${new Date().getMonth() + 1}`);
-    const [viewMode, setViewMode] = React.useState('dashboard'); // 'dashboard' | 'editor'
+    const [subTab, setSubTab] = React.useState('STATEMENT'); // 'STATEMENT' | 'DAILY_LEDGER' | 'EDITOR'
     const [selectedChannelTab, setSelectedChannelTab] = React.useState('Shopee VN');
     const [localReports, setLocalReports] = React.useState({}); 
     const [editingReport, setEditingReport] = React.useState(null);
     const [reportForm, setReportForm] = React.useState({});
     const [isSavingAll, setIsSavingAll] = React.useState(false);
+
+    // Side Drawer chi tiết ngày
+    const [selectedDayDrawer, setSelectedDayDrawer] = React.useState(null);
 
     React.useEffect(() => {
         if (erpData?.ProfitReports?.length > 0) {
@@ -105,7 +100,7 @@ const BusinessReportTab = React.memo(function BusinessReportTab({ erpData, pushD
         }
     }, [erpData?.ProfitReports]);
 
-    // Aggregate report logic
+    // Tính toán tổng hợp số liệu cho từng kênh
     const getAggregatedReport = React.useCallback((channelName) => {
         let agg = { revenue: 0, orderCount: 0, platformFee: 0, returns: 0, discount: 0, ads: 0, cogs: 0, salary: 0, operation: 0 };
         const currentYear = new Date().getFullYear();
@@ -164,7 +159,7 @@ const BusinessReportTab = React.memo(function BusinessReportTab({ erpData, pushD
             return agg;
         }
 
-        // Fallback: Calculate from Orders
+        // Quét trực tiếp từ Orders
         let dynamicRev = 0, dynamicRet = 0, dynamicCount = 0;
         const orders = erpData?.Orders || [];
 
@@ -232,48 +227,38 @@ const BusinessReportTab = React.memo(function BusinessReportTab({ erpData, pushD
         return agg;
     }, [erpData?.ProfitReports, erpData?.Orders, filter, localReports]);
 
-    // Comprehensive financial breakdown
+    // Financial breakdown toàn diện
     const financialStats = React.useMemo(() => {
-        let grossSales = 0; // 1. Doanh thu bán hàng
-        let totalReturns = 0; // 2a. Hàng bán bị trả lại
-        let totalDiscounts = 0; // 2b. Chiết khấu & Voucher
-        let totalPlatformFees = 0; // 6a. Phí sàn & Đối tác vận chuyển
-        let totalAds = 0; // 6b. Chi phí ADS & Marketing
+        let grossSales = 0;
+        let totalReturns = 0;
+        let totalDiscounts = 0;
+        let totalPlatformFees = 0;
+        let totalAds = 0;
         let totalOrders = 0;
 
         REPORT_CHANNELS.forEach(channel => {
-            const data = getAggregatedReport(channel.id);
-            grossSales += Number(data.revenue || 0);
-            totalReturns += Number(data.returns || 0);
-            totalDiscounts += Number(data.discount || 0);
-            totalPlatformFees += Number(data.platformFee || 0);
-            totalAds += Number(data.ads || 0);
-            totalOrders += Number(data.orderCount || 0);
+            const d = getAggregatedReport(channel.id);
+            grossSales += Number(d.revenue || 0);
+            totalReturns += Number(d.returns || 0);
+            totalDiscounts += Number(d.discount || 0);
+            totalPlatformFees += Number(d.platformFee || 0);
+            totalAds += Number(d.ads || 0);
+            totalOrders += Number(d.orderCount || 0);
         });
 
         const genData = getAggregatedReport('COMPANY_GENERAL');
-        const cogs = Number(genData.cogs || 0); // 4. Giá vốn hàng bán COGS
-        const salary = Number(genData.salary || 0); // 6c. Quỹ lương & gia công
-        const operation = Number(genData.operation || 0); // 6d. Vận hành & Mặt bằng
+        const cogs = Number(genData.cogs || 0);
+        const salary = Number(genData.salary || 0);
+        const operation = Number(genData.operation || 0);
 
-        const totalDeductions = totalReturns + totalDiscounts; // 2. Giảm trừ doanh thu
-        const netRevenue = Math.max(0, grossSales - totalDeductions); // 3. Doanh thu thuần (DTT)
-        const grossProfit = netRevenue - cogs; // 5. Lợi nhuận gộp
-        const operatingExpenses = totalPlatformFees + totalAds + salary + operation; // 6. Tổng chi phí hoạt động
-        const operatingProfit = grossProfit - operatingExpenses; // 7. Lợi nhuận từ HĐKD
-        
-        const otherIncome = 0;
-        const netProfit = operatingProfit + otherIncome; // 9. Lợi nhuận thuần ròng
+        const totalDeductions = totalReturns + totalDiscounts;
+        const netRevenue = Math.max(0, grossSales - totalDeductions);
+        const grossProfit = netRevenue - cogs;
+        const operatingExpenses = totalPlatformFees + totalAds + salary + operation;
+        const netProfit = grossProfit - operatingExpenses;
 
-        // Ratios
-        const returnRate = grossSales > 0 ? (totalReturns / grossSales) * 100 : 0;
-        const deductionRate = grossSales > 0 ? (totalDeductions / grossSales) * 100 : 0;
-        const cogsRateOnNet = netRevenue > 0 ? (cogs / netRevenue) * 100 : 0;
-        const grossMargin = netRevenue > 0 ? (grossProfit / netRevenue) * 100 : 0;
-        const opexRateOnNet = netRevenue > 0 ? (operatingExpenses / netRevenue) * 100 : 0;
-        const netMarginOnNet = netRevenue > 0 ? (netProfit / netRevenue) * 100 : 0;
-        const netMarginOnGMV = grossSales > 0 ? (netProfit / grossSales) * 100 : 0;
-        const aov = totalOrders > 0 ? Math.round(grossSales / totalOrders) : 0;
+        const netMarginOnNet = netRevenue > 0 ? ((netProfit / netRevenue) * 100) : 0;
+        const cirAds = netRevenue > 0 ? ((totalAds / netRevenue) * 100) : 0;
 
         return {
             grossSales,
@@ -288,21 +273,127 @@ const BusinessReportTab = React.memo(function BusinessReportTab({ erpData, pushD
             salary,
             operation,
             operatingExpenses,
-            operatingProfit,
-            otherIncome,
             netProfit,
             totalOrders,
-            aov,
-            returnRate,
-            deductionRate,
-            cogsRateOnNet,
-            grossMargin,
-            opexRateOnNet,
             netMarginOnNet,
-            netMarginOnGMV
+            cirAds
         };
     }, [getAggregatedReport]);
 
+    // Bảng Daily P&L Ledger theo từng ngày
+    const dailyLedgerData = React.useMemo(() => {
+        const orders = erpData?.Orders || [];
+        const txs = erpData?.Transactions || [];
+
+        let filterMonthNum = null;
+        const currentYear = new Date().getFullYear();
+        if (filter.startsWith('Tháng')) {
+            const mMatch = filter.match(/\d+/);
+            if (mMatch) filterMonthNum = parseInt(mMatch[0], 10);
+        }
+
+        const dayMap = {};
+
+        // Quét đơn
+        orders.forEach(o => {
+            const dateStr = String(o.date || o.createdAt || '').slice(0, 10);
+            if (!dateStr) return;
+            const d = new Date(dateStr);
+            if (isNaN(d.getTime())) return;
+
+            if (filterMonthNum !== null) {
+                if (d.getMonth() + 1 !== filterMonthNum || d.getFullYear() !== currentYear) return;
+            }
+
+            if (!dayMap[dateStr]) {
+                dayMap[dateStr] = {
+                    date: dateStr,
+                    orderCount: 0,
+                    revenue: 0,
+                    platformFee: 0,
+                    cogs: 0,
+                    ads: 0,
+                    laborPackaging: 0,
+                    returnsCount: 0,
+                    ordersList: [],
+                    txsList: []
+                };
+            }
+
+            const st = String(o.status || '').toUpperCase().trim();
+            if (st.includes('HỦY') || st.includes('HUỶ') || st === 'CANCELLED') return;
+
+            let rev = Number(String(o.revenue || 0).replace(/[^\d.]/g, '')) || 0;
+            let pFee = Number(o.feeFixed || 0) + Number(o.feeService || 0) + Number(o.feePayment || 0) + Number(o.feeAffiliate || 0) + Number(o.tax || 0);
+            let cogsVal = Number(o.cogs || 0);
+
+            if (st.includes('HOÀN') && !st.includes('HOÀN THÀNH')) {
+                dayMap[dateStr].returnsCount += 1;
+            } else {
+                dayMap[dateStr].orderCount += 1;
+                dayMap[dateStr].revenue += rev;
+                dayMap[dateStr].platformFee += pFee;
+                dayMap[dateStr].cogs += cogsVal;
+                dayMap[dateStr].laborPackaging += 25000;
+            }
+
+            dayMap[dateStr].ordersList.push(o);
+        });
+
+        // Quét chi phí Ads & Vận hành
+        txs.forEach(t => {
+            const tDate = String(t.date || t.createdAt || '').slice(0, 10);
+            if (!tDate) return;
+            const d = new Date(tDate);
+            if (isNaN(d.getTime())) return;
+
+            if (filterMonthNum !== null) {
+                if (d.getMonth() + 1 !== filterMonthNum || d.getFullYear() !== currentYear) return;
+            }
+
+            const amt = Math.abs(Number(t.amount || 0));
+            const cat = String(t.category || '').toLowerCase();
+            const title = String(t.title || t.note || '').toLowerCase();
+
+            if (!dayMap[tDate]) {
+                dayMap[tDate] = {
+                    date: tDate,
+                    orderCount: 0,
+                    revenue: 0,
+                    platformFee: 0,
+                    cogs: 0,
+                    ads: 0,
+                    laborPackaging: 0,
+                    returnsCount: 0,
+                    ordersList: [],
+                    txsList: []
+                };
+            }
+
+            if (cat.includes('quảng cáo') || cat.includes('ads') || title.includes('ads')) {
+                dayMap[tDate].ads += amt;
+            }
+
+            dayMap[tDate].txsList.push(t);
+        });
+
+        const list = Object.values(dayMap).map(row => {
+            const netProfit = row.revenue - row.platformFee - row.ads - row.cogs - row.laborPackaging;
+            const margin = row.revenue > 0 ? ((netProfit / row.revenue) * 100).toFixed(1) : '0.0';
+            const cir = row.revenue > 0 ? ((row.ads / row.revenue) * 100).toFixed(1) : '0.0';
+            return {
+                ...row,
+                netProfit,
+                margin,
+                cir
+            };
+        });
+
+        list.sort((a, b) => b.date.localeCompare(a.date));
+        return list;
+    }, [erpData?.Orders, erpData?.Transactions, filter]);
+
+    // Xử lý Form chỉnh sửa
     const handleEditReport = (channelId) => {
         const reportId = `PROFIT_${filter}_${channelId}`;
         const saved = localReports[reportId] || (erpData?.ProfitReports || []).find(r => 
@@ -341,13 +432,13 @@ const BusinessReportTab = React.memo(function BusinessReportTab({ erpData, pushD
             await pushDeltas({ ProfitReports: [payload] }, `Đã lưu số liệu ${channelId} (${filter})`, 'fa-save');
             setLocalReports(prev => ({ ...prev, [reportId]: payload }));
             setEditingReport(null); 
-            triggerToast(`Đã lưu báo cáo ${channelId} (${filter}) thành công!`, 'fa-check', 'success');
+            if (typeof triggerToast === 'function') triggerToast(`Đã lưu báo cáo ${channelId} (${filter})!`, 'fa-check', 'success');
         } catch(e) { 
-            triggerToast('Lỗi khi lưu báo cáo!', 'fa-times', 'danger'); 
+            if (typeof triggerToast === 'function') triggerToast('Lỗi khi lưu báo cáo!', 'fa-times', 'danger'); 
         }
     };
 
-    // Chốt sổ toàn bộ các kênh trong kỳ đang chọn
+    // Chốt sổ toàn bộ các kênh
     const handleSaveAllChannels = async () => {
         if (!window.confirm(`Xác nhận chốt sổ & lưu toàn bộ dữ liệu KQKD cho kỳ ${filter}?`)) return;
         setIsSavingAll(true);
@@ -357,17 +448,17 @@ const BusinessReportTab = React.memo(function BusinessReportTab({ erpData, pushD
             
             REPORT_CHANNELS.forEach(c => {
                 const reportId = `PROFIT_${filter}_${c.id}`;
-                const data = getAggregatedReport(c.id);
+                const d = getAggregatedReport(c.id);
                 allPayloads.push({
                     id: reportId,
                     period: filter,
                     channel: c.id,
-                    revenue: data.revenue || 0,
-                    orderCount: data.orderCount || 0,
-                    platformFee: data.platformFee || 0,
-                    returns: data.returns || 0,
-                    discount: data.discount || 0,
-                    ads: data.ads || 0,
+                    revenue: d.revenue || 0,
+                    orderCount: d.orderCount || 0,
+                    platformFee: d.platformFee || 0,
+                    returns: d.returns || 0,
+                    discount: d.discount || 0,
+                    ads: d.ads || 0,
                     cogs: 0,
                     salary: 0,
                     operation: 0,
@@ -375,7 +466,6 @@ const BusinessReportTab = React.memo(function BusinessReportTab({ erpData, pushD
                 });
             });
 
-            // Company General
             const genData = getAggregatedReport('COMPANY_GENERAL');
             const genId = `PROFIT_${filter}_COMPANY_GENERAL`;
             allPayloads.push({
@@ -399,584 +489,580 @@ const BusinessReportTab = React.memo(function BusinessReportTab({ erpData, pushD
             const updatedMap = { ...localReports };
             allPayloads.forEach(p => updatedMap[p.id] = p);
             setLocalReports(updatedMap);
-            setEditingReport(null);
-            triggerToast(`Đã chốt sổ thành công toàn bộ kỳ ${filter}!`, 'fa-check-double', 'success');
+            if (typeof triggerToast === 'function') triggerToast(`Đã chốt sổ thành công kỳ ${filter}!`, 'fa-check-double', 'success');
         } catch(e) {
-            triggerToast('Lỗi khi chốt sổ toàn bộ kỳ!', 'fa-times', 'danger');
+            if (typeof triggerToast === 'function') triggerToast('Lỗi khi chốt sổ dữ liệu!', 'fa-exclamation-triangle', 'danger');
         } finally {
             setIsSavingAll(false);
         }
     };
 
+    // Xuất Excel / CSV
+    const handleExportExcel = () => {
+        let csv = '\uFEFFNgày,Số Đơn,Doanh Thu,Phí Sàn,Chi Phí Ads,CIR (%),Giá Vốn COGS,Công KCS & Bao Bì,Lợi Nhuận Ròng,Biên LN (%)\n';
+        dailyLedgerData.forEach(row => {
+            csv += `"${row.date}","${row.orderCount}","${row.revenue}","${row.platformFee}","${row.ads}","${row.cir}%","${row.cogs}","${row.laborPackaging}","${row.netProfit}","${row.margin}%"\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `Bao_Cao_P&L_${filter.replace(/\s+/g, '_')}.csv`;
+        link.click();
+        if (typeof triggerToast === 'function') triggerToast('Đã xuất file báo cáo Excel!', 'fa-file-excel', 'success');
+    };
+
+    // In Báo Cáo A4
+    const handlePrint = () => {
+        window.print();
+    };
+
+    // ==========================================
+    // GATEKEEPER CHECK (ĐẶT SAU TẤT CẢ REACT HOOKS)
+    // ==========================================
+    if (!canViewFinanceReport) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[70vh] text-center p-6 bg-[#09090b]">
+                <div className="w-20 h-20 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mb-5 text-rose-500 text-3xl shadow-sm">
+                    <i className="fas fa-lock animate-pulse"></i>
+                </div>
+                <h2 className="text-xl font-black text-white uppercase tracking-wider mb-2 font-mono">
+                    403 TRUY CẬP BỊ TỪ CHỐI
+                </h2>
+                <p className="text-zinc-400 text-xs max-w-md leading-relaxed font-sans">
+                    Báo Cáo Kết Quả Kinh Doanh & P&L chứa thông tin tài chính bảo mật tối cao của xưởng.<br/>
+                    Chỉ dành riêng cho <strong className="text-white">Ban Giám Đốc</strong> và <strong className="text-amber-400">Kế Toán Trưởng</strong>.
+                </p>
+                <div className="mt-5 text-[10px] font-mono text-zinc-600 bg-white/[0.02] px-3 py-1 rounded border border-white/[0.04]">
+                    User: {currentUser || 'N/A'} • Role: {currentRole || 'N/A'}
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className="space-y-4 animate-fade-in pb-16 w-full max-w-7xl mx-auto">
+        <div className="space-y-4 sm:space-y-5 pb-8 w-full relative bg-[#09090b] text-zinc-100 font-sans">
             
-            {/* 1. TOP HEADER & PERIOD CONTROLLER BAR */}
-            <div className="bg-[#121216] border border-zinc-800/80 rounded-2xl p-3.5 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-                
-                {/* Selector Kỳ */}
-                <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar no-scrollbar w-full md:w-auto py-0.5">
-                    <div className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 shrink-0 pr-1">
-                        <i className="fas fa-calendar-alt text-amber-400"></i> Kỳ:
+            {/* 1. HEADER & SUB-TABS NAVIGATION */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.06] pb-3.5">
+                <div>
+                    <div className="flex items-center gap-2">
+                        <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
+                            Báo Cáo Kết Quả Kinh Doanh (P&L)
+                        </h1>
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-[#d4af37] font-bold">
+                            Royal Statement v3.0
+                        </span>
                     </div>
-                    {filterOptions.map(p => (
-                        <button 
-                            key={p} 
-                            onClick={() => { setFilter(p); setEditingReport(null); }} 
-                            className={`whitespace-nowrap px-3.5 py-1.5 rounded-xl text-[11px] font-bold uppercase transition-all border cursor-pointer ${
-                                filter === p 
-                                    ? 'bg-amber-500 text-zinc-950 font-black border-amber-500 shadow-sm shadow-amber-500/20' 
-                                    : 'bg-[#09090b] text-zinc-400 hover:text-zinc-200 border-zinc-800 hover:border-zinc-700'
-                            }`}
-                        >
-                            {p}
-                        </button>
-                    ))}
+                    <p className="text-zinc-500 text-[11px] font-medium mt-0.5">
+                        Bảng báo cáo tài chính định kỳ theo chuẩn GAAP xưởng sản xuất Rich Fish Aquarium.
+                    </p>
                 </div>
 
-                {/* Right Action Switchers */}
-                <div className="flex items-center gap-2 w-full md:w-auto justify-end shrink-0">
-                    <div className="bg-[#09090b] p-0.5 rounded-xl border border-zinc-800 flex items-center">
-                        <button 
-                            onClick={() => setViewMode('dashboard')} 
-                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
-                                viewMode === 'dashboard' 
-                                    ? 'bg-zinc-800 text-zinc-100 shadow-sm' 
-                                    : 'text-zinc-400 hover:text-zinc-200'
+                <div className="flex items-center gap-2 flex-wrap">
+                    {/* Period Selector */}
+                    <div className="flex items-center gap-1.5 bg-[#121214] px-3 py-1.5 rounded-xl border border-white/[0.06]">
+                        <i className="far fa-calendar-alt text-[#d4af37] text-xs"></i>
+                        <select 
+                            value={filter} 
+                            onChange={(e) => setFilter(e.target.value)}
+                            className="bg-transparent text-white text-xs font-bold font-mono outline-none cursor-pointer"
+                        >
+                            {filterOptions.map(p => <option key={p} value={p} className="bg-[#121214] text-white">{p}</option>)}
+                        </select>
+                    </div>
+
+                    {/* Sub-Tabs Selector */}
+                    <div className="flex items-center bg-[#121214] p-1 rounded-xl border border-white/[0.06]">
+                        <button
+                            onClick={() => setSubTab('STATEMENT')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                subTab === 'STATEMENT' ? 'bg-[#d4af37] text-black font-black shadow-sm' : 'text-zinc-400 hover:text-white'
                             }`}
                         >
-                            <i className="fas fa-chart-pie text-xs text-sky-400"></i> Tổng Quan
+                            <i className="fas fa-file-invoice mr-1.5"></i> Báo Cáo Tổng Hợp
                         </button>
-                        <button 
-                            onClick={() => setViewMode('editor')} 
-                            className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
-                                viewMode === 'editor' 
-                                    ? 'bg-zinc-800 text-zinc-100 shadow-sm' 
-                                    : 'text-zinc-400 hover:text-zinc-200'
+                        <button
+                            onClick={() => setSubTab('DAILY_LEDGER')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                subTab === 'DAILY_LEDGER' ? 'bg-[#d4af37] text-black font-black shadow-sm' : 'text-zinc-400 hover:text-white'
                             }`}
                         >
-                            <i className="fas fa-pen-to-square text-xs text-amber-400"></i> Nhập Số Liệu
+                            <i className="fas fa-calendar-day mr-1.5"></i> Nhật Ký Ngày
+                        </button>
+                        <button
+                            onClick={() => setSubTab('EDITOR')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                subTab === 'EDITOR' ? 'bg-[#d4af37] text-black font-black shadow-sm' : 'text-zinc-400 hover:text-white'
+                            }`}
+                        >
+                            <i className="fas fa-edit mr-1.5"></i> Chốt Sổ Kỳ
                         </button>
                     </div>
 
-                    <button 
-                        onClick={handleSaveAllChannels} 
-                        disabled={isSavingAll}
-                        className="px-3.5 py-1.5 bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 border border-emerald-500/30 hover:border-emerald-500/50 rounded-xl text-[11px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                        title="Chốt sổ và lưu nhanh toàn bộ các kênh trong kỳ này"
+                    {/* Action Buttons */}
+                    <button
+                        onClick={handleExportExcel}
+                        className="h-9 px-3 bg-white/[0.04] hover:bg-white/[0.08] text-emerald-400 border border-white/[0.06] rounded-xl flex items-center gap-1.5 text-xs font-bold transition-all cursor-pointer"
+                        title="Xuất dữ liệu Excel"
                     >
-                        <i className={`fas ${isSavingAll ? 'fa-spinner fa-spin' : 'fa-check-double'} text-xs text-emerald-400`}></i>
-                        <span className="hidden sm:inline">Chốt Sổ Kỳ Này</span>
+                        <i className="fas fa-file-excel"></i> Xuất Excel
+                    </button>
+                    <button
+                        onClick={handlePrint}
+                        className="h-9 px-3 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 border border-white/[0.06] rounded-xl flex items-center gap-1.5 text-xs font-bold transition-all cursor-pointer"
+                        title="In Báo Cáo Khổ A4"
+                    >
+                        <i className="fas fa-print"></i> In
                     </button>
                 </div>
             </div>
 
-            {/* 2. EXECUTIVE 4-PILLAR KPI DECK */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-                
-                {/* 1. Doanh thu GMV */}
-                <div className="bg-[#121216] border border-sky-500/30 p-3.5 rounded-2xl shadow-sm bg-sky-950/10 flex flex-col justify-between relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-20 h-20 bg-sky-500/5 rounded-full blur-xl -mr-6 -mt-6 pointer-events-none"></div>
+            {/* 2. 4 METRIC CARDS NÉN PHẲNG */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* Thẻ 1: Doanh Thu Thuần */}
+                <div className="bg-[#121214] border border-white/[0.06] rounded-xl p-3.5 flex flex-col justify-between">
                     <div>
-                        <div className="flex justify-between items-center mb-1">
-                            <span className="text-[10px] font-bold text-sky-400 uppercase tracking-wider">Doanh Thu Ghi Nhận (GMV)</span>
-                            <span className="text-[10px] font-mono font-bold text-zinc-400 bg-[#09090b] px-1.5 py-0.2 rounded border border-zinc-800">
-                                {financialStats.totalOrders} đơn
-                            </span>
+                        <div className="flex items-center justify-between text-[10px] font-black uppercase text-zinc-400 tracking-wider mb-1">
+                            <span>Doanh Thu Thuần (DTT)</span>
+                            <span className="text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded text-[9px] font-mono">NET REV</span>
                         </div>
-                        <div className="text-[20px] sm:text-[23px] font-mono font-black text-white leading-tight">
-                            {formatFinanceMoney(financialStats.grossSales)}đ
+                        <div className="text-xl sm:text-2xl font-black text-white font-mono tracking-tight">
+                            {formatMoney(financialStats.netRevenue)} đ
                         </div>
                     </div>
-                    <div className="text-[10px] text-zinc-400 mt-2 pt-2 border-t border-zinc-800/80 flex justify-between items-center">
-                        <span>AOV / Đơn:</span>
-                        <span className="font-mono font-bold text-zinc-200">{formatFinanceMoney(financialStats.aov)}đ</span>
+                    <div className="mt-2 pt-2 border-t border-white/[0.04] text-[10.5px] font-mono text-zinc-500">
+                        GMV Gốc: <strong className="text-zinc-300">{formatMoney(financialStats.grossSales)} đ</strong>
                     </div>
                 </div>
 
-                {/* 2. Doanh thu thuần */}
-                <div className="bg-[#121216] border border-zinc-800/80 p-3.5 rounded-2xl shadow-sm flex flex-col justify-between">
+                {/* Thẻ 2: Tổng Chi Phí Hoạt Động & COGS */}
+                <div className="bg-[#121214] border border-white/[0.06] rounded-xl p-3.5 flex flex-col justify-between">
                     <div>
-                        <div className="flex justify-between items-center mb-1">
-                            <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Doanh Thu Thuần (DTT)</span>
-                            <span className="text-[10px] font-mono font-bold text-rose-400 bg-rose-950/30 px-1.5 py-0.2 rounded border border-rose-500/20">
-                                -{financialStats.deductionRate.toFixed(1)}% Hoàn/CK
-                            </span>
+                        <div className="flex items-center justify-between text-[10px] font-black uppercase text-zinc-400 tracking-wider mb-1">
+                            <span>Chi Phí Vận Hành & COGS</span>
+                            <span className="text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded text-[9px] font-mono">TOTAL OPEX</span>
                         </div>
-                        <div className="text-[20px] sm:text-[23px] font-mono font-black text-indigo-300 leading-tight">
-                            {formatFinanceMoney(financialStats.netRevenue)}đ
+                        <div className="text-xl sm:text-2xl font-black text-rose-400 font-mono tracking-tight">
+                            {formatMoney(financialStats.operatingExpenses + financialStats.cogs)} đ
                         </div>
                     </div>
-                    <div className="text-[10px] text-zinc-400 mt-2 pt-2 border-t border-zinc-800/80 flex justify-between items-center">
-                        <span>Hoàn hàng & Giảm giá:</span>
-                        <span className="font-mono font-bold text-rose-400">-{formatFinanceMoney(financialStats.totalDeductions)}đ</span>
+                    <div className="mt-2 pt-2 border-t border-white/[0.04] text-[10.5px] font-mono text-zinc-500">
+                        Phí sàn: <strong className="text-zinc-300">{formatMoney(financialStats.totalPlatformFees)} đ</strong>
                     </div>
                 </div>
 
-                {/* 3. Lợi Nhuận Gộp */}
-                <div className="bg-[#121216] border border-amber-500/30 p-3.5 rounded-2xl shadow-sm bg-amber-950/10 flex flex-col justify-between">
+                {/* Thẻ 3: Lợi Nhuận Ròng Thực Tế */}
+                <div className="bg-[#121214] border border-white/[0.06] rounded-xl p-3.5 flex flex-col justify-between">
                     <div>
-                        <div className="flex justify-between items-center mb-1">
-                            <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Lợi Nhuận Gộp</span>
-                            <span className="text-[10px] font-mono font-black text-amber-400 bg-amber-950/40 px-1.5 py-0.2 rounded border border-amber-500/30">
-                                Biên {financialStats.grossMargin.toFixed(1)}%
-                            </span>
-                        </div>
-                        <div className="text-[20px] sm:text-[23px] font-mono font-black text-amber-300 leading-tight">
-                            {formatFinanceMoney(financialStats.grossProfit)}đ
-                        </div>
-                    </div>
-                    <div className="text-[10px] text-zinc-400 mt-2 pt-2 border-t border-zinc-800/80 flex justify-between items-center">
-                        <span>Giá vốn COGS ({financialStats.cogsRateOnNet.toFixed(1)}%):</span>
-                        <span className="font-mono font-bold text-zinc-300">{formatFinanceMoney(financialStats.cogs)}đ</span>
-                    </div>
-                </div>
-
-                {/* 4. Lợi Nhuận Thuần Ròng */}
-                <div className="bg-[#121216] border border-emerald-500/40 p-3.5 rounded-2xl shadow-sm bg-emerald-950/15 flex flex-col justify-between relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/10 rounded-full blur-xl -mr-6 -mt-6 pointer-events-none"></div>
-                    <div>
-                        <div className="flex justify-between items-center mb-1">
-                            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Lợi Nhuận Thuần Ròng (P&L)</span>
-                            <span className={`text-[10px] font-mono font-black px-1.5 py-0.2 rounded border ${financialStats.netProfit >= 0 ? 'bg-emerald-950/50 text-emerald-300 border-emerald-500/40' : 'bg-rose-950/50 text-rose-300 border-rose-500/40'}`}>
+                        <div className="flex items-center justify-between text-[10px] font-black uppercase text-zinc-400 tracking-wider mb-1">
+                            <span>Lợi Nhuận Ròng Thực Tế</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-black font-mono border ${
+                                financialStats.netProfit >= 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                            }`}>
                                 {financialStats.netMarginOnNet.toFixed(1)}% DTT
                             </span>
                         </div>
-                        <div className={`text-[22px] sm:text-[25px] font-mono font-black leading-tight ${financialStats.netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {formatFinanceMoney(financialStats.netProfit)}đ
+                        <div className={`text-xl sm:text-2xl font-black font-mono tracking-tight ${
+                            financialStats.netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                        }`}>
+                            {formatMoney(financialStats.netProfit)} đ
                         </div>
                     </div>
-                    <div className="text-[10px] text-zinc-400 mt-2 pt-2 border-t border-zinc-800/80 flex justify-between items-center">
-                        <span>Tỷ suất trên GMV:</span>
-                        <span className="font-mono font-bold text-zinc-200">{financialStats.netMarginOnGMV.toFixed(1)}% GMV</span>
+                    <div className="mt-2 pt-2 border-t border-white/[0.04] text-[10.5px] font-mono text-zinc-500">
+                        Thực nhận sau thuế & chi phí
+                    </div>
+                </div>
+
+                {/* Thẻ 4: Tổng Đơn Bán & CIR Ads */}
+                <div className="bg-[#121214] border border-white/[0.06] rounded-xl p-3.5 flex flex-col justify-between">
+                    <div>
+                        <div className="flex items-center justify-between text-[10px] font-black uppercase text-zinc-400 tracking-wider mb-1">
+                            <span>Sản Lượng & CIR Ads</span>
+                            <span className="text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded text-[9px] font-mono">MARKETING</span>
+                        </div>
+                        <div className="text-xl sm:text-2xl font-black text-white font-mono tracking-tight">
+                            {financialStats.totalOrders} <span className="text-xs text-zinc-400 font-normal">đơn thành công</span>
+                        </div>
+                    </div>
+                    <div className="mt-2 pt-2 border-t border-white/[0.04] text-[10.5px] font-mono text-zinc-500">
+                        CIR Ads: <strong className={financialStats.cirAds > 20 ? 'text-rose-400' : 'text-emerald-400'}>{financialStats.cirAds.toFixed(1)}%</strong> ({formatMoney(financialStats.totalAds)}đ)
                     </div>
                 </div>
             </div>
 
-            {/* 3. CHẾ ĐỘ XEM: TỔNG QUAN BÁO CÁO P&L vs BẢNG NHẬP LIỆU */}
-            {viewMode === 'dashboard' ? (
-                <div className="space-y-4">
-                    
-                    {/* BẢNG TÓM TẮT CÁC CHỈ TIÊU TÀI CHÍNH CỐT LÕI (FINANCIAL BREAKDOWN MATRIX) */}
-                    <div className="bg-[#121216] border border-zinc-800/80 rounded-2xl p-4 sm:p-5 shadow-sm">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4 pb-3 border-b border-zinc-800">
-                            <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 text-sm">
-                                    <i className="fas fa-file-invoice-dollar"></i>
-                                </div>
-                                <div>
-                                    <h3 className="font-black text-[14px] text-zinc-100 uppercase tracking-wider">Bảng Báo Cáo Kết Quả Kinh Doanh ({filter})</h3>
-                                    <span className="text-[11px] text-zinc-500 font-medium">Đơn vị: Rich Fish Aquarium · Lũy kế đối soát chuẩn mực</span>
-                                </div>
-                            </div>
-                            <span className="text-[10px] font-mono font-bold text-zinc-400 bg-[#09090b] px-2.5 py-1 rounded-full border border-zinc-800">
-                                4 Trụ Cột Tài Chính Chuẩn P&L
-                            </span>
-                        </div>
-
-                        {/* Financial Table */}
-                        <div className="overflow-x-auto custom-scrollbar">
-                            <table className="w-full text-left text-[12px] border-collapse">
-                                <thead>
-                                    <tr className="border-b border-zinc-800 text-[10px] uppercase font-bold text-zinc-400 tracking-wider bg-[#09090b]/40">
-                                        <th className="py-2.5 px-3">Chỉ Tiêu Tài Chính</th>
-                                        <th className="py-2.5 px-3 text-right">Giá Trị Thực Tế (VNĐ)</th>
-                                        <th className="py-2.5 px-3 text-right">Tỷ Trọng / Biên Tài Chính</th>
-                                        <th className="py-2.5 px-3 hidden md:table-cell">Đánh Giá & Nhận Định</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-zinc-800/60 font-medium">
-                                    {/* 1. Doanh thu bán hàng */}
-                                    <tr className="hover:bg-zinc-900/30 transition-colors">
-                                        <td className="py-3 px-3">
-                                            <div className="font-bold text-zinc-100 flex items-center gap-2">
-                                                <span className="w-5 h-5 rounded-md bg-sky-950/50 text-sky-400 border border-sky-500/30 flex items-center justify-center text-[10px] font-mono font-bold">1</span>
-                                                Doanh thu bán hàng (GMV)
-                                            </div>
-                                        </td>
-                                        <td className="py-3 px-3 text-right font-mono font-bold text-white text-[13px]">
-                                            {formatFinanceMoney(financialStats.grossSales)}đ
-                                        </td>
-                                        <td className="py-3 px-3 text-right font-mono font-bold text-sky-400">
-                                            100.0% (GMV)
-                                        </td>
-                                        <td className="py-3 px-3 text-[11px] text-zinc-400 hidden md:table-cell">
-                                            Tổng quy mô doanh số ghi nhận trước giảm trừ
-                                        </td>
-                                    </tr>
-
-                                    {/* 2. Các khoản giảm trừ */}
-                                    <tr className="hover:bg-zinc-900/30 transition-colors">
-                                        <td className="py-3 px-3">
-                                            <div className="font-bold text-rose-300 flex items-center gap-2 pl-2">
-                                                <span className="w-5 h-5 rounded-md bg-rose-950/50 text-rose-400 border border-rose-500/30 flex items-center justify-center text-[10px] font-mono font-bold">2</span>
-                                                Các khoản giảm trừ doanh thu
-                                            </div>
-                                            <div className="text-[10px] text-zinc-500 pl-7 mt-0.5">
-                                                Hàng trả: {formatFinanceMoney(financialStats.totalReturns)}đ | Chiết khấu: {formatFinanceMoney(financialStats.totalDiscounts)}đ
-                                            </div>
-                                        </td>
-                                        <td className="py-3 px-3 text-right font-mono font-bold text-rose-400 text-[13px]">
-                                            -{formatFinanceMoney(financialStats.totalDeductions)}đ
-                                        </td>
-                                        <td className="py-3 px-3 text-right font-mono font-bold text-rose-400">
-                                            {financialStats.deductionRate.toFixed(2)}% GMV
-                                        </td>
-                                        <td className="py-3 px-3 text-[11px] text-zinc-400 hidden md:table-cell">
-                                            Bao gồm hàng hoàn bể vỡ/lỗi ({financialStats.returnRate.toFixed(1)}%) & voucher kích cầu
-                                        </td>
-                                    </tr>
-
-                                    {/* 3. Doanh thu thuần */}
-                                    <tr className="bg-[#09090b]/80 border-y border-zinc-800">
-                                        <td className="py-3.5 px-3">
-                                            <div className="font-black text-indigo-300 uppercase tracking-wide flex items-center gap-2">
-                                                <span className="w-5 h-5 rounded-md bg-indigo-950 text-indigo-400 border border-indigo-500/40 flex items-center justify-center text-[10px] font-mono font-bold">3</span>
-                                                DOANH THU THUẦN (3 = 1 - 2)
-                                            </div>
-                                        </td>
-                                        <td className="py-3.5 px-3 text-right font-mono font-black text-indigo-300 text-[14px]">
-                                            {formatFinanceMoney(financialStats.netRevenue)}đ
-                                        </td>
-                                        <td className="py-3.5 px-3 text-right font-mono font-black text-indigo-300">
-                                            {(100 - financialStats.deductionRate).toFixed(2)}% GMV
-                                        </td>
-                                        <td className="py-3.5 px-3 text-[11px] font-bold text-indigo-400 hidden md:table-cell">
-                                            Doanh thu thực nhận làm căn cứ xác định kết quả kinh doanh
-                                        </td>
-                                    </tr>
-
-                                    {/* 4. Giá vốn COGS */}
-                                    <tr className="hover:bg-zinc-900/30 transition-colors">
-                                        <td className="py-3 px-3">
-                                            <div className="font-bold text-zinc-200 flex items-center gap-2">
-                                                <span className="w-5 h-5 rounded-md bg-zinc-900 text-zinc-400 border border-zinc-700 flex items-center justify-center text-[10px] font-mono font-bold">4</span>
-                                                Giá vốn hàng bán (COGS)
-                                            </div>
-                                            <div className="text-[10px] text-zinc-500 pl-7 mt-0.5">
-                                                Kính siêu trong, lũa, đá, keo dán & vật tư layout
-                                            </div>
-                                        </td>
-                                        <td className="py-3 px-3 text-right font-mono font-bold text-zinc-300 text-[13px]">
-                                            {formatFinanceMoney(financialStats.cogs)}đ
-                                        </td>
-                                        <td className="py-3 px-3 text-right font-mono font-bold text-zinc-400">
-                                            {financialStats.cogsRateOnNet.toFixed(2)}% DTT
-                                        </td>
-                                        <td className="py-3 px-3 text-[11px] text-zinc-400 hidden md:table-cell">
-                                            Tỷ lệ nguyên vật liệu trực tiếp ở mức tối ưu
-                                        </td>
-                                    </tr>
-
-                                    {/* 5. Lợi nhuận gộp */}
-                                    <tr className="bg-amber-950/10 border-y border-amber-500/20">
-                                        <td className="py-3.5 px-3">
-                                            <div className="font-black text-amber-300 uppercase tracking-wide flex items-center gap-2">
-                                                <span className="w-5 h-5 rounded-md bg-amber-950 text-amber-400 border border-amber-500/40 flex items-center justify-center text-[10px] font-mono font-bold">5</span>
-                                                LỢI NHUẬN GỘP (5 = 3 - 4)
-                                            </div>
-                                        </td>
-                                        <td className="py-3.5 px-3 text-right font-mono font-black text-amber-300 text-[14px]">
-                                            {formatFinanceMoney(financialStats.grossProfit)}đ
-                                        </td>
-                                        <td className="py-3.5 px-3 text-right font-mono font-black text-amber-400">
-                                            {financialStats.grossMargin.toFixed(2)}% (Biên gộp)
-                                        </td>
-                                        <td className="py-3.5 px-3 text-[11px] font-bold text-amber-400 hidden md:table-cell">
-                                            Biên lợi nhuận gộp vượt trội nhờ sản phẩm thủ công mỹ nghệ
-                                        </td>
-                                    </tr>
-
-                                    {/* 6. Chi phí hoạt động */}
-                                    <tr className="hover:bg-zinc-900/30 transition-colors">
-                                        <td className="py-3 px-3">
-                                            <div className="font-bold text-zinc-200 flex items-center gap-2">
-                                                <span className="w-5 h-5 rounded-md bg-zinc-900 text-zinc-400 border border-zinc-700 flex items-center justify-center text-[10px] font-mono font-bold">6</span>
-                                                Chi phí hoạt động & Vận hành (OPEX)
-                                            </div>
-                                            <div className="text-[10px] text-zinc-500 pl-7 mt-0.5">
-                                                Phí sàn/ship: {formatFinanceMoney(financialStats.totalPlatformFees)}đ | Lương: {formatFinanceMoney(financialStats.salary)}đ | Mặt bằng: {formatFinanceMoney(financialStats.operation)}đ | ADS: {formatFinanceMoney(financialStats.totalAds)}đ
-                                            </div>
-                                        </td>
-                                        <td className="py-3 px-3 text-right font-mono font-bold text-rose-400 text-[13px]">
-                                            {formatFinanceMoney(financialStats.operatingExpenses)}đ
-                                        </td>
-                                        <td className="py-3 px-3 text-right font-mono font-bold text-rose-400">
-                                            {financialStats.opexRateOnNet.toFixed(2)}% DTT
-                                        </td>
-                                        <td className="py-3 px-3 text-[11px] text-zinc-400 hidden md:table-cell">
-                                            Chủ yếu là phí sàn TMĐT, đóng gói vận chuyển và quỹ lương
-                                        </td>
-                                    </tr>
-
-                                    {/* 7. Lợi nhuận từ HĐKD */}
-                                    <tr className="hover:bg-zinc-900/30 transition-colors">
-                                        <td className="py-3 px-3">
-                                            <div className="font-bold text-emerald-300 flex items-center gap-2">
-                                                <span className="w-5 h-5 rounded-md bg-emerald-950/50 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-[10px] font-mono font-bold">7</span>
-                                                Lợi nhuận từ HĐKD (7 = 5 - 6)
-                                            </div>
-                                        </td>
-                                        <td className="py-3 px-3 text-right font-mono font-bold text-emerald-400 text-[13px]">
-                                            {formatFinanceMoney(financialStats.operatingProfit)}đ
-                                        </td>
-                                        <td className="py-3 px-3 text-right font-mono font-bold text-emerald-400">
-                                            {financialStats.netRevenue > 0 ? ((financialStats.operatingProfit / financialStats.netRevenue) * 100).toFixed(2) : 0}% DTT
-                                        </td>
-                                        <td className="py-3 px-3 text-[11px] text-zinc-400 hidden md:table-cell">
-                                            Hiệu quả kinh doanh cốt lõi vượt trội
-                                        </td>
-                                    </tr>
-
-                                    {/* 8. LỢI NHUẬN THUẦN RÒNG SAU CÙNG */}
-                                    <tr className="bg-emerald-950/20 border-t-2 border-emerald-500/40">
-                                        <td className="py-4 px-3">
-                                            <div className="font-black text-emerald-400 uppercase tracking-widest text-[13px] flex items-center gap-2">
-                                                <span className="w-6 h-6 rounded-lg bg-emerald-900 text-emerald-200 border border-emerald-500/50 flex items-center justify-center text-[11px] font-mono font-black">★</span>
-                                                LỢI NHUẬN THUẦN RÒNG (P&L NET PROFIT)
-                                            </div>
-                                            <div className="text-[10px] text-emerald-500/80 pl-8 mt-0.5 font-bold">
-                                                Dòng tiền thặng dư thực tế mang lại cho doanh nghiệp
-                                            </div>
-                                        </td>
-                                        <td className="py-4 px-3 text-right font-mono font-black text-emerald-400 text-[16px] sm:text-[18px]">
-                                            {formatFinanceMoney(financialStats.netProfit)}đ
-                                        </td>
-                                        <td className="py-4 px-3 text-right font-mono font-black text-emerald-400 text-[13px]">
-                                            {financialStats.netMarginOnNet.toFixed(2)}% DTT
-                                        </td>
-                                        <td className="py-4 px-3 text-[11px] font-bold text-emerald-300 hidden md:table-cell">
-                                            Tỷ suất sinh lời cao (~{financialStats.netMarginOnGMV.toFixed(1)}% GMV) · Tài chính rất lành mạnh
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
+            {/* 3. NỘI DUNG CHÍNH THEO SUB-TAB */}
+            {subTab === 'STATEMENT' && (
+                /* BÁO CÁO TÀI CHÍNH GAAP NÉN PHẲNG */
+                <div className="bg-[#121214] border border-white/[0.06] rounded-xl p-4 sm:p-5 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+                        <h2 className="text-sm sm:text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
+                            <i className="fas fa-balance-scale text-[#d4af37]"></i>
+                            Bảng Kết Quả Hoạt Động Kinh Doanh • {filter}
+                        </h2>
+                        <span className="text-[10px] font-mono text-zinc-500">Đơn vị: VNĐ</span>
                     </div>
 
-                    {/* PHÂN BỔ DOANH SỐ VÀ LỢI NHUẬN THEO KÊNH */}
-                    <div className="bg-[#121216] border border-zinc-800/80 rounded-2xl p-4 sm:p-5 shadow-sm">
-                        <div className="flex justify-between items-center mb-4 pb-3 border-b border-zinc-800">
-                            <div className="flex items-center gap-2">
-                                <i className="fas fa-layer-group text-amber-400 text-sm"></i>
-                                <h3 className="font-bold text-[14px] text-zinc-100 uppercase tracking-wider">Cơ Cấu Đóng Góp Kênh Bán Hàng ({filter})</h3>
-                            </div>
-                            <button 
-                                onClick={() => setViewMode('editor')} 
-                                className="text-[11px] font-bold text-amber-400 hover:text-amber-300 flex items-center gap-1 cursor-pointer"
-                            >
-                                <i className="fas fa-pencil-alt text-xs"></i> Chỉnh sửa số liệu kênh
-                            </button>
+                    <div className="divide-y divide-white/[0.04] text-xs">
+                        {/* 1. Doanh thu bán hàng */}
+                        <div className="py-2.5 flex items-center justify-between font-bold">
+                            <span className="text-zinc-200">1. Tổng Doanh Thu Bán Hàng & Dịch Vụ (Gross Revenue)</span>
+                            <span className="font-mono text-zinc-100">{formatMoney(financialStats.grossSales)} đ</span>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            {REPORT_CHANNELS.map(channel => {
-                                const data = getAggregatedReport(channel.id);
-                                const channelGross = Number(data.revenue || 0) - (Number(data.platformFee || 0) + Number(data.returns || 0) + Number(data.discount || 0) + Number(data.ads || 0));
-                                const contribution = financialStats.grossSales > 0 ? ((data.revenue / financialStats.grossSales) * 100).toFixed(1) : 0;
-                                
-                                return (
-                                    <div key={channel.id} className="bg-[#09090b] border border-zinc-800/80 rounded-xl p-3.5 flex flex-col justify-between hover:border-zinc-700 transition-all">
-                                        <div>
-                                            <div className="flex justify-between items-center mb-2">
-                                                <div className="flex items-center gap-2">
-                                                    <div className={`w-7 h-7 rounded-lg ${channel.bg} ${channel.border} border flex items-center justify-center ${channel.color} text-xs`}>
-                                                        <i className={`fas ${channel.icon}`}></i>
-                                                    </div>
-                                                    <span className="font-bold text-zinc-100 text-[13px]">{channel.name}</span>
-                                                </div>
-                                                <span className="text-[10px] font-mono font-bold text-zinc-400 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-800">
-                                                    {contribution}% GMV
-                                                </span>
-                                            </div>
+                        {/* 2. Các khoản giảm trừ */}
+                        <div className="py-2.5 flex items-center justify-between font-medium pl-4 text-zinc-400">
+                            <span>2. Các Khoản Giảm Trừ Doanh Thu (Hàng hoàn, voucher, chiết khấu)</span>
+                            <span className="font-mono text-rose-400">-{formatMoney(financialStats.totalDeductions)} đ</span>
+                        </div>
 
-                                            <div className="space-y-1.5 my-2.5 text-[11px]">
-                                                <div className="flex justify-between text-zinc-400">
-                                                    <span>Doanh thu:</span>
-                                                    <span className="font-mono font-bold text-zinc-200">{formatFinanceMoney(data.revenue)}đ</span>
-                                                </div>
-                                                <div className="flex justify-between text-zinc-400">
-                                                    <span>Số lượng đơn:</span>
-                                                    <span className="font-mono font-bold text-zinc-200">{data.orderCount} đơn</span>
-                                                </div>
-                                                <div className="flex justify-between text-zinc-400">
-                                                    <span>Phí sàn & ADS:</span>
-                                                    <span className="font-mono font-bold text-rose-400">-{formatFinanceMoney(Number(data.platformFee || 0) + Number(data.ads || 0))}đ</span>
-                                                </div>
-                                                <div className="flex justify-between text-zinc-400">
-                                                    <span>Hàng hoàn & Voucher:</span>
-                                                    <span className="font-mono font-bold text-amber-400">-{formatFinanceMoney(Number(data.returns || 0) + Number(data.discount || 0))}đ</span>
-                                                </div>
-                                            </div>
-                                        </div>
+                        {/* 3. Doanh thu thuần */}
+                        <div className="py-2.5 flex items-center justify-between font-bold bg-white/[0.02] px-2 rounded">
+                            <span className="text-emerald-400 uppercase">3. Doanh Thu Thuần (Net Revenue = 1 - 2)</span>
+                            <span className="font-mono text-emerald-400 font-black">{formatMoney(financialStats.netRevenue)} đ</span>
+                        </div>
 
-                                        <div className="pt-2 border-t border-zinc-800/80 flex justify-between items-center">
-                                            <span className="text-[10px] font-bold text-zinc-400 uppercase">Lợi Nhuận Kênh:</span>
-                                            <span className={`font-mono font-black text-[13px] ${channelGross >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                {formatFinanceMoney(channelGross)}đ
-                                            </span>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                        {/* 4. Giá vốn hàng bán COGS */}
+                        <div className="py-2.5 flex items-center justify-between font-medium pl-4 text-zinc-400">
+                            <span>4. Giá Vốn Hàng Bán & Vật Tư Xuất Xưởng (COGS)</span>
+                            <span className="font-mono text-blue-400">-{formatMoney(financialStats.cogs)} đ</span>
+                        </div>
+
+                        {/* 5. Lợi nhuận gộp */}
+                        <div className="py-2.5 flex items-center justify-between font-bold bg-white/[0.02] px-2 rounded">
+                            <span className="text-zinc-200 uppercase">5. Lợi Nhuận Gộp (Gross Profit = 3 - 4)</span>
+                            <span className="font-mono text-white font-black">{formatMoney(financialStats.grossProfit)} đ</span>
+                        </div>
+
+                        {/* 6. Chi phí bán hàng & quản lý doanh nghiệp */}
+                        <div className="py-2.5 space-y-1.5 pl-4 text-zinc-400">
+                            <div className="flex items-center justify-between font-bold text-zinc-300">
+                                <span>6. Chi Phí Hoạt Động Doanh Nghiệp (OPEX)</span>
+                                <span className="font-mono text-rose-400">-{formatMoney(financialStats.operatingExpenses)} đ</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] pl-4">
+                                <span>• Phí Sàn TMĐT & Thanh Toán</span>
+                                <span className="font-mono text-zinc-400">-{formatMoney(financialStats.totalPlatformFees)} đ</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] pl-4">
+                                <span>• Chi Phí Quảng Cáo (Shopee & TikTok Ads)</span>
+                                <span className="font-mono text-zinc-400">-{formatMoney(financialStats.totalAds)} đ</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] pl-4">
+                                <span>• Quỹ Lương KCS, Sản Xuất & Vận Hành</span>
+                                <span className="font-mono text-zinc-400">-{formatMoney(financialStats.salary)} đ</span>
+                            </div>
+                            <div className="flex items-center justify-between text-[11px] pl-4">
+                                <span>• Chi Phí Mặt Bằng, Điện Nước & Khác</span>
+                                <span className="font-mono text-zinc-400">-{formatMoney(financialStats.operation)} đ</span>
+                            </div>
+                        </div>
+
+                        {/* 7. Lợi nhuận thuần từ HĐKD */}
+                        <div className={`py-3.5 flex items-center justify-between font-black px-3 rounded-lg border ${
+                            financialStats.netProfit >= 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/30'
+                        }`}>
+                            <div className="flex items-center gap-2">
+                                <i className="fas fa-crown text-[#d4af37]"></i>
+                                <span className="uppercase text-sm">7. LỢI NHUẬN THUẦN RÒNG (NET PROFIT = 5 - 6)</span>
+                            </div>
+                            <div className="text-right font-mono">
+                                <div className={`text-base sm:text-lg font-black ${financialStats.netProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                    {formatMoney(financialStats.netProfit)} đ
+                                </div>
+                                <div className="text-[10px] text-zinc-400 font-normal">
+                                    Biên LN Ròng: <strong className="text-white">{financialStats.netMarginOnNet.toFixed(1)}%</strong>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-            ) : (
-                /* CHẾ ĐỘ NHẬP LIỆU VÀ CHỐT SỔ KÊNH (DATA EDITOR) */
-                <div className="space-y-4">
-                    
-                    {/* Channel Selector Tabs */}
-                    <div className="flex gap-2 overflow-x-auto custom-scrollbar no-scrollbar py-1">
-                        {REPORT_CHANNELS.map(c => (
-                            <button 
-                                key={c.id} 
-                                onClick={() => { setSelectedChannelTab(c.id); setEditingReport(null); }}
-                                className={`px-4 py-2 rounded-xl text-[11px] font-bold uppercase transition-all flex items-center gap-2 border cursor-pointer shrink-0 ${
-                                    selectedChannelTab === c.id 
-                                        ? `${c.bg} ${c.color} ${c.border} font-black shadow-sm` 
-                                        : 'bg-[#121216] text-zinc-400 hover:text-zinc-200 border-zinc-800'
-                                }`}
-                            >
-                                <i className={`fas ${c.icon}`}></i>
-                                <span>{c.name}</span>
-                            </button>
-                        ))}
-                        <button 
-                            onClick={() => { setSelectedChannelTab('COMPANY_GENERAL'); setEditingReport(null); }}
-                            className={`px-4 py-2 rounded-xl text-[11px] font-bold uppercase transition-all flex items-center gap-2 border cursor-pointer shrink-0 ${
-                                selectedChannelTab === 'COMPANY_GENERAL' 
-                                    ? 'bg-purple-950/40 text-purple-300 border-purple-500/40 font-black shadow-sm' 
-                                    : 'bg-[#121216] text-zinc-400 hover:text-zinc-200 border-zinc-800'
-                            }`}
+            )}
+
+            {subTab === 'DAILY_LEDGER' && (
+                /* BẢNG SỔ NHẬT KÝ LỢI NHUẬN THEO NGÀY (ROW h-12) */
+                <div className="bg-[#121214] border border-white/[0.06] rounded-xl p-4 sm:p-5 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
+                        <div className="flex items-center gap-2">
+                            <i className="fas fa-calendar-alt text-[#d4af37]"></i>
+                            <h2 className="text-sm sm:text-base font-black text-white uppercase tracking-wider">
+                                Sổ Nhật Ký Lợi Nhuận Từng Ngày (Daily P&L Ledger • Row h-12)
+                            </h2>
+                        </div>
+                        <span className="text-[10px] font-mono text-zinc-500">Bấm dòng để xem chi tiết</span>
+                    </div>
+
+                    <div className="overflow-x-auto custom-scrollbar">
+                        <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr className="border-b border-white/[0.06] text-zinc-400 font-bold uppercase text-[10px] tracking-wider">
+                                    <th className="py-2.5 px-3">Ngày</th>
+                                    <th className="py-2.5 px-3 text-center">Đơn</th>
+                                    <th className="py-2.5 px-3 text-right">Doanh Thu Thuần</th>
+                                    <th className="py-2.5 px-3 text-right">Phí Sàn</th>
+                                    <th className="py-2.5 px-3 text-right">Chi Phí Ads (CIR)</th>
+                                    <th className="py-2.5 px-3 text-right">Giá Vốn COGS</th>
+                                    <th className="py-2.5 px-3 text-right">Lợi Nhuận Ngày</th>
+                                    <th className="py-2.5 px-3 text-right">Biên Ròng %</th>
+                                    <th className="py-2.5 px-3 text-center">Chi Tiết</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/[0.04]">
+                                {dailyLedgerData.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="9" className="text-center py-6 text-zinc-500 italic">Không có dữ liệu trong kỳ này.</td>
+                                    </tr>
+                                ) : (
+                                    dailyLedgerData.map((row) => (
+                                        <tr 
+                                            key={row.date} 
+                                            onClick={() => setSelectedDayDrawer(row)}
+                                            className="h-12 hover:bg-white/[0.02] transition-colors cursor-pointer"
+                                        >
+                                            <td className="py-1 px-3 font-mono font-bold text-zinc-200">
+                                                {row.date.split('-').reverse().join('/')}
+                                            </td>
+                                            <td className="py-1 px-3 text-center font-mono text-zinc-300">
+                                                {row.orderCount}
+                                            </td>
+                                            <td className="py-1 px-3 text-right font-mono font-bold text-emerald-400">
+                                                {formatMoney(row.revenue)}đ
+                                            </td>
+                                            <td className="py-1 px-3 text-right font-mono text-rose-400">
+                                                {formatMoney(row.platformFee)}đ
+                                            </td>
+                                            <td className="py-1 px-3 text-right font-mono text-amber-400">
+                                                {formatMoney(row.ads)}đ <span className="text-[9.5px] text-zinc-500">({row.cir}%)</span>
+                                            </td>
+                                            <td className="py-1 px-3 text-right font-mono text-blue-400">
+                                                {formatMoney(row.cogs)}đ
+                                            </td>
+                                            <td className="py-1 px-3 text-right font-mono font-bold text-zinc-100">
+                                                {formatMoney(row.netProfit)}đ
+                                            </td>
+                                            <td className="py-1 px-3 text-right font-mono">
+                                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                                                    Number(row.margin) >= 20 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                                                    Number(row.margin) > 0 ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' :
+                                                    'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                                                }`}>
+                                                    {row.margin}%
+                                                </span>
+                                            </td>
+                                            <td className="py-1 px-3 text-center">
+                                                <button className="text-zinc-500 hover:text-zinc-200 text-xs transition-colors">
+                                                    <i className="fas fa-chevron-right"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
+            {subTab === 'EDITOR' && (
+                /* GIAO DIỆN CHỐT SỔ KỲ TÀI CHÍNH */
+                <div className="bg-[#121214] border border-white/[0.06] rounded-xl p-4 sm:p-5 shadow-sm space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+                        <div>
+                            <h2 className="text-sm sm:text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
+                                <i className="fas fa-lock text-[#d4af37]"></i> Chốt Sổ Kỳ Báo Cáo • {filter}
+                            </h2>
+                            <p className="text-zinc-500 text-[11px] mt-0.5">
+                                Khóa số liệu P&L để lưu trữ vĩnh viễn vào CSDL `ProfitReports`.
+                            </p>
+                        </div>
+                        <button
+                            onClick={handleSaveAllChannels}
+                            disabled={isSavingAll}
+                            className="px-4 py-2 bg-gradient-to-r from-[#d4af37] to-[#f0ca5e] hover:brightness-110 text-black font-black text-xs rounded-xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95"
                         >
-                            <i className="fas fa-building"></i>
-                            <span>Chi Phí Cố Định Xưởng</span>
+                            <i className="fas fa-check-double"></i>
+                            <span>{isSavingAll ? 'Đang chốt sổ...' : 'Chốt Sổ Toàn Bộ Kênh'}</span>
                         </button>
                     </div>
 
-                    {/* Channel Editor Card */}
-                    {selectedChannelTab !== 'COMPANY_GENERAL' ? (() => {
-                        const channelObj = REPORT_CHANNELS.find(c => c.id === selectedChannelTab) || REPORT_CHANNELS[0];
-                        const isEditing = editingReport === channelObj.id;
-                        const data = isEditing ? reportForm : getAggregatedReport(channelObj.id);
-                        const channelGrossProfit = Number(data.revenue || 0) - (Number(data.platformFee || 0) + Number(data.returns || 0) + Number(data.discount || 0) + Number(data.ads || 0));
-
-                        return (
-                            <div className="bg-[#121216] rounded-2xl border border-zinc-800/80 p-5 shadow-sm space-y-4">
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-zinc-800">
-                                    <div className="flex items-center gap-3">
-                                        <div className={`w-10 h-10 rounded-xl ${channelObj.bg} ${channelObj.border} border flex items-center justify-center ${channelObj.color} text-base`}>
-                                            <i className={`fas ${channelObj.icon}`}></i>
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <h3 className="font-black text-zinc-100 text-[15px] uppercase">{channelObj.name}</h3>
-                                                {data.isLocked ? (
-                                                    <span className="text-[9px] font-bold bg-emerald-950/50 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full">
-                                                        ✔ Đã Chốt Sổ ({filter})
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-[9px] font-bold bg-sky-950/50 text-sky-300 border border-sky-500/40 px-2 py-0.5 rounded-full">
-                                                        ⚡ Dữ Liệu Động Từ Orders
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <span className="text-[11px] text-zinc-400">Nhập hoặc điều chỉnh các khoản phát sinh theo sàn & đối tác</span>
-                                        </div>
-                                    </div>
-
-                                    {isEditing ? (
-                                        <div className="flex gap-2">
-                                            <button onClick={() => setEditingReport(null)} className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-[11px] font-bold uppercase transition-all cursor-pointer">
-                                                Hủy
-                                            </button>
-                                            <button onClick={() => handleSaveReport(channelObj.id)} className="px-4 py-1.5 bg-sky-600 hover:bg-sky-500 text-zinc-950 rounded-xl text-[11px] font-black uppercase transition-all flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                                <i className="fas fa-save text-xs"></i> Lưu Kênh Này
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <button onClick={() => handleEditReport(channelObj.id)} className="px-4 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-amber-400 border border-amber-500/30 rounded-xl text-[11px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer">
-                                            <i className="fas fa-pencil-alt text-xs"></i> Sửa / Nhập Số Liệu
-                                        </button>
-                                    )}
-                                </div>
-
-                                {/* Form Inputs Grid */}
-                                <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-                                    <ReportMetricField label="Doanh Thu Bán Hàng (GMV)" field="revenue" value={data.revenue} isEditing={isEditing} onChange={handleFormChange} color="text-sky-400" />
-                                    <ReportMetricField label="Số Lượng Đơn Hàng" field="orderCount" value={data.orderCount} isEditing={isEditing} onChange={handleFormChange} color="text-zinc-100" />
-                                    <ReportMetricField label="Phí Sàn & Đối Tác Giao Hàng" field="platformFee" value={data.platformFee} isEditing={isEditing} onChange={handleFormChange} color="text-rose-400" />
-                                    <ReportMetricField label="Hàng Hoàn Trả (Vỡ/Lỗi)" field="returns" value={data.returns} isEditing={isEditing} onChange={handleFormChange} color="text-rose-400" />
-                                    <ReportMetricField label="Chiết Khấu & Voucher Giảm Giá" field="discount" value={data.discount} isEditing={isEditing} onChange={handleFormChange} color="text-amber-400" />
-                                    <ReportMetricField label="Chi Phí Quảng Cáo (ADS)" field="ads" value={data.ads} isEditing={isEditing} onChange={handleFormChange} color="text-amber-400" />
-                                </div>
-
-                                {/* Channel Profit Summary Bar */}
-                                <div className="rounded-xl p-3.5 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#09090b] border border-zinc-800 gap-2">
-                                    <div>
-                                        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block">Lợi Nhuận Gộp Kênh Sau Phí & Hoàn:</span>
-                                        <span className="text-[10px] text-zinc-500 font-medium">Doanh thu - (Phí sàn + Hàng hoàn + Voucher + ADS)</span>
-                                    </div>
-                                    <span className={`text-[18px] sm:text-[20px] font-mono font-black ${channelGrossProfit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                        {formatFinanceMoney(channelGrossProfit)}đ
-                                    </span>
-                                </div>
-                            </div>
-                        );
-                    })() : (
-                        /* COMPANY_GENERAL EDITOR */
-                        (() => {
-                            const isEditing = editingReport === 'COMPANY_GENERAL';
-                            const data = isEditing ? reportForm : getAggregatedReport('COMPANY_GENERAL');
-
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {REPORT_CHANNELS.map(c => {
+                            const d = getAggregatedReport(c.id);
+                            const isLocked = d.isLocked;
                             return (
-                                <div className="bg-[#121216] rounded-2xl border border-zinc-800/80 p-5 shadow-sm space-y-4">
-                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-zinc-800">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-xl bg-purple-950/40 border border-purple-500/40 flex items-center justify-center text-purple-400 text-base">
-                                                <i className="fas fa-building"></i>
-                                            </div>
-                                            <div>
-                                                <h3 className="font-black text-zinc-100 text-[15px] uppercase">Chi Phí Cố Định Công Ty ({filter})</h3>
-                                                <span className="text-[11px] text-zinc-400">Giá vốn COGS toàn xưởng, quỹ lương nhân sự và chi phí mặt bằng vận hành</span>
-                                            </div>
+                                <div key={c.id} className="bg-white/[0.02] border border-white/[0.06] rounded-xl p-3.5 flex flex-col justify-between">
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="font-bold text-zinc-200 text-xs">{c.name}</span>
+                                            <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded font-bold border ${
+                                                isLocked ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                            }`}>
+                                                {isLocked ? 'ĐÃ CHỐT' : 'CHƯA KHÓA'}
+                                            </span>
                                         </div>
-
-                                        {isEditing ? (
-                                            <div className="flex gap-2">
-                                                <button onClick={() => setEditingReport(null)} className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-[11px] font-bold uppercase transition-all cursor-pointer">
-                                                    Hủy
-                                                </button>
-                                                <button onClick={() => handleSaveReport('COMPANY_GENERAL')} className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-zinc-950 rounded-xl text-[11px] font-black uppercase transition-all flex items-center gap-1.5 cursor-pointer shadow-sm">
-                                                    <i className="fas fa-save text-xs"></i> Lưu Chi Phí
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <button onClick={() => handleEditReport('COMPANY_GENERAL')} className="px-4 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-amber-400 border border-amber-500/30 rounded-xl text-[11px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer">
-                                                <i className="fas fa-pencil-alt text-xs"></i> Sửa Chi Phí Xưởng
-                                            </button>
-                                        )}
+                                        <div className="text-sm font-black font-mono text-white mb-1">
+                                            {formatMoney(d.revenue)} đ
+                                        </div>
+                                        <div className="text-[10.5px] font-mono text-zinc-500 space-y-0.5">
+                                            <div>Phí sàn: {formatMoney(d.platformFee)} đ</div>
+                                            <div>Ads: {formatMoney(d.ads)} đ</div>
+                                            <div>Số đơn: {d.orderCount}</div>
+                                        </div>
                                     </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                        <ReportMetricField label="Giá Vốn Hàng Bán Tổng (COGS)" field="cogs" value={data.cogs} isEditing={isEditing} onChange={handleFormChange} color="text-rose-400" />
-                                        <ReportMetricField label="Quỹ Lương & Gia Công Nhân Sự (Salary)" field="salary" value={data.salary} isEditing={isEditing} onChange={handleFormChange} color="text-purple-400" />
-                                        <ReportMetricField label="Mặt Bằng, Điện Nước & Bảo Trì (Operation)" field="operation" value={data.operation} isEditing={isEditing} onChange={handleFormChange} color="text-zinc-300" />
-                                    </div>
-
-                                    <div className="rounded-xl p-3.5 flex justify-between items-center bg-[#09090b] border border-zinc-800">
-                                        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Tổng Chi Phí Cố Định Xưởng:</span>
-                                        <span className="text-[18px] font-mono font-black text-rose-400">
-                                            {formatFinanceMoney(Number(data.cogs || 0) + Number(data.salary || 0) + Number(data.operation || 0))}đ
-                                        </span>
+                                    <div className="mt-3 pt-2.5 border-t border-white/[0.04] flex items-center justify-end">
+                                        <button
+                                            onClick={() => handleEditReport(c.id)}
+                                            className="text-[10.5px] font-bold text-[#d4af37] hover:underline cursor-pointer flex items-center gap-1"
+                                        >
+                                            <i className="fas fa-edit text-[9.5px]"></i> Sửa số liệu
+                                        </button>
                                     </div>
                                 </div>
                             );
-                        })()
-                    )}
+                        })}
+                    </div>
                 </div>
             )}
+
+            {/* 4. SLIDE-OVER SIDE DRAWER: CHI TIẾT NGÀY */}
+            {selectedDayDrawer && (
+                <div className="fixed inset-0 z-[9999] overflow-hidden">
+                    {/* Backdrop */}
+                    <div 
+                        className="absolute inset-0 bg-black/70 backdrop-blur-xs transition-opacity animate-fade-in"
+                        onClick={() => setSelectedDayDrawer(null)}
+                    ></div>
+
+                    <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
+                        <div className="w-screen max-w-lg bg-[#121214] border-l border-white/[0.08] shadow-2xl p-5 flex flex-col justify-between overflow-y-auto custom-scrollbar animate-slide-left">
+                            <div>
+                                {/* Header Drawer */}
+                                <div className="flex items-center justify-between pb-3.5 border-b border-white/[0.06] mb-4">
+                                    <div>
+                                        <div className="text-[10px] font-mono uppercase text-[#d4af37] font-bold">Chi Tiết Sổ Nhật Ký</div>
+                                        <h2 className="text-lg font-black text-white font-mono mt-0.5">
+                                            Ngày {selectedDayDrawer.date.split('-').reverse().join('/')}
+                                        </h2>
+                                    </div>
+                                    <button 
+                                        onClick={() => setSelectedDayDrawer(null)}
+                                        className="w-8 h-8 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                                    >
+                                        <i className="fas fa-times text-sm"></i>
+                                    </button>
+                                </div>
+
+                                {/* Summary Mini Cards */}
+                                <div className="grid grid-cols-3 gap-2 mb-4">
+                                    <div className="bg-white/[0.02] border border-white/[0.04] p-2.5 rounded-lg">
+                                        <div className="text-[9.5px] text-zinc-400 uppercase font-mono">Doanh Thu</div>
+                                        <div className="text-xs font-black font-mono text-emerald-400 mt-0.5">
+                                            {formatMoney(selectedDayDrawer.revenue)}đ
+                                        </div>
+                                    </div>
+                                    <div className="bg-white/[0.02] border border-white/[0.04] p-2.5 rounded-lg">
+                                        <div className="text-[9.5px] text-zinc-400 uppercase font-mono">Chi Phí Ads</div>
+                                        <div className="text-xs font-black font-mono text-amber-400 mt-0.5">
+                                            {formatMoney(selectedDayDrawer.ads)}đ
+                                        </div>
+                                    </div>
+                                    <div className="bg-white/[0.02] border border-white/[0.04] p-2.5 rounded-lg">
+                                        <div className="text-[9.5px] text-zinc-400 uppercase font-mono">Lợi Nhuận</div>
+                                        <div className="text-xs font-black font-mono text-[#d4af37] mt-0.5">
+                                            {formatMoney(selectedDayDrawer.netProfit)}đ
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Danh sách đơn hàng trong ngày */}
+                                <div className="space-y-3 mb-4">
+                                    <div className="text-xs font-black uppercase tracking-wider text-zinc-300 flex items-center justify-between">
+                                        <span>Đơn Hàng Trong Ngày ({selectedDayDrawer.ordersList?.length || 0})</span>
+                                    </div>
+                                    <div className="space-y-1.5 max-h-56 overflow-y-auto custom-scrollbar pr-1">
+                                        {(selectedDayDrawer.ordersList || []).map((o, idx) => (
+                                            <div key={idx} className="p-2 bg-white/[0.02] border border-white/[0.04] rounded-lg flex items-center justify-between text-xs">
+                                                <div className="min-w-0 pr-2">
+                                                    <div className="font-bold text-zinc-200 truncate">{o.orderCode || o.id}</div>
+                                                    <div className="text-[9.5px] font-mono text-zinc-500">{o.channel} • {o.customer || 'Khách TMĐT'}</div>
+                                                </div>
+                                                <div className="text-right font-mono font-bold text-emerald-400 text-xs">
+                                                    {formatMoney(o.revenue)}đ
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Danh sách phiếu chi phát sinh */}
+                                <div className="space-y-3">
+                                    <div className="text-xs font-black uppercase tracking-wider text-zinc-300 flex items-center justify-between">
+                                        <span>Phiếu Chi / Giao Dịch ({selectedDayDrawer.txsList?.length || 0})</span>
+                                    </div>
+                                    <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                                        {(selectedDayDrawer.txsList || []).length === 0 ? (
+                                            <div className="text-zinc-500 italic text-[11px] py-2">Không có giao dịch sổ quỹ trong ngày.</div>
+                                        ) : (
+                                            selectedDayDrawer.txsList.map((t, idx) => (
+                                                <div key={idx} className="p-2 bg-white/[0.02] border border-white/[0.04] rounded-lg flex items-center justify-between text-xs">
+                                                    <div className="min-w-0 pr-2">
+                                                        <div className="font-bold text-zinc-200 truncate">{t.title || t.note || 'Chi phí'}</div>
+                                                        <div className="text-[9.5px] font-mono text-zinc-500">{t.category}</div>
+                                                    </div>
+                                                    <div className="text-right font-mono font-bold text-rose-400 text-xs">
+                                                        -{formatMoney(t.amount)}đ
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Footer Drawer */}
+                            <div className="pt-3 border-t border-white/[0.06] mt-4">
+                                <button
+                                    onClick={() => setSelectedDayDrawer(null)}
+                                    className="w-full py-2 bg-white/[0.06] hover:bg-white/[0.1] text-zinc-300 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                                >
+                                    Đóng Chi Tiết
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 5. MODAL SỬA SỐ LIỆU TỪNG KÊNH */}
+            {editingReport && (
+                <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[9999] p-4 backdrop-blur-xs animate-fade-in" onClick={() => setEditingReport(null)}>
+                    <div className="bg-[#121214] border border-white/[0.1] w-full max-w-lg rounded-2xl p-5 shadow-2xl space-y-4" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center border-b border-white/[0.06] pb-3">
+                            <h3 className="text-white font-black text-sm uppercase tracking-wider flex items-center gap-2">
+                                <i className="fas fa-edit text-[#d4af37]"></i>
+                                Điều Chỉnh Số Liệu: {editingReport} ({filter})
+                            </h3>
+                            <button onClick={() => setEditingReport(null)} className="text-zinc-400 hover:text-white cursor-pointer"><i className="fas fa-times"></i></button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3 bg-[#09090b] p-3.5 rounded-xl border border-white/[0.06]">
+                            <ReportMetricField label="Doanh thu" field="revenue" value={reportForm.revenue} isEditing={true} onChange={handleFormChange} color="text-emerald-400" />
+                            <ReportMetricField label="Số lượng đơn" field="orderCount" value={reportForm.orderCount} isEditing={true} onChange={handleFormChange} color="text-zinc-100" />
+                            <ReportMetricField label="Phí sàn" field="platformFee" value={reportForm.platformFee} isEditing={true} onChange={handleFormChange} color="text-rose-400" />
+                            <ReportMetricField label="Chi phí Ads" field="ads" value={reportForm.ads} isEditing={true} onChange={handleFormChange} color="text-amber-400" />
+                            <ReportMetricField label="Hàng hoàn" field="returns" value={reportForm.returns} isEditing={true} onChange={handleFormChange} color="text-rose-400" />
+                            <ReportMetricField label="Chiết khấu" field="discount" value={reportForm.discount} isEditing={true} onChange={handleFormChange} color="text-zinc-400" />
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-1">
+                            <button onClick={() => setEditingReport(null)} className="px-3.5 py-1.5 rounded-lg text-xs font-bold text-zinc-400 hover:bg-[#27272a] transition-colors cursor-pointer">Hủy</button>
+                            <button onClick={() => handleSaveReport(editingReport)} className="px-4 py-1.5 rounded-lg text-xs font-black text-black bg-[#d4af37] hover:brightness-110 transition-all cursor-pointer shadow-sm active:scale-95">
+                                Lưu Số Liệu
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 });

@@ -25,9 +25,9 @@
       theme: {
         extend: {
           fontFamily: {
-            sans: ['Inter', 'sans-serif'],
-            display: ['Plus Jakarta Sans', 'sans-serif'],
-            mono: ['JetBrains Mono', 'monospace']
+            sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            display: ['Outfit', '"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
           },
           colors: {
             canvas: 'var(--bg-canvas)',
@@ -35,9 +35,25 @@
               1: 'var(--bg-surface-1)',
               2: 'var(--bg-surface-2)'
             },
-            accent: {
-              gold: 'var(--accent-gold)',
-              light: 'var(--accent-gold-light)'
+            teal: {
+              400: '#2E9599',
+              500: '#2E9599',
+              600: '#237377'
+            },
+            yellow: {
+              400: '#F7DC68',
+              500: '#F7DC68',
+              600: '#d1b849'
+            },
+            orange: {
+              400: '#F46C3F',
+              500: '#F46C3F',
+              600: '#cf5228'
+            },
+            berry: {
+              400: '#A7226F',
+              500: '#A7226F',
+              600: '#861957'
             },
             border: {
               hairline: 'var(--border-hairline)'
@@ -74,7 +90,9 @@
     });
   </script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,600&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script>window.React || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"><\/script>')</script>
@@ -170,52 +188,19 @@
   </script>
   <style>
     /* =========================================================================
-       👑 HALLMARK ROYAL WORKBENCH DESIGN SYSTEM (ANTI-AI-SLOP v2.12.0)
-       Pre-emit critique: Philosophy 5 · Hierarchy 5 · Execution 5 · Specificity 5 · Restraint 5 · Variety 5
+       🎨 FOUR SEASONS PALETTE & PLUS JAKARTA SANS
+       Palette: #2E9599 (Teal) · #F7DC68 (Yellow) · #F46C3F (Orange) · #A7226F (Berry)
        ========================================================================= */
 
     :root {
-      --bg-canvas: #09090b;
-      --bg-surface-1: #121215;
-      --bg-surface-2: #1a1a20;
+      --bg-canvas: #18191d;
+      --bg-surface-1: #202228;
+      --bg-surface-2: #282b33;
       --border-hairline: rgba(255, 255, 255, 0.08);
-      --accent-gold: #d4af37;
-      --accent-gold-light: #f0ca5e;
-    }
-
-    /* --- GAMIFICATION: FLOATING EXP & REWARD PARTICLES --- */
-    @keyframes floatExpUp {
-      0% {
-        opacity: 1;
-        transform: translate3d(-50%, 0, 0) scale(0.85);
-      }
-      35% {
-        opacity: 1;
-        transform: translate3d(-50%, -24px, 0) scale(1.15);
-      }
-      100% {
-        opacity: 0;
-        transform: translate3d(-50%, -52px, 0) scale(0.9);
-      }
-    }
-    .rf-exp-float-particle {
-      position: fixed;
-      pointer-events: none;
-      z-index: 999999;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-weight: 900;
-      font-size: 13px;
-      letter-spacing: -0.02em;
-      padding: 3px 9px;
-      border-radius: 8px;
-      background: rgba(12, 12, 16, 0.94);
-      border: 1px solid rgba(212, 175, 55, 0.5);
-      color: #fde047;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7), 0 0 16px rgba(234, 179, 8, 0.4);
-      animation: floatExpUp 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      white-space: nowrap;
-      will-change: transform, opacity;
-      user-select: none;
+      --color-teal: #2E9599;
+      --color-yellow: #F7DC68;
+      --color-orange: #F46C3F;
+      --color-berry: #A7226F;
     }
 
     /* --- BASE RESET & MOBILE SCREEN LOCK (100DVH + SAFE AREA INSETS) --- */
@@ -229,13 +214,96 @@
       padding-bottom: env(safe-area-inset-bottom, 0px);
       background-color: var(--bg-canvas);
       color: #fafafa;
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
       text-rendering: optimizeLegibility;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
       overscroll-behavior: none;
       overflow-x: clip;
       touch-action: pan-y pinch-zoom;
+    }
+
+    /* --- MATTE FOUR SEASONS CARDS & PANELS --- */
+    .vision-card,
+    .spatial-glass {
+      background: #202228 !important;
+      border: 1px solid rgba(255, 255, 255, 0.04) !important;
+      border-radius: 1.25rem !important; /* 20px */
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+    }
+
+    .spatial-glass-interactive {
+      background: #202228;
+      border: none;
+      border-radius: 1rem;
+      transition: all 0.2s ease-out;
+    }
+    .spatial-glass-interactive:hover {
+      background: #282b33;
+      transform: translateY(-1px);
+    }
+
+    /* Floating Matte Bottom Dock */
+    .vision-dock {
+      background: #202228 !important;
+      border: 1px solid rgba(255, 255, 255, 0.06) !important;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+      border-radius: 9999px !important;
+    }
+
+    /* FOUR SEASONS STATUS PILLS */
+    .pill-ongoing,
+    .pill-orange {
+      background: #F46C3F !important;
+      color: #ffffff !important;
+      font-weight: 700 !important;
+      font-size: 11px !important;
+      padding: 3px 10px !important;
+      border-radius: 9999px !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+    .pill-complete,
+    .pill-teal {
+      background: #2E9599 !important;
+      color: #ffffff !important;
+      font-weight: 700 !important;
+      font-size: 11px !important;
+      padding: 3px 10px !important;
+      border-radius: 9999px !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+    .pill-yellow {
+      background: #F7DC68 !important;
+      color: #1e2026 !important;
+      font-weight: 700 !important;
+      font-size: 11px !important;
+      padding: 3px 10px !important;
+      border-radius: 9999px !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+    .pill-berry,
+    .pill-danger {
+      background: #A7226F !important;
+      color: #ffffff !important;
+      font-weight: 700 !important;
+      font-size: 11px !important;
+      padding: 3px 10px !important;
+      border-radius: 9999px !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+    .pill-cream {
+      background: #FAE0C7 !important;
+      color: #26201b !important;
+      font-weight: 700 !important;
+      font-size: 11px !important;
+      padding: 3px 10px !important;
+      border-radius: 9999px !important;
+      border: none !important;
+      box-shadow: none !important;
     }
 
     /* Container chính của ứng dụng (#root và wrapper ngoài cùng) */

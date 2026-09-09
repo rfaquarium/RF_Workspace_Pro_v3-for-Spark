@@ -781,9 +781,39 @@
 
         const RELEASES = [
             {
+                version: 'Royal v2.46.0',
+                date: '09/09/2026',
+                isLatest: true,
+                badge: 'BOM ISOLATION & LAYOUT UOM PRECISION',
+                badgeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+                title: 'Tách Biệt Tuyệt Đối Định Mức Vật Tư BOM Layout & Bể Kính, Chấm Dứt Hiện Tượng Layout Trừ Kính & Keo Silicone',
+                summary: 'Khắc phục triệt để và dứt điểm sự cố hiển thị/khấu trừ nhầm vật tư kính và silicon cho sản phẩm Layout: (1) Phân loại chính xác 100% giữa Bể Kính và Layout trong toàn bộ hệ thống (getProductBOMAndCosts, listWithComputed, Drawer Chi tiết & Bảng sản xuất), ưu tiên nhận diện từ khóa Layout (biotop, rừng, lũa, đá, cuội, bonsai, vách, hẻm, ver, hang...) trước khi xét Bể Kính; (2) Tách biệt giao diện Drawer chi tiết: Sản phẩm Layout hiển thị thông số Quy cách Khung Phôi & Vật tư BOM (Đá, Lũa, Keo 502), chỉ sản phẩm Bể Kính mới hiển thị UOM Diện tích kính (m²) và Keo Silicone (ml/chai); (3) Loại bỏ nhãn diện tích kính m² khỏi dòng hiển thị của sản phẩm Layout trong bảng danh sách sản xuất.',
+                categories: ['Sản Xuất', 'BOM Layout', 'Bể Kính', 'Vật Tư', 'UI/UX', 'Poka-Yoke'],
+                items: [
+                    {
+                        icon: 'fa-cubes-stacked',
+                        color: 'text-amber-400',
+                        title: 'Ưu Tiên Phân Loại Layout Trước Bể Kính',
+                        desc: 'Nhận diện chuẩn xác toàn bộ danh mục Layout Thủy Sinh / Bán Cạn, ngăn chặn hoàn toàn việc các sản phẩm như "Biotop Cuội", "Layout Rừng" bị nhận diện nhầm thành Bể Kính.'
+                    },
+                    {
+                        icon: 'fa-sliders',
+                        color: 'text-blue-400',
+                        title: 'Chuẩn Hóa Drawer Chi Tiết Sản Xuất',
+                        desc: 'Chỉ Bể Kính mới hiển thị hộp tính toán UOM Kính & Silicone. Sản phẩm Layout hiển thị Quy cách Khung Phôi và Vật tư BOM theo đúng thực tế xưởng.'
+                    },
+                    {
+                        icon: 'fa-table-list',
+                        color: 'text-emerald-400',
+                        title: 'Làm Sạch Bảng Danh Sách Sản Xuất',
+                        desc: 'Ẩn diện tích kính m² trên các dòng sản phẩm Layout trong bảng sản xuất, giữ giao diện sạch sẽ, trực quan cho quản đốc và thợ xưởng.'
+                    }
+                ]
+            },
+            {
                 version: 'Royal v2.45.11',
                 date: '07/09/2026',
-                isLatest: true,
+                isLatest: false,
                 badge: 'IMPORT/EXPORT STABILITY & SUPPLIER SYNC HOTFIX',
                 badgeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
                 title: 'Khắc Phục Triệt Để Lỗi Lưu Phiếu Kho (totalDebtAdd) & Đồng Bộ Tức Thì Nhà Cung Cấp Mới',
@@ -6923,8 +6953,8 @@
                                 </div>
                             )}
                             <div className={`${isSidebarCollapsed ? 'lg:hidden' : ''} truncate transition-opacity duration-200`}>
-                                <div className="font-semibold font-display tracking-wide text-[14px] text-zinc-100">Workspace</div>
-                                <div className="text-[10px] text-[#d4af37] font-bold uppercase tracking-widest mt-0.5">Royal V2</div>
+                                <div className="font-semibold font-display tracking-wide text-[14px] text-zinc-100">Workspace Pro</div>
+                                <div className="text-[10px] text-zinc-400 font-semibold uppercase tracking-wider mt-0.5">Rich Fish v3.0</div>
                             </div>
                         </div>
 
@@ -7056,12 +7086,12 @@
                                         </div>
                                         <span className={`${isSidebarCollapsed ? 'lg:hidden' : ''} truncate`}>Bản Cập Nhật</span>
                                     </div>
-                                    <span className={`${isSidebarCollapsed ? 'lg:hidden' : ''} text-[9px] bg-emerald-500/20 text-emerald-400 font-bold px-1.5 py-0.5 rounded border border-emerald-500/30`}>v2.45.11</span>
+                                    <span className={`${isSidebarCollapsed ? 'lg:hidden' : ''} text-[9px] bg-emerald-500/20 text-emerald-400 font-bold px-1.5 py-0.5 rounded border border-emerald-500/30`}>v2.46.0</span>
                                 </button>
 
                                 {isSidebarCollapsed && (
                                     <div className="hidden lg:group-hover:flex mini-rail-tooltip absolute left-[68px] top-1/2 -translate-y-1/2 z-[300] bg-[#18181b]/95 backdrop-blur-md text-zinc-100 text-[12px] font-medium px-3 py-1.5 rounded-lg shadow-[0_10px_25px_-5px_rgba(0,0,0,0.5),0_0_12px_rgba(212,175,55,0.2)] border border-[#d4af37]/35 whitespace-nowrap items-center gap-2 pointer-events-none">
-                                        <span>Bản Cập Nhật v2.45.11</span>
+                                        <span>Bản Cập Nhật v2.46.0</span>
                                         <div className="absolute -left-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-[#18181b] border-l border-b border-[#d4af37]/35 rotate-45"></div>
                                     </div>
                                 )}
@@ -7175,18 +7205,7 @@
                                 </span>
                             </div>
                         </div>
-                        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
-                            {/* THANH CẤP ĐỘ & EXP MINI (ĐỒNG BỘ TAB HR) */}
-                            {currentUser && (
-                                <HeaderExpWidget 
-                                    currentUser={currentUser} 
-                                    erpData={erpData} 
-                                    userConfigs={userConfigs} 
-                                    prodItems={memoizedProdItems} 
-                                    packings={memoizedPackings} 
-                                />
-                            )}
-
+                        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                             {/* BAN ĐIỀU HÀNH TÁC NHÂN SỐ (RF WAR ROOM) CẠNH AVATAR */}
                             <button
                                 id="rf-header-war-room-btn"
@@ -7196,18 +7215,18 @@
                                         window.toggleAgentsTower();
                                     }
                                 }}
-                                className="animate-fade-in flex items-center gap-1.5 bg-[#18181b] hover:bg-[#27272a] active:scale-95 px-2 sm:px-2.5 py-1 rounded-md border border-[#d4af37]/40 hover:border-[#d4af37] shadow-sm cursor-pointer shrink-0 transition-all duration-200 group"
+                                className="flex items-center gap-1.5 bg-[#202228] hover:bg-[#282b33] active:scale-95 px-3 py-1.5 rounded-full border-0 shadow-none cursor-pointer shrink-0 transition-all duration-200 group"
                                 title="Ban Điều Hành Tác Nhân Số (RF War Room 7 AI)"
                             >
-                                <span className="w-2 h-2 bg-emerald-500 rounded-full inline-block shadow-[0_0_6px_#22c55e] animate-pulse shrink-0"></span>
-                                <span className="text-[11px] sm:text-[12px] font-bold text-[#d4af37] font-mono leading-none group-hover:text-amber-300 whitespace-nowrap">
-                                    🎖️ War Room <span className="text-[10px] sm:text-[11px] opacity-80">(7)</span>
+                                <span className="w-2 h-2 bg-[#2E9599] rounded-full inline-block shrink-0"></span>
+                                <span className="text-[11px] sm:text-[12px] font-bold text-zinc-200 font-mono leading-none group-hover:text-white whitespace-nowrap">
+                                    War Room <span className="text-[10px] text-zinc-400 font-normal">(7)</span>
                                 </span>
                             </button>
 
                             {isAdmin && (
                                 <div className="hidden md:block animate-fade-in shrink-0">
-                                    <div className="text-[10px] font-bold text-[#d4af37] uppercase tracking-wider bg-[#d4af37]/10 px-2.5 py-1 rounded-md border border-[#d4af37]/20 shadow-sm">
+                                    <div className="text-[10.5px] font-black text-zinc-950 uppercase tracking-wider bg-[#F7DC68] px-3 py-1 rounded-full border-0 shadow-none">
                                         {isBoss ? 'TỐI CAO' : getDisplayRole(userRole)}
                                     </div>
                                 </div>
@@ -7306,8 +7325,8 @@
                         </ErrorBoundary>
                     </main>
 
-                    {/* MOBILE BOTTOM NAVIGATION DOCK (Hiển thị cố định trên Mobile & Tablet < lg) */}
-                    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-[190] bg-[#121214]/92 backdrop-blur-2xl border-t border-white/[0.08] shadow-[0_-4px_24px_rgba(0,0,0,0.55)] px-1.5 pt-1.5 pb-[max(0.6rem,env(safe-area-inset-bottom))] flex items-center justify-around select-none">
+                    {/* MOBILE BOTTOM NAVIGATION DOCK (VisionOS Floating Capsule Glass Dock) */}
+                    <nav className="lg:hidden fixed bottom-3 left-3 right-3 sm:left-1/2 sm:-translate-x-1/2 sm:w-auto sm:min-w-[360px] z-[190] vision-dock px-2 py-1.5 flex items-center justify-around select-none">
                         {/* Tab 1: Tổng Quan (Dashboard) */}
                         {!isCTVRole && (
                             <button
@@ -7317,16 +7336,16 @@
                                     setActiveTab('dashboard');
                                     setMode('WORKSPACE');
                                 }}
-                                className={`flex flex-col items-center justify-center py-1 px-2 min-w-[56px] rounded-xl transition-all duration-200 active:scale-95 ${
+                                className={`flex flex-col items-center justify-center py-1 px-3 min-w-[54px] rounded-full transition-all duration-200 active:scale-95 ${
                                     activeTab === 'dashboard'
-                                        ? 'text-[#d4af37] font-semibold bg-[#d4af37]/10 border border-[#d4af37]/25 shadow-sm'
+                                        ? 'text-white font-bold bg-white/[0.12] border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.5)]'
                                         : 'text-zinc-400 hover:text-zinc-200'
                                 }`}
                             >
-                                <div className="w-6 h-6 flex items-center justify-center text-[15px]">
+                                <div className="w-5 h-5 flex items-center justify-center text-[14px]">
                                     <i className="fas fa-home"></i>
                                 </div>
-                                <span className="text-[10px] tracking-tight mt-0.5 leading-none">Tổng Quan</span>
+                                <span className="text-[9.5px] font-medium tracking-tight mt-0.5 leading-none">Tổng Quan</span>
                             </button>
                         )}
 
@@ -7338,16 +7357,16 @@
                                 setActiveTab('orders');
                                 setMode('WORKSPACE');
                             }}
-                            className={`flex flex-col items-center justify-center py-1 px-2 min-w-[56px] rounded-xl transition-all duration-200 active:scale-95 ${
+                            className={`flex flex-col items-center justify-center py-1 px-3 min-w-[54px] rounded-full transition-all duration-200 active:scale-95 ${
                                 activeTab === 'orders'
-                                    ? 'text-[#d4af37] font-semibold bg-[#d4af37]/10 border border-[#d4af37]/25 shadow-sm'
+                                    ? 'text-white font-bold bg-white/[0.12] border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.5)]'
                                     : 'text-zinc-400 hover:text-zinc-200'
                             }`}
                         >
-                            <div className="w-6 h-6 flex items-center justify-center text-[15px]">
+                            <div className="w-5 h-5 flex items-center justify-center text-[14px]">
                                 <i className="fas fa-shopping-cart"></i>
                             </div>
-                            <span className="text-[10px] tracking-tight mt-0.5 leading-none">Đơn Hàng</span>
+                            <span className="text-[9.5px] font-medium tracking-tight mt-0.5 leading-none">Đơn Hàng</span>
                         </button>
 
                         {/* Tab 3: Sản Xuất (Production) */}
@@ -7358,16 +7377,16 @@
                                 setActiveTab('production');
                                 setMode('WORKSPACE');
                             }}
-                            className={`flex flex-col items-center justify-center py-1 px-2 min-w-[56px] rounded-xl transition-all duration-200 active:scale-95 ${
+                            className={`flex flex-col items-center justify-center py-1 px-3 min-w-[54px] rounded-full transition-all duration-200 active:scale-95 ${
                                 activeTab === 'production'
-                                    ? 'text-[#d4af37] font-semibold bg-[#d4af37]/10 border border-[#d4af37]/25 shadow-sm'
+                                    ? 'text-white font-bold bg-white/[0.12] border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.5)]'
                                     : 'text-zinc-400 hover:text-zinc-200'
                             }`}
                         >
-                            <div className="w-6 h-6 flex items-center justify-center text-[15px]">
+                            <div className="w-5 h-5 flex items-center justify-center text-[14px]">
                                 <i className="fas fa-hammer"></i>
                             </div>
-                            <span className="text-[10px] tracking-tight mt-0.5 leading-none">Sản Xuất</span>
+                            <span className="text-[9.5px] font-medium tracking-tight mt-0.5 leading-none">Sản Xuất</span>
                         </button>
 
                         {/* Tab 4: Kho Hàng (Nếu Admin) hoặc Nhân Sự */}
@@ -7379,16 +7398,16 @@
                                     setActiveTab('warehouse');
                                     setMode('ERP');
                                 }}
-                                className={`flex flex-col items-center justify-center py-1 px-2 min-w-[56px] rounded-xl transition-all duration-200 active:scale-95 ${
+                                className={`flex flex-col items-center justify-center py-1 px-3 min-w-[54px] rounded-full transition-all duration-200 active:scale-95 ${
                                     activeTab === 'warehouse'
-                                        ? 'text-[#d4af37] font-semibold bg-[#d4af37]/10 border border-[#d4af37]/25 shadow-sm'
+                                        ? 'text-white font-bold bg-white/[0.12] border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.5)]'
                                         : 'text-zinc-400 hover:text-zinc-200'
                                 }`}
                             >
-                                <div className="w-6 h-6 flex items-center justify-center text-[15px]">
+                                <div className="w-5 h-5 flex items-center justify-center text-[14px]">
                                     <i className="fas fa-boxes"></i>
                                 </div>
-                                <span className="text-[10px] tracking-tight mt-0.5 leading-none">Kho Hàng</span>
+                                <span className="text-[9.5px] font-medium tracking-tight mt-0.5 leading-none">Kho Hàng</span>
                             </button>
                         ) : (!isCTVRole ? (
                             <button
@@ -7398,16 +7417,16 @@
                                     setActiveTab('hr');
                                     setMode('WORKSPACE');
                                 }}
-                                className={`flex flex-col items-center justify-center py-1 px-2 min-w-[56px] rounded-xl transition-all duration-200 active:scale-95 ${
+                                className={`flex flex-col items-center justify-center py-1 px-3 min-w-[54px] rounded-full transition-all duration-200 active:scale-95 ${
                                     activeTab === 'hr'
-                                        ? 'text-[#d4af37] font-semibold bg-[#d4af37]/10 border border-[#d4af37]/25 shadow-sm'
+                                        ? 'text-white font-bold bg-white/[0.12] border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.5)]'
                                         : 'text-zinc-400 hover:text-zinc-200'
                                 }`}
                             >
-                                <div className="w-6 h-6 flex items-center justify-center text-[15px]">
+                                <div className="w-5 h-5 flex items-center justify-center text-[14px]">
                                     <i className="fas fa-user-clock"></i>
                                 </div>
-                                <span className="text-[10px] tracking-tight mt-0.5 leading-none">Nhân Sự</span>
+                                <span className="text-[9.5px] font-medium tracking-tight mt-0.5 leading-none">Nhân Sự</span>
                             </button>
                         ) : null)}
 
@@ -7418,17 +7437,17 @@
                                 triggerHaptic('light');
                                 setIsMenuOpen(true);
                             }}
-                            className={`flex flex-col items-center justify-center py-1 px-2 min-w-[56px] rounded-xl transition-all duration-200 active:scale-95 ${
+                            className={`flex flex-col items-center justify-center py-1 px-3 min-w-[54px] rounded-full transition-all duration-200 active:scale-95 ${
                                 isMenuOpen
-                                    ? 'text-[#d4af37] font-semibold bg-[#d4af37]/10 border border-[#d4af37]/25'
+                                    ? 'text-white font-bold bg-white/[0.12] border border-white/20'
                                     : 'text-zinc-400 hover:text-zinc-200'
                             }`}
                             aria-label="Tất cả Menu"
                         >
-                            <div className="w-6 h-6 flex items-center justify-center text-[15px]">
+                            <div className="w-5 h-5 flex items-center justify-center text-[14px]">
                                 <i className="fas fa-bars-staggered"></i>
                             </div>
-                            <span className="text-[10px] tracking-tight mt-0.5 leading-none">Menu</span>
+                            <span className="text-[9.5px] font-medium tracking-tight mt-0.5 leading-none">Menu</span>
                         </button>
                     </nav>
 

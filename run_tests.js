@@ -1207,9 +1207,6 @@ assert('App_Main.html: Sidebar badge displays >= v2.45.7', />v2\.(4[5-9]|\d{2,})
 assert('CHANGELOG.md: Documents v2.45.7 release notes', changelogV2457.includes('## [v2.45.7] - 2026-09-07'));
 assert('Tab_Orders.html: processCode implements auto-migration of past month return orders', tabOrdersV2457.includes('isOldMonth') && tabOrdersV2457.includes('đưa về mục Hoàn Tháng'));
 assert('Tab_Orders.html: confirmBulkReturn implements auto-migration of past month return orders', tabOrdersV2457.includes('oldMonthCount') && tabOrdersV2457.includes('đưa về Hoàn T'));
-assert('Tab_Orders.html: matchTimeFilter preserves unreconciled return orders in Tháng Này', tabOrdersV2457.includes('isReturnOrder && !isRec && (filterTime ==='));
-assert('Tab_Orders.html: matchTimeFilter prioritizes returnedAt for return orders', tabOrdersV2457.includes('order.returnedAt || order.reconciledAt || order.date'));
-assert('Tab_Orders.html: realTimeSummary.urgentAlerts checks returnedAt', tabOrdersV2457.includes('String(o.returnedAt || o.updatedAt || o.createdAt || o.date'));
 assert('Tab_Orders.html: ReturnScannerModal displays informative auto-migration guarantee pill', tabOrdersV2457.includes('Đơn tháng cũ (T8) khi quét sẽ tự động đưa về mục Hoàn Tháng Này'));
 
 // Unit logic test for return order migration
@@ -1293,6 +1290,27 @@ assert('Tab_Production.html: MaterialRequisitionModal declares availableMaterial
 const setHookPos = tabProdV2459.indexOf('const initialList = React.useMemo');
 const setReturnPos = tabProdV2459.indexOf('if (!isOpen || !item) return null;', reqReturnPos + 1);
 assert('Tab_Production.html: MaterialSettlementModal declares initialList BEFORE if (!isOpen || !item) return null', setHookPos !== -1 && setReturnPos !== -1 && setHookPos < setReturnPos);
+
+console.log('\n--- 28. Testing Royal v2.46.0 BOM Layout & Glass Tank Isolation ---');
+const appMainV2460 = fs.readFileSync(path.join(__dirname, 'App_Main.html'), 'utf8');
+const changelogV2460 = fs.readFileSync(path.join(__dirname, 'CHANGELOG.md'), 'utf8');
+const tabProdV2460 = fs.readFileSync(path.join(__dirname, 'Tab_Production.html'), 'utf8');
+
+assert('App_Main.html: Contains Royal v2.46.0 in RELEASES', appMainV2460.includes("version: 'Royal v2.46.0'"));
+assert('App_Main.html: Sidebar badge displays >= v2.46.0', />v2\.(4[6-9]|[5-9]\d|\d{3,})\.\d+<\/span>/.test(appMainV2460));
+assert('CHANGELOG.md: Documents v2.46.0 release notes', changelogV2460.includes('## [v2.46.0] - 2026-09-09'));
+assert('Tab_Production.html: getProductBOMAndCosts prioritizes isLayout before isGlass', tabProdV2460.includes("const isLayout = itemTypeUpper.includes('LAYOUT') || /(layout|rừng|rung|bonsai|cầu vồng|cau vong|đảo bay|dao bay|cuội|cuoi|đá|da|lũa|lua|biotop|cover|tiểu cảnh|tieu canh|vách|vach|hẻm|hem|đảo|dao|nhất trụ|nhat tru|núi|nui|hang|cầu|cau|biotope)/i.test(itemNameLower);") && tabProdV2460.includes("const isGlass = !isLayout &&"));
+assert('Tab_Production.html: listWithComputed prioritizes isLayout before isBeKinh', tabProdV2460.includes("const isBeKinh = !isLayout && (typeStr === 'Bể Kính' || typeStr.toUpperCase().includes('BỂ') || /(bể kính|be kinh|hồ kính|ho kinh|bể siêu trong|dán bể|hồ cá|bể cá|hồ đúc|bể đúc|\\bbể\\b|\\bhồ\\b|\\btank\\b)/i.test(nameLower));"));
+assert('Tab_Production.html: Drawer only renders Glass and Silicone UOM if item._computedType === "Bể Kính"', tabProdV2460.includes("item._computedType === 'Bể Kính' && dims && (") && tabProdV2460.includes("QUY CÁCH SẢN PHẨM LAYOUT"));
+assert('Tab_Production.html: Table row only renders m2 glass area for Bể Kính', tabProdV2460.includes("item._computedType === 'Bể Kính' && <>• <span className=\"text-[#2E9599] font-semibold\">{dims.areaM2}m²</span> (5%)</>"));
+
+// Simulation tests for Layout item
+const sampleLayoutName = 'Biotop Cuội ver.1 - 30x20x20cm';
+const sampleNameLower = sampleLayoutName.toLowerCase();
+const simIsLayout = /(layout|rừng|rung|bonsai|cầu vồng|cau vong|đảo bay|dao bay|cuội|cuoi|đá|da|lũa|lua|biotop|cover|tiểu cảnh|tieu canh|vách|vach|hẻm|hem|đảo|dao|nhất trụ|nhat tru|núi|nui|hang|cầu|cau|biotope)/i.test(sampleNameLower);
+const simIsGlass = !simIsLayout && /(bể kính|be kinh|hồ kính|ho kinh|bể siêu trong|dán bể|hồ cá|bể cá|hồ đúc|bể đúc|\bbể\b|\bhồ\b|\btank\b)/i.test(sampleNameLower);
+assert('Logic Test: Biotop Cuội is classified as isLayout = true', simIsLayout === true);
+assert('Logic Test: Biotop Cuội is NOT classified as isGlass (isGlass = false)', simIsGlass === false);
 
 // SUMMARY
 

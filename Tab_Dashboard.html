@@ -32,8 +32,7 @@ const OperationsHealthWidget = React.memo(function OperationsHealthWidget() {
   if (totalAlerts === 0) return null;
 
   return (
-    <div className="bg-[#09090b] border border-rose-900/40 rounded-xl p-3.5 shadow-sm mb-4 relative overflow-hidden transition-all">
-      <div className="absolute top-0 left-0 w-1 h-full bg-rose-500"></div>
+    <div className="vision-card p-4 sm:p-5 mb-4 relative overflow-hidden transition-all border-rose-500/30">
       
       {/* Header bar */}
       <div 
@@ -41,18 +40,18 @@ const OperationsHealthWidget = React.memo(function OperationsHealthWidget() {
         className="flex items-center justify-between cursor-pointer select-none"
       >
         <div className="flex items-center gap-2.5">
-          <div className="w-6 h-6 rounded-md bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
-              <i className="fas fa-exclamation-triangle text-rose-500 animate-pulse text-[11px]"></i>
+          <div className="w-8 h-8 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center">
+              <i className="fas fa-exclamation-triangle text-rose-400 animate-pulse text-[12px]"></i>
           </div>
           <div>
-            <span className="font-black text-[12px] text-zinc-100 uppercase tracking-wider">Cảnh Báo Vận Hành</span>
-            <span className="ml-2 text-[10px] font-black text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-full">
+            <span className="font-display font-extrabold text-[15px] text-white tracking-tight">Cảnh Báo Vận Hành</span>
+            <span className="ml-2.5 text-[10.5px] font-bold text-rose-300 bg-rose-500/20 border border-rose-500/30 px-2.5 py-0.5 rounded-full font-mono">
               {totalAlerts} vấn đề
             </span>
           </div>
         </div>
         
-        <button className="text-[10px] font-bold text-zinc-400 hover:text-zinc-200 flex items-center gap-1 bg-[#121214] px-2.5 py-1 rounded border border-[#27272a]">
+        <button className="text-[11px] font-semibold text-zinc-300 hover:text-white flex items-center gap-1.5 bg-white/[0.06] hover:bg-white/[0.1] px-3.5 py-1.5 rounded-full border border-white/10 transition-all font-display">
           <span>{isExpanded ? 'Thu gọn' : 'Chi tiết'}</span>
           <i className={`fas fa-chevron-${isExpanded ? 'up' : 'down'} text-[9px]`}></i>
         </button>
@@ -310,7 +309,7 @@ const ProductionStaffDispatchBoard = React.memo(function ProductionStaffDispatch
     return duongTasks.reduce((sum, item) => sum + calcProdItemReward(item, 'both'), 0);
   }, [duongTasks, calcProdItemReward]);
 
-  const huongReward = React.useMemo(() => {
+const huongReward = React.useMemo(() => {
     return huongTasks.reduce((sum, order) => sum + calcOrderPackingReward(order), 0);
   }, [huongTasks, calcOrderPackingReward]);
 
@@ -327,94 +326,78 @@ const ProductionStaffDispatchBoard = React.memo(function ProductionStaffDispatch
     }));
   };
 
-  // Cấu hình metadata cho 4 thợ
+  // Cấu hình metadata cho 4 thợ theo bảng màu Four Seasons
   const staffConfigs = [
     {
       key: 'TAN',
       name: 'Trần Duy Tân',
       shortName: 'Tân',
-      role: 'Cần Dựng Khung',
+      role: 'Khâu 1: Dựng Khung',
       phaseLabel: 'Khâu 1 Layout',
       icon: 'fa-hammer',
       tasks: tanTasks,
       reward: tanReward,
+      color: '#F46C3F', // Sunset Orange
+      textColor: '#ffffff',
+      badgeClass: 'bg-[#F46C3F] text-white',
       theme: {
-        accent: 'amber',
-        border: 'border-amber-500/30',
-        borderActive: 'border-amber-500',
-        bgActive: 'bg-amber-950/25',
-        ringActive: 'ring-1 ring-amber-500/50',
-        glow: 'shadow-[0_0_20px_rgba(245,158,11,0.15)]',
-        text: 'text-amber-400',
-        badge: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-        countActive: 'bg-amber-500 text-black',
-        hoverBorder: 'hover:border-amber-500/40'
+        badge: 'bg-[#F46C3F] text-white border-transparent',
+        hoverBorder: 'hover:border-[#F46C3F]/50',
+        border: 'border-[#F46C3F]/20'
       }
     },
     {
       key: 'TAM',
       name: 'Lại Trường Tâm',
       shortName: 'Tâm',
-      role: 'Cần Gia Cố',
+      role: 'Khâu 2: Gia Cố & Rêu',
       phaseLabel: 'Khâu 2 Gắn Rêu',
       icon: 'fa-shield-alt',
       tasks: tamTasks,
       reward: tamReward,
+      color: '#2E9599', // Spring Teal
+      textColor: '#ffffff',
+      badgeClass: 'bg-[#2E9599] text-white',
       theme: {
-        accent: 'emerald',
-        border: 'border-emerald-500/30',
-        borderActive: 'border-emerald-500',
-        bgActive: 'bg-emerald-950/25',
-        ringActive: 'ring-1 ring-emerald-500/50',
-        glow: 'shadow-[0_0_20px_rgba(16,185,129,0.15)]',
-        text: 'text-emerald-400',
-        badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-        countActive: 'bg-emerald-500 text-black',
-        hoverBorder: 'hover:border-emerald-500/40'
+        badge: 'bg-[#2E9599] text-white border-transparent',
+        hoverBorder: 'hover:border-[#2E9599]/50',
+        border: 'border-[#2E9599]/20'
       }
     },
     {
       key: 'DUONG',
       name: 'Nguyễn Hoàng Dương',
       shortName: 'Dương',
-      role: 'Cần Cắt Dán Bể',
+      role: 'Khâu 3: Cắt Dán Bể',
       phaseLabel: 'Bể Kính / Mài Keo',
       icon: 'fa-cube',
       tasks: duongTasks,
       reward: duongReward,
+      color: '#F7DC68', // Warm Yellow
+      textColor: '#1e2026',
+      badgeClass: 'bg-[#F7DC68] text-[#1e2026]',
       theme: {
-        accent: 'sky',
-        border: 'border-sky-500/30',
-        borderActive: 'border-sky-500',
-        bgActive: 'bg-sky-950/25',
-        ringActive: 'ring-1 ring-sky-500/50',
-        glow: 'shadow-[0_0_20px_rgba(14,165,233,0.15)]',
-        text: 'text-sky-400',
-        badge: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
-        countActive: 'bg-sky-500 text-black',
-        hoverBorder: 'hover:border-sky-500/40'
+        badge: 'bg-[#F7DC68] text-[#1e2026] border-transparent',
+        hoverBorder: 'hover:border-[#F7DC68]/50',
+        border: 'border-[#F7DC68]/20'
       }
     },
     {
       key: 'HUONG',
       name: 'Nguyễn Thị Diệu Hương',
       shortName: 'Hương',
-      role: 'Cần Đóng Gói',
+      role: 'Khâu 4: Đóng Gói Xuất',
       phaseLabel: 'Đóng Gói / Giao Vận',
       icon: 'fa-boxes',
       tasks: huongTasks,
       reward: huongReward,
+      color: '#A7226F', // Berry Magenta
+      textColor: '#ffffff',
+      badgeClass: 'bg-[#A7226F] text-white',
       theme: {
-        accent: 'purple',
-        border: 'border-purple-500/30',
-        borderActive: 'border-purple-500',
-        bgActive: 'bg-purple-950/25',
-        ringActive: 'ring-1 ring-purple-500/50',
-        glow: 'shadow-[0_0_20px_rgba(168,85,247,0.15)]',
-        text: 'text-purple-400',
-        badge: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-        countActive: 'bg-purple-500 text-white',
-        hoverBorder: 'hover:border-purple-500/40'
+        badge: 'bg-[#A7226F] text-white border-transparent',
+        hoverBorder: 'hover:border-[#A7226F]/50',
+        border: 'border-[#A7226F]/20'
       }
     }
   ];
@@ -430,29 +413,33 @@ const ProductionStaffDispatchBoard = React.memo(function ProductionStaffDispatch
   };
 
   return (
-    <div className="bg-[#101014] border border-white/[0.08] rounded-2xl p-3 sm:p-4 shadow-sm relative overflow-hidden">
+    <div className="vision-card p-4 sm:p-5 mb-4 relative overflow-hidden transition-all">
       {/* Background Subtle Ambient Glow */}
-      <div className="absolute top-0 left-1/4 w-80 h-28 bg-amber-500/5 rounded-full blur-[60px] pointer-events-none"></div>
+      <div className="absolute top-0 left-1/4 w-80 h-28 bg-white/[0.03] rounded-full blur-[60px] pointer-events-none"></div>
 
-      {/* HEADER SECTION (GỌN GÀNG, KHÔNG Ô TÌM KIẾM) */}
-      <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#27272a] relative z-10">
+      {/* HEADER SECTION */}
+      <div className="flex items-center justify-between gap-3 pb-3 border-b border-white/[0.08] relative z-10">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shadow-sm shrink-0">
-            <i className="fas fa-clipboard-list text-[12px]"></i>
+          <div className="w-8 h-8 rounded-xl bg-white/[0.06] border border-white/10 flex items-center justify-center text-zinc-200 shadow-sm shrink-0">
+            <i className="fas fa-clipboard-list text-[13px]"></i>
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="font-black text-[12.5px] sm:text-[13.5px] text-zinc-100 uppercase tracking-wider">
-                Bảng Nhắc Việc Sản Xuất & Đóng Gói
+              <h2 className="font-display font-extrabold text-[15px] sm:text-[17px] text-white tracking-tight">
+                Tiến Độ Xưởng & Phân Việc
               </h2>
-              <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-black font-mono border ${
-                totalTasks > 0 ? 'bg-amber-500/15 text-amber-400 border-amber-500/30' : 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-              }`}>
-                {totalTasks} việc đang chờ
-              </span>
+              {totalTasks > 0 ? (
+                <span className="pill-ongoing">
+                  {totalTasks} việc cần xử lý
+                </span>
+              ) : (
+                <span className="pill-complete">
+                  Đã hoàn thành 100%
+                </span>
+              )}
             </div>
-            <p className="text-[10.5px] text-zinc-400 font-medium truncate mt-0.5">
-              Bấm vào từng thợ để mở / thu gọn danh sách việc cần xử lý
+            <p className="text-[11px] text-zinc-400 font-medium truncate mt-0.5 font-display">
+              Chạm vào thợ để xem và cập nhật tiến độ công việc
             </p>
           </div>
         </div>
@@ -461,17 +448,17 @@ const ProductionStaffDispatchBoard = React.memo(function ProductionStaffDispatch
         {activeStaffConfig && (
           <button 
             onClick={() => setSelectedStaff(null)}
-            className="hidden sm:flex items-center gap-1.5 text-[10px] font-bold text-zinc-400 hover:text-zinc-200 bg-[#121214] hover:bg-[#121214] px-2.5 py-1 rounded-lg border border-[#27272a] transition-all shrink-0 cursor-pointer"
+            className="hidden sm:flex items-center gap-1.5 text-[11px] font-semibold text-zinc-300 hover:text-white bg-white/[0.06] hover:bg-white/[0.1] px-3 py-1.5 rounded-full border border-white/10 transition-all shrink-0 cursor-pointer"
             title="Thu gọn danh sách việc"
           >
-            <i className="fas fa-chevron-up text-[9px] text-zinc-500"></i>
-            <span>Đóng việc của {activeStaffConfig.shortName}</span>
+            <i className="fas fa-chevron-up text-[9px] text-zinc-400"></i>
+            <span>Đóng việc {activeStaffConfig.shortName}</span>
           </button>
         )}
       </div>
 
       {/* 4 THẺ THỢ CỐT LÕI (BẤM VÀO THỢ ĐỂ THẢ DANH SÁCH VIỆC) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 my-3 relative z-10">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 my-3 relative z-10">
         {staffConfigs.map((staff) => {
           const isSelected = selectedStaff === staff.key;
           const count = staff.tasks.length;
@@ -480,10 +467,10 @@ const ProductionStaffDispatchBoard = React.memo(function ProductionStaffDispatch
             <div 
               key={staff.key}
               onClick={() => handleToggleStaff(staff.key)}
-              className={`p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer select-none relative overflow-hidden group active:scale-[0.98] ${
+              className={`p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer select-none relative overflow-hidden group active:scale-[0.98] ${
                 isSelected 
-                  ? `${staff.theme.bgActive} ${staff.theme.borderActive} ${staff.theme.glow} ${staff.theme.ringActive}` 
-                  : `bg-[#121216] border-white/[0.08] ${staff.theme.hoverBorder} hover:bg-[#16161c]`
+                  ? 'bg-white/[0.12] border-white/30 shadow-[0_8px_24px_rgba(0,0,0,0.6)] ring-1 ring-white/30' 
+                  : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/[0.08] hover:border-white/20'
               }`}
             >
               {/* Layout ngang trên Mobile, cân đối trên Desktop */}
@@ -491,16 +478,21 @@ const ProductionStaffDispatchBoard = React.memo(function ProductionStaffDispatch
                 
                 {/* Cột trái: Icon + Role + Name */}
                 <div className="flex items-center gap-3 min-w-0 flex-1">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm shrink-0 border ${
-                    isSelected ? `${staff.theme.countActive} border-transparent shadow-md` : `${staff.theme.badge}`
-                  }`}>
+                  <div 
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-sm shrink-0 border"
+                    style={{
+                      backgroundColor: isSelected ? staff.color : `${staff.color}18`,
+                      borderColor: isSelected ? staff.color : `${staff.color}40`,
+                      color: isSelected ? staff.textColor : staff.color
+                    }}
+                  >
                     <i className={`fas ${staff.icon}`}></i>
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className={`text-[10px] font-black uppercase tracking-wider truncate ${staff.theme.text}`}>
+                    <div className="text-[11px] font-semibold font-display truncate" style={{ color: staff.color }}>
                       {staff.role}
                     </div>
-                    <div className="text-[13px] font-black text-zinc-100 group-hover:text-white transition-colors truncate">
+                    <div className="text-[14px] font-bold text-zinc-100 font-display group-hover:text-white transition-colors truncate">
                       {staff.name}
                     </div>
                   </div>
@@ -508,15 +500,23 @@ const ProductionStaffDispatchBoard = React.memo(function ProductionStaffDispatch
 
                 {/* Cột phải: Task Count + Reward + Indicator */}
                 <div className="flex flex-col items-end shrink-0 pl-1">
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black font-mono transition-all border ${
-                    count > 0 
-                      ? (isSelected ? `${staff.theme.countActive} border-transparent shadow-sm` : `${staff.theme.badge} animate-pulse`) 
-                      : 'bg-white/[0.04] text-zinc-500 border-white/[0.08]'
-                  }`}>
-                    {count} việc
-                  </span>
+                  {count > 0 ? (
+                    <span 
+                      className="font-bold text-[11px] px-3 py-0.5 rounded-full"
+                      style={{
+                        backgroundColor: staff.color,
+                        color: staff.textColor
+                      }}
+                    >
+                      {count} việc
+                    </span>
+                  ) : (
+                    <span className="bg-white/[0.05] text-zinc-400 font-semibold text-[11px] px-2.5 py-0.5 rounded-full border border-white/[0.08]">
+                      0 việc
+                    </span>
+                  )}
 
-                  <div className="flex items-center gap-1.5 mt-1">
+                  <div className="flex items-center gap-1.5 mt-1.5">
                     {staff.reward > 0 && (
                       <span className="font-mono text-[9.5px] font-bold text-[#d4af37]">
                         +{staff.reward.toLocaleString('vi-VN')}đ
@@ -798,68 +798,68 @@ const MonthlyPenaltyLedger = React.memo(function MonthlyPenaltyLedger({
   };
 
   return (
-    <div className="bg-[#09090b] border border-[#27272a] rounded-2xl p-3.5 sm:p-4 shadow-sm relative overflow-hidden">
+    <div className="vision-card p-4 sm:p-5 mb-4 relative overflow-hidden transition-all">
       {/* Accent Glow */}
-      <div className="absolute top-0 right-1/4 w-60 h-24 bg-rose-500/5 rounded-full blur-[50px] pointer-events-none"></div>
+      <div className="absolute top-0 right-1/4 w-60 h-24 bg-white/[0.02] rounded-full blur-[50px] pointer-events-none"></div>
 
       {/* HEADER SECTION */}
-      <div className="flex items-center justify-between gap-2 pb-3 border-b border-[#27272a] relative z-10">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-rose-500/20 to-red-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
-            <i className="fas fa-gavel text-[11px]"></i>
+      <div className="flex items-center justify-between gap-2 pb-3 border-b border-white/[0.08] relative z-10">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-8 h-8 rounded-xl bg-white/[0.06] border border-white/10 flex items-center justify-center text-rose-400 shadow-sm shrink-0">
+            <i className="fas fa-gavel text-[12px]"></i>
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <h2 className="font-black text-[12px] sm:text-[13px] text-zinc-100 uppercase tracking-wide truncate">
-                Lịch Sử Trừ Lương
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="font-display font-extrabold text-[15px] sm:text-[17px] text-white tracking-tight truncate">
+                Lịch Sử Trừ Lương & Kỷ Luật
               </h2>
-              <span className="bg-rose-500/15 text-rose-400 border border-rose-500/30 px-1.5 py-0.2 rounded-full text-[9px] font-black font-mono">
-                {filteredRecords.length}
+              <span className="bg-rose-500/15 text-rose-300 border border-rose-500/25 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono">
+                {filteredRecords.length} vi phạm
               </span>
             </div>
           </div>
         </div>
 
         {/* Nút Phạt Nhanh & Lọc Tháng */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <select 
             value={selectedMonth} 
             onChange={e => setSelectedMonth(e.target.value)}
-            className="bg-[#121214] border border-[#27272a] focus:border-rose-500/50 text-zinc-200 text-[10.5px] font-bold rounded-lg px-2.5 py-1 outline-none cursor-pointer"
+            className="bg-white/[0.06] hover:bg-white/[0.1] border border-white/10 focus:border-rose-500/50 text-white text-[11px] font-semibold rounded-full px-3 py-1.5 outline-none cursor-pointer font-display transition-colors"
           >
-            <option value="ALL">Tất cả tháng</option>
+            <option value="ALL" className="bg-[#18191e] text-white">Tất cả tháng</option>
             {monthOptions.map(m => (
-              <option key={m} value={m}>Tháng {m.split('-')[1]}/{m.split('-')[0]}</option>
+              <option key={m} value={m} className="bg-[#18191e] text-white">Tháng {m.split('-')[1]}/{m.split('-')[0]}</option>
             ))}
           </select>
 
           {(isAdmin || isBoss) && (
             <button 
               onClick={() => window.dispatchEvent(new Event('openQuickPenaltyModal'))}
-              className="bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 border border-rose-500/30 hover:border-rose-500/50 font-bold text-[9.5px] px-2.5 py-1 rounded-lg flex items-center gap-1 uppercase tracking-wide transition-all cursor-pointer active:scale-95"
+              className="bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/30 hover:border-rose-500/50 font-bold text-[11px] px-3.5 py-1.5 rounded-full flex items-center gap-1.5 transition-all cursor-pointer active:scale-95 shadow-sm"
               title="Lập biên bản phạt vi phạm"
             >
-              <i className="fas fa-plus text-[8.5px]"></i> Phạt
+              <i className="fas fa-plus text-[9px]"></i> Phạt
             </button>
           )}
         </div>
       </div>
 
       {/* COMPACT SUMMARY METRICS (2 COLUMNS) */}
-      <div className="grid grid-cols-2 gap-2.5 my-2.5 relative z-10">
+      <div className="grid grid-cols-2 gap-3 my-3 relative z-10">
         
         {/* Card 1: Tổng tiền trừ lương */}
-        <div className="p-2.5 sm:p-3 bg-[#121214] border border-[#27272a] rounded-xl flex items-center justify-between">
+        <div className="p-3.5 bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.08] rounded-2xl flex items-center justify-between transition-all">
           <div>
-            <div className="text-[9.5px] sm:text-[10px] font-bold text-zinc-400 uppercase tracking-tight flex items-center gap-1.5">
-              <i className="fas fa-money-bill-wave text-rose-400 text-[10px]"></i>
+            <div className="text-[10.5px] font-semibold text-zinc-400 font-display flex items-center gap-1.5">
+              <i className="fas fa-money-bill-wave text-rose-400 text-[11px]"></i>
               <span>Tổng Đã Trừ</span>
             </div>
-            <div className="text-[14px] sm:text-[16px] font-black font-mono text-rose-400 mt-0.5">
+            <div className="text-[17px] sm:text-[20px] font-extrabold font-display text-rose-400 mt-0.5 tracking-tight">
               -{totalDeductedAmount.toLocaleString('vi-VN')}đ
             </div>
           </div>
-          <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 text-sm shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 text-base shrink-0">
             <i className="fas fa-hand-holding-usd"></i>
           </div>
         </div>
@@ -1176,27 +1176,26 @@ const DashboardTasksSection = React.memo(function DashboardTasksSection({ import
       
       {/* ==================== 0. KHUNG YÊU CẦU HOÀN TIỀN VẬT TƯ ==================== */}
       {isAdmin && reimbursements && reimbursements.length > 0 && (
-          <div className="bg-[#09090b] border border-[#27272a] rounded-xl p-4 shadow-sm relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-1 h-full bg-rose-500"></div>
-            <div className="flex items-center gap-2 border-b border-[#27272a] pb-3 mb-4">
-              <div className="w-6 h-6 rounded-md bg-rose-500/10 border border-rose-500/20 flex items-center justify-center">
-                <i className="fas fa-receipt text-rose-500 text-[11px]"></i>
+          <div className="vision-card p-4 sm:p-5 mb-4 relative overflow-hidden">
+            <div className="flex items-center gap-2 border-b border-white/[0.08] pb-3 mb-4">
+              <div className="w-8 h-8 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                <i className="fas fa-receipt text-[12px]"></i>
               </div>
-              <span className="font-black text-[12px] text-zinc-100 uppercase tracking-widest">Yêu Cầu Hoàn Tiền Vật Tư ({reimbursements.length})</span>
+              <span className="font-display font-extrabold text-[15px] sm:text-[17px] text-white tracking-tight">Yêu Cầu Hoàn Tiền Vật Tư ({reimbursements.length})</span>
             </div>
             <div className="space-y-2">
               {reimbursements.map(rb => (
-                <div key={rb.id} className="p-3 bg-[#121214] border border-[#27272a] rounded-lg flex items-center justify-between gap-3 flex-wrap">
+                <div key={rb.id} className="p-3 bg-white/[0.04] border border-white/[0.08] rounded-xl flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex-1 min-w-0">
-                    <span className="font-bold text-[12px] text-zinc-100 block">{rb.reason || rb.name}</span>
-                    <span className="text-[10px] font-medium text-zinc-500 block mt-0.5">Người yêu cầu: <span className="text-rose-400 font-bold">{rb.staffName || rb.user}</span> - Số tiền: <span className="text-emerald-400 font-bold">{Number(rb.amount || 0).toLocaleString('vi-VN')}đ</span></span>
+                    <span className="font-bold text-[13px] text-white block">{rb.reason || rb.name}</span>
+                    <span className="text-[11px] font-medium text-zinc-400 block mt-0.5">Người yêu cầu: <span className="text-rose-400 font-bold">{rb.staffName || rb.user}</span> - Số tiền: <span className="text-emerald-400 font-bold font-mono">{Number(rb.amount || 0).toLocaleString('vi-VN')}đ</span></span>
                   </div>
                   <div className="flex gap-2">
                     <button 
                       onClick={() => {
                         window.dispatchEvent(new CustomEvent('openAdminApprovalModal', { detail: rb }));
                       }} 
-                      className="px-3 py-1.5 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white rounded text-[10px] font-bold uppercase tracking-wide flex items-center gap-1.5 cursor-pointer shadow-sm transition-all"
+                      className="px-3.5 py-1.5 bg-rose-500 hover:bg-rose-600 active:scale-95 text-white rounded-full text-[11px] font-bold uppercase tracking-wide flex items-center gap-1.5 cursor-pointer shadow-sm transition-all"
                     >
                       <i className="fas fa-money-check-alt"></i> Duyệt Chi
                     </button>
@@ -1784,52 +1783,413 @@ const DashboardTab = React.memo(function DashboardTab({ reimbursements = [], ord
     }
   };
 
+  // ==================== CÁC CHỈ SỐ ĐIỀU HÀNH & WORKBENCH SINH TỬ ====================
+  const isExecutive = isBoss || canSeeFinance || currentRole === 'TỐI CAO';
+
+  // 1. Dòng tiền lưu động khả dụng xưởng (Tầng 1 Treasury, loại trừ Vault dự trữ)
+  const operatingCash = React.useMemo(() => {
+    const accs = erpData?.Accounts || [];
+    return accs.filter(a => {
+      const name = String(a.accountName || a.name || '').toUpperCase();
+      return !name.includes('VAULT') && !name.includes('DỰ TRỮ') && !name.includes('689M') && !name.includes('ĐẦU TƯ');
+    }).reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+  }, [erpData?.Accounts]);
+
+  // 2. Chi phí OPEX bình quân ngày (Daily Burn Rate)
+  const dailyBurnRate = React.useMemo(() => {
+    const txs = erpData?.Transactions || [];
+    const now = new Date();
+    const thisMonth = now.toISOString().slice(0, 7);
+    const monthOpex = txs
+      .filter(t => String(t.type || '').toUpperCase() === 'EXPENSE' && String(t.date || '').startsWith(thisMonth))
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    return monthOpex > 0 ? Math.round(monthOpex / Math.max(1, now.getDate())) : 2200000;
+  }, [erpData?.Transactions]);
+
+  // 3. Số ngày cầm cự (Cash Runway)
+  const cashRunwayDays = React.useMemo(() => {
+    if (dailyBurnRate <= 0) return 999;
+    return Math.floor(operatingCash / dailyBurnRate);
+  }, [operatingCash, dailyBurnRate]);
+
+  // 4. Áp lực SLA theo ca: Đơn chưa hoàn thành có deadline trong ngày hôm nay hoặc trễ
+  const urgentSlaOrders = React.useMemo(() => {
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+    return (orders || []).filter(o => {
+      const st = String(o.status || '').trim().toUpperCase();
+      if (['ĐÃ BÀN GIAO', 'ĐỐI SOÁT THÀNH CÔNG', 'ĐƠN HUỶ', 'HOÀN THÀNH', 'DELIVERED'].includes(st)) return false;
+      if (!o.deadline) return false;
+      const d = new Date(o.deadline);
+      return !isNaN(d.getTime()) && d <= todayEnd;
+    });
+  }, [orders]);
+
+  // 5. Hàng hoàn chờ kiểm định vật lý (Reverse Logistics)
+  const pendingReturns = React.useMemo(() => {
+    return (orders || []).filter(o => {
+      const st = String(o.status || '').trim().toUpperCase();
+      return st === 'HÀNG HOÀN' || st === 'RETURNED' || st.includes('HOÀN');
+    });
+  }, [orders]);
+
+  // 6. Số lượng lệnh sản xuất đang chạy
+  const activeProductionCount = React.useMemo(() => {
+    return (prodItems || []).filter(p => !['DONE', 'ĐÃ XONG', 'HOÀN THÀNH'].includes(String(p.status || '').toUpperCase())).length;
+  }, [prodItems]);
+
+  // 7. SKU chạm đáy tồn kho (dưới mức minStock)
+  const lowStockCount = React.useMemo(() => {
+    return (erpProducts || erpData?.Products || []).filter(p => Number(p.quantity) <= Number(p.minStock || 5)).length;
+  }, [erpProducts, erpData?.Products]);
+
+  // 8. Dữ liệu cá nhân cho Workbench thợ xưởng
+  const myAttendance = React.useMemo(() => {
+    return rosterAndAttendance.staffRoster.find(s => s.name === currentUser);
+  }, [rosterAndAttendance.staffRoster, currentUser]);
+
+  const myActiveTasks = React.useMemo(() => {
+    if (!currentUser) return [];
+    const isHuong = currentUser.toLowerCase().includes('hương');
+    if (isHuong) {
+      return (orders || []).filter(o => {
+        const st = String(o.status || '').toUpperCase();
+        return ['SẴN SÀNG ĐÓNG GÓI', 'READY_TO_PACK', 'CHỜ ĐÓNG GÓI'].includes(st);
+      }).map(o => ({ id: o.id, code: o.orderCode || o.id, type: 'ĐÓNG GÓI', title: `Đóng gói đơn ${o.orderCode || o.id}`, deadline: o.deadline }));
+    }
+    return (prodItems || []).filter(item => {
+      const p1User = item.phases?.phase1?.user || item.p1_user;
+      const p1Status = String(item.phases?.phase1?.status || item.p1_status || '').toUpperCase();
+      const p2User = item.phases?.phase2?.user || item.p2_user;
+      const p2Status = String(item.phases?.phase2?.status || item.p2_status || '').toUpperCase();
+      const isMyP1 = p1User === currentUser && p1Status !== 'DONE' && p1Status !== 'ĐÃ XONG';
+      const isMyP2 = p2User === currentUser && p2Status !== 'DONE' && p2Status !== 'ĐÃ XONG';
+      return isMyP1 || isMyP2;
+    }).map(item => ({ id: item.id, code: item.orderId || item.id, type: 'SẢN XUẤT', title: item.name || 'Gia công bể/layout', deadline: item.deadline }));
+  }, [currentUser, prodItems, orders]);
+
+  const myDoneTodayCount = React.useMemo(() => {
+    if (!currentUser) return 0;
+    let count = 0;
+    (prodItems || []).forEach(item => {
+      const p1End = item.phases?.phase1?.endTime || item.p1_endTime;
+      const p2End = item.phases?.phase2?.endTime || item.p2_endTime;
+      if (item.phases?.phase1?.user === currentUser && p1End && String(p1End).includes(todayStr)) count++;
+      if (item.phases?.phase2?.user === currentUser && p2End && String(p2End).includes(todayStr)) count++;
+    });
+    (packings || []).forEach(pk => {
+      if (pk.user === currentUser && pk.status === 'Done' && pk.endTime && String(pk.endTime).includes(todayStr)) count++;
+    });
+    return count;
+  }, [currentUser, prodItems, packings, todayStr]);
+
+  const myRewardToday = React.useMemo(() => {
+    if (!currentUser) return 0;
+    let sum = 0;
+    (prodItems || []).forEach(item => {
+      const p1End = item.phases?.phase1?.endTime || item.p1_endTime;
+      const p2End = item.phases?.phase2?.endTime || item.p2_endTime;
+      if (item.phases?.phase1?.user === currentUser && p1End && String(p1End).includes(todayStr)) {
+        sum += Number(item.phases?.phase1?.reward_vnd || item.p1_reward_vnd) || 0;
+      }
+      if (item.phases?.phase2?.user === currentUser && p2End && String(p2End).includes(todayStr)) {
+        sum += Number(item.phases?.phase2?.reward_vnd || item.p2_reward_vnd) || 0;
+      }
+    });
+    (packings || []).forEach(pk => {
+      if (pk.user === currentUser && pk.status === 'Done' && pk.endTime && String(pk.endTime).includes(todayStr)) {
+        sum += Number(pk.reward_vnd) || 0;
+      }
+    });
+    return sum;
+  }, [currentUser, prodItems, packings, todayStr]);
+
+  // 9. Danh sách việc cần xử lý ngay (Top Critical Actions)
+  const criticalActionItems = React.useMemo(() => {
+    const list = [];
+    urgentSlaOrders.slice(0, 3).forEach(o => {
+      list.push({
+        id: 'SLA_' + o.id,
+        tag: 'SLA GẤP',
+        tagColor: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
+        title: `Đơn ${o.orderCode || o.id} - ${o.customer || 'Khách TMĐT'}`,
+        sub: `Hạn giao: ${o.deadline ? String(o.deadline).slice(0,16) : 'Hôm nay'}`,
+        actionText: 'Mở Đơn',
+        onAction: () => window.dispatchEvent(new CustomEvent('globalNavigateAndTrigger', { detail: { tab: 'orders', trigger: 'filterSla' } }))
+      });
+    });
+    pendingReturns.slice(0, 2).forEach(o => {
+      list.push({
+        id: 'RET_' + o.id,
+        tag: 'HÀNG HOÀN',
+        tagColor: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+        title: `Kiện hàng ${o.orderCode || o.id} cần rạch thùng kiểm tra`,
+        sub: `Kênh: ${o.channel || 'Sàn TMĐT'}`,
+        actionText: 'Kiểm Định',
+        onAction: () => window.dispatchEvent(new CustomEvent('globalNavigateAndTrigger', { detail: { tab: 'inventory', trigger: 'filterReturns' } }))
+      });
+    });
+    return list;
+  }, [urgentSlaOrders, pendingReturns]);
+
   return (
-    <div className="space-y-4 sm:space-y-5 pb-4 sm:pb-6 w-full relative">
+    <div className="space-y-4 sm:space-y-5 pb-6 w-full relative bg-[#09090b] text-zinc-100 font-sans">
       
-      {/* HEADER: ĐỒNG HỒ & TIÊU ĐỀ (TRÊN CÙNG) */}
-      <div className="flex items-center justify-between border-b border-[#222] pb-3">
+      {/* 1. HEADER: TIÊU ĐỀ & ĐỒNG HỒ REALTIME PHẲNG */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-white/[0.06] pb-3.5">
         <div>
-          <h1 className="text-[22px] sm:text-[24px] font-black text-white tracking-wide">Tổng Quan</h1>
-          <p className="text-[#34d399] text-[11px] font-bold flex items-center gap-1.5 mt-0.5 font-mono">
-              <i className="fas fa-clock text-[10px] animate-pulse"></i>
-              <RealtimeClock />
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight uppercase">
+              {isExecutive ? 'Bảng Điều Hành Tổng Quan' : 'Bàn Làm Việc Cá Nhân'}
+            </h1>
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-white/[0.04] border border-white/[0.08] text-zinc-400 font-semibold">
+              v3.0 Executive
+            </span>
+          </div>
+          <p className="text-zinc-500 text-[11px] font-medium flex items-center gap-1.5 mt-0.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            <span>Hệ Thống Quản Trị Vận Hành • Xưởng Rich Fish</span>
           </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <div className="text-zinc-200 text-xs font-semibold font-mono flex items-center gap-1.5 justify-end">
+              <i className="fas fa-clock text-[10px] text-zinc-400"></i>
+              <RealtimeClock />
+            </div>
+            <div className="text-zinc-500 text-[10px] font-mono">
+              Ca trực: <strong className="text-zinc-300">{activeShift || 'Ngoài ca'}</strong>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* THÔNG BÁO TỪ BAN QUẢN LÝ (BOSS) */}
+      {/* 2. LIVE SYSTEM TICKER (1 DÒNG CẢNH BÁO NÓNG TRÊN CÙNG) */}
+      <div className="bg-[#121214] border border-white/[0.06] rounded-xl px-3.5 py-2 flex items-center justify-between gap-3 overflow-hidden shadow-sm">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0"></span>
+          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 shrink-0 font-mono">
+            Hệ Thống
+          </span>
+          <div className="text-[11px] font-medium text-zinc-300 truncate flex items-center gap-4">
+            {urgentSlaOrders.length > 0 ? (
+              <span className="text-rose-300 flex items-center gap-1">
+                <i className="fas fa-exclamation-circle text-rose-400 text-[10px]"></i>
+                <span>Cảnh báo: Có <strong>{urgentSlaOrders.length}</strong> đơn sắp trễ hạn giao vận!</span>
+              </span>
+            ) : null}
+            {pendingReturns.length > 0 ? (
+              <span className="text-amber-300 flex items-center gap-1">
+                <i className="fas fa-box-open text-amber-400 text-[10px]"></i>
+                <span>Có <strong>{pendingReturns.length}</strong> kiện hàng hoàn chờ kiểm tra thực tế.</span>
+              </span>
+            ) : null}
+            {lowStockCount > 0 ? (
+              <span className="text-sky-300 flex items-center gap-1">
+                <i className="fas fa-layer-group text-sky-400 text-[10px]"></i>
+                <span>Có <strong>{lowStockCount}</strong> mã vật tư chạm ngưỡng an toàn.</span>
+              </span>
+            ) : null}
+            {urgentSlaOrders.length === 0 && pendingReturns.length === 0 && lowStockCount === 0 && (
+              <span className="text-emerald-400 flex items-center gap-1 font-mono">
+                <i className="fas fa-check text-[10px]"></i>
+                Toàn bộ dây chuyền vận hành ổn định. Không có điểm nghẽn.
+              </span>
+            )}
+          </div>
+        </div>
+        <button 
+          onClick={() => window.location.reload()}
+          title="Làm mới dữ liệu"
+          className="text-zinc-500 hover:text-zinc-300 text-[10px] shrink-0 font-mono transition-colors"
+        >
+          <i className="fas fa-sync-alt text-[9px]"></i> Sync
+        </button>
+      </div>
+
+      {/* 3. ADAPTIVE METRIC CARDS (4 THẺ ĐIỀU HÀNH HOẶC WORKBENCH) */}
+      {isExecutive ? (
+        /* EXECUTIVE COCKPIT: VỐN KHẢ DỤNG - RUNWAY - ÁP LỰC SLA - NHỊP SẢN XUẤT */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Card 1: Vốn lưu động khả dụng */}
+          <div className="bg-[#121214] border border-white/[0.06] rounded-xl p-4 flex flex-col justify-between relative overflow-hidden">
+            <div>
+              <div className="flex items-center justify-between text-[11px] font-bold uppercase text-zinc-400 tracking-wider mb-1.5">
+                <span>Vốn Khả Dụng Vận Hành</span>
+                <span className="text-zinc-300 bg-zinc-900 px-2 py-0.5 rounded text-[10px] font-mono border border-white/[0.06]">Ngắn Hạn</span>
+              </div>
+              <div className="text-2xl font-bold text-white font-mono tracking-tight">
+                {operatingCash.toLocaleString('vi-VN')} đ
+              </div>
+            </div>
+            <div className="mt-3 pt-2.5 border-t border-white/[0.04] flex items-center justify-between text-[11px] font-mono text-zinc-500">
+              <span>Quỹ Dự Trữ:</span>
+              <span className="text-zinc-300 font-semibold">689.000.000 đ</span>
+            </div>
+          </div>
+
+          {/* Card 2: Số ngày cầm cự (Runway) */}
+          <div className="bg-[#121214] border border-white/[0.06] rounded-xl p-4 flex flex-col justify-between relative overflow-hidden">
+            <div>
+              <div className="flex items-center justify-between text-[11px] font-bold uppercase text-zinc-400 tracking-wider mb-1.5">
+                <span>Thời Gian Duy Trì (Runway)</span>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono border ${
+                  cashRunwayDays < 15 ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' :
+                  cashRunwayDays < 30 ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' :
+                  'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                }`}>
+                  {cashRunwayDays < 15 ? 'Báo Động' : cashRunwayDays < 30 ? 'Lưu Ý' : 'An Toàn'}
+                </span>
+              </div>
+              <div className="text-2xl font-bold text-white font-mono tracking-tight">
+                {cashRunwayDays} <span className="text-xs text-zinc-400 font-normal">ngày</span>
+              </div>
+            </div>
+            <div className="mt-3 pt-2.5 border-t border-white/[0.04] flex items-center justify-between text-[11px] font-mono text-zinc-500">
+              <span>Chi phí TB / ngày:</span>
+              <span className="text-zinc-300 font-semibold">~{(dailyBurnRate / 1000000).toFixed(1)}M đ</span>
+            </div>
+          </div>
+
+          {/* Card 3: Áp lực SLA theo ca */}
+          <div className="bg-[#121214] border border-white/[0.06] rounded-xl p-4 flex flex-col justify-between relative overflow-hidden">
+            <div>
+              <div className="flex items-center justify-between text-[11px] font-bold uppercase text-zinc-400 tracking-wider mb-1.5">
+                <span>Áp Lực Giao Hàng Ca</span>
+                <span className="text-zinc-300 bg-zinc-900 px-2 py-0.5 rounded text-[10px] font-mono border border-white/[0.06]">Tiến Độ</span>
+              </div>
+              <div className="text-2xl font-bold text-white font-mono tracking-tight">
+                {urgentSlaOrders.length} <span className="text-xs text-zinc-400 font-normal">đơn đến hạn</span>
+              </div>
+            </div>
+            <div className="mt-3 pt-2.5 border-t border-white/[0.04] flex items-center justify-between text-[11px] font-mono text-zinc-500">
+              <span>Hàng hoàn chờ kiểm:</span>
+              <span className="text-amber-400 font-semibold">{pendingReturns.length} kiện</span>
+            </div>
+          </div>
+
+          {/* Card 4: Nhịp sản xuất & tồn kho */}
+          <div className="bg-[#121214] border border-white/[0.06] rounded-xl p-4 flex flex-col justify-between relative overflow-hidden">
+            <div>
+              <div className="flex items-center justify-between text-[11px] font-bold uppercase text-zinc-400 tracking-wider mb-1.5">
+                <span>Tiến Độ Xưởng & Tồn Kho</span>
+                <span className="text-zinc-300 bg-zinc-900 px-2 py-0.5 rounded text-[10px] font-mono border border-white/[0.06]">Vận Hành</span>
+              </div>
+              <div className="text-2xl font-bold text-white font-mono tracking-tight">
+                {activeProductionCount} <span className="text-xs text-zinc-400 font-normal">lệnh đang chạy</span>
+              </div>
+            </div>
+            <div className="mt-3 pt-2.5 border-t border-white/[0.04] flex items-center justify-between text-[11px] font-mono text-zinc-500">
+              <span>SKU cạn kho:</span>
+              <span className="text-rose-400 font-semibold">{lowStockCount} vật tư</span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* PERSONAL WORKBENCH: CA TRỰC - VIỆC CẦN LÀM - KCS ĐẠT CHUẨN - THƯỞNG HÔM NAY */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Card 1: Ca làm việc & Chấm công */}
+          <div className="bg-[#121214] border border-white/[0.06] rounded-xl p-3.5 flex flex-col justify-between relative overflow-hidden">
+            <div>
+              <div className="flex items-center justify-between text-[10px] font-black uppercase text-zinc-400 tracking-wider mb-1">
+                <span>Ca Làm Việc Hôm Nay</span>
+                <span className="text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded text-[9px] font-mono">
+                  {myAttendance?.status === 'WORKING' ? 'ĐANG LÀM' : myAttendance?.status === 'CHECKED_OUT' ? 'ĐÃ RA CA' : 'CHƯA CHECK-IN'}
+                </span>
+              </div>
+              <div className="text-lg sm:text-xl font-black text-white font-mono">
+                Ca {activeShift || 'Chuẩn'}
+              </div>
+            </div>
+            <div className="mt-2 pt-2 border-t border-white/[0.04] flex items-center justify-between text-[10.5px] font-mono text-zinc-400">
+              <span>Vào: <strong className="text-emerald-400">{myAttendance?.inTime || '--:--'}</strong></span>
+              <span>Ra: <strong className="text-amber-400">{myAttendance?.outTime || '--:--'}</strong></span>
+            </div>
+          </div>
+
+          {/* Card 2: Việc được phân công đang chờ */}
+          <div className="bg-[#121214] border border-white/[0.06] rounded-xl p-3.5 flex flex-col justify-between relative overflow-hidden">
+            <div>
+              <div className="flex items-center justify-between text-[10px] font-black uppercase text-zinc-400 tracking-wider mb-1">
+                <span>Việc Đang Phân Công</span>
+                <span className="text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded text-[9px] font-mono">CẦN LÀM</span>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-white font-mono tracking-tight">
+                {myActiveTasks.length} <span className="text-xs text-zinc-400 font-normal">bể/đơn</span>
+              </div>
+            </div>
+            <div className="mt-2 pt-2 border-t border-white/[0.04] text-[10.5px] font-mono text-zinc-500 truncate">
+              {myActiveTasks.length > 0 ? myActiveTasks[0].title : 'Đã hoàn thành hết việc được giao'}
+            </div>
+          </div>
+
+          {/* Card 3: Sản phẩm hoàn thành hôm nay */}
+          <div className="bg-[#121214] border border-white/[0.06] rounded-xl p-3.5 flex flex-col justify-between relative overflow-hidden">
+            <div>
+              <div className="flex items-center justify-between text-[10px] font-black uppercase text-zinc-400 tracking-wider mb-1">
+                <span>KCS & Đã Xong Hôm Nay</span>
+                <span className="text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded text-[9px] font-mono">ĐẠT CHUẨN</span>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-white font-mono tracking-tight">
+                {myDoneTodayCount} <span className="text-xs text-zinc-400 font-normal">sản phẩm</span>
+              </div>
+            </div>
+            <div className="mt-2 pt-2 border-t border-white/[0.04] text-[10.5px] font-mono text-emerald-400">
+              100% không lỗi trả về
+            </div>
+          </div>
+
+          {/* Card 4: Thưởng ca tạm tính hôm nay */}
+          <div className="bg-[#121214] border border-white/[0.06] rounded-xl p-3.5 flex flex-col justify-between relative overflow-hidden">
+            <div>
+              <div className="flex items-center justify-between text-[10px] font-black uppercase text-zinc-400 tracking-wider mb-1">
+                <span>Thưởng Tạm Tính Hôm Nay</span>
+                <span className="text-[#d4af37] bg-[#d4af37]/10 px-1.5 py-0.5 rounded text-[9px] font-mono">TÍCH LŨY</span>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-[#d4af37] font-mono tracking-tight">
+                +{myRewardToday.toLocaleString('vi-VN')} đ
+              </div>
+            </div>
+            <div className="mt-2 pt-2 border-t border-white/[0.04] text-[10.5px] font-mono text-zinc-500">
+              Cộng trực tiếp vào bảng lương tháng
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. LOA PHÁT THANH NỘI BỘ (TỪ BOSS) */}
       {(!isEditingNotice && (!displayNotice || displayNotice === 'Chưa có thông báo nội bộ nào.')) ? (
-        <div className="bg-[#121216] border border-white/[0.08] rounded-2xl px-4 py-2.5 flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-2.5 text-zinc-400 text-xs font-bold">
+        <div className="bg-[#121214] border border-white/[0.06] rounded-xl px-4 py-2.5 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2.5 text-zinc-400 text-xs font-medium">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span className="text-zinc-300">Toàn bộ xưởng đang vận hành ổn định</span>
+            <span className="text-zinc-300">Toàn bộ xưởng đang vận hành nhịp nhàng theo tiến độ chuẩn.</span>
           </div>
           {isBoss && (
             <button 
               onClick={handleEditClick} 
-              className="text-[10px] font-black text-[#d4af37] hover:text-amber-300 bg-[#d4af37]/10 px-2.5 py-1 rounded-lg border border-[#d4af37]/25 transition-all flex items-center gap-1.5 uppercase cursor-pointer active:scale-95"
+              className="text-[10px] font-black text-[#d4af37] hover:text-amber-300 bg-[#d4af37]/10 px-2.5 py-1 rounded border border-[#d4af37]/20 transition-all flex items-center gap-1.5 uppercase cursor-pointer active:scale-95"
             >
               <i className="fas fa-bullhorn"></i> Phát loa
             </button>
           )}
         </div>
       ) : (
-        <div className="bg-[#121216] border border-amber-500/30 rounded-2xl p-4 sm:p-5 relative overflow-hidden shadow-sm group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-[#d4af37]/5 rounded-full blur-[50px] -mr-10 -mt-10 pointer-events-none"></div>
-          <div className="flex items-center justify-between mb-3 relative z-10">
+        <div className="bg-[#121214] border border-amber-500/20 rounded-xl p-4 relative overflow-hidden shadow-sm">
+          <div className="flex items-center justify-between mb-2 relative z-10">
             <div className="flex items-center gap-2">
-              <span className="flex h-2.5 w-2.5 relative">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+              <span className="flex h-2 w-2 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
               </span>
-              <span className="font-black text-[11px] text-[#d4af37] uppercase tracking-widest flex items-center gap-1.5"><i className="fas fa-bullhorn"></i> Loa Phát Thanh Nội Bộ</span>
+              <span className="font-black text-[11px] text-[#d4af37] uppercase tracking-widest flex items-center gap-1.5">
+                <i className="fas fa-bullhorn"></i> Loa Phát Thanh Nội Bộ
+              </span>
             </div>
             
             {isBoss && !isEditingNotice && (
               <button 
                 onClick={handleEditClick} 
-                className="text-[10px] font-bold text-[#d4af37] bg-transparent hover:bg-[#d4af37]/10 px-3 py-1 rounded-lg border border-[#d4af37]/30 transition-all flex items-center gap-1.5 uppercase tracking-wide cursor-pointer active:scale-95"
+                className="text-[10px] font-bold text-[#d4af37] hover:bg-[#d4af37]/10 px-2.5 py-0.5 rounded border border-[#d4af37]/25 transition-all flex items-center gap-1.5 uppercase tracking-wide cursor-pointer active:scale-95"
               >
                 <i className="fas fa-edit"></i> Sửa tin
               </button>
@@ -1837,315 +2197,348 @@ const DashboardTab = React.memo(function DashboardTab({ reimbursements = [], ord
           </div>
 
           {isEditingNotice ? (
-            <div className="space-y-3 animate-fade-in relative z-10">
+            <div className="space-y-3 relative z-10">
               <textarea
                 value={tempNotice}
                 onChange={(e) => setTempNotice(e.target.value)}
-                className="w-full bg-[#09090b] border border-[#27272a] focus:border-[#d4af37]/50 text-zinc-100 text-[13px] rounded-xl p-3.5 outline-none min-h-[90px] custom-scrollbar font-medium transition-colors"
+                className="w-full bg-[#09090b] border border-white/[0.08] focus:border-[#d4af37]/50 text-zinc-100 text-[13px] rounded-lg p-3 outline-none min-h-[80px] custom-scrollbar font-medium transition-colors"
                 placeholder="Nhập thông báo truyền đi toàn xưởng..."
               />
-              <div className="flex items-center justify-end gap-2 border-t border-white/[0.08] pt-2.5">
-                <button onClick={() => setIsEditingNotice(false)} className="px-3.5 py-1.5 rounded-lg text-[10px] font-bold text-zinc-400 hover:bg-[#27272a] transition-colors uppercase tracking-wide cursor-pointer">Hủy</button>
-                <button onClick={handleSaveNotice} className="px-4 py-1.5 rounded-lg text-[10px] font-black text-[#09090b] bg-gradient-to-r from-[#d4af37] to-[#f0ca5e] hover:brightness-110 transition-all uppercase tracking-wide flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95">
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button onClick={() => setIsEditingNotice(false)} className="px-3 py-1 rounded text-[10px] font-bold text-zinc-400 hover:bg-[#27272a] transition-colors uppercase tracking-wide cursor-pointer">Hủy</button>
+                <button onClick={handleSaveNotice} className="px-3.5 py-1 rounded text-[10px] font-black text-[#09090b] bg-[#d4af37] hover:brightness-110 transition-all uppercase tracking-wide flex items-center gap-1.5 shadow-sm cursor-pointer active:scale-95">
                   <i className="fas fa-paper-plane"></i> Phát loa ngay
                 </button>
               </div>
             </div>
           ) : (
-            <div className="text-[13px] text-zinc-200 leading-relaxed whitespace-pre-wrap relative z-10 font-medium">
+            <div className="text-[12.5px] text-zinc-200 leading-relaxed whitespace-pre-wrap relative z-10 font-medium">
               {displayNotice}
             </div>
           )}
         </div>
       )}
 
-      {/* 🚀 BẢNG NHẮC VIỆC SẢN XUẤT & ĐÓNG GÓI THEO THỢ (TÂN, TÂM, DƯƠNG, HƯƠNG) */}
-      <ProductionStaffDispatchBoard 
-        prodItems={prodItems || []}
-        orders={orders || []}
-        packings={packings || erpData?.Packings || []}
-        currentUser={currentUser}
-        isAdmin={isSuperAdmin}
-        isBoss={isBoss}
-        pushDeltas={pushDeltas}
-        triggerToast={triggerToast}
-        kpiConfig={typeof kpiConfig !== 'undefined' ? kpiConfig : []}
-        erpData={erpData || {}}
-      />
-
-      {/* QUICK ACTIONS FRAME 2.0 - HALLMARK BENTO */}
-      <div className="bg-[#101014] border border-white/[0.08] p-4 sm:p-5 rounded-2xl shadow-sm relative overflow-hidden group/container">
-          <div className="flex items-center justify-between mb-4 relative z-10 border-b border-white/[0.08] pb-3">
-              <div className="flex items-center gap-2 text-[11px] font-black text-zinc-300 uppercase tracking-widest">
-                  <i className="fas fa-th-large text-[#d4af37]"></i> Bảng Điều Khiển Nhanh
-              </div>
-              <div className="text-[9.5px] font-bold text-zinc-400 bg-white/[0.04] px-2.5 py-0.5 rounded-full border border-white/[0.08]">
-                  Trạm Trung Tâm
-              </div>
-          </div>
+      {/* 5. SPLIT GRID 60 / 40 (HAI CỘT NÉN PHẲNG THEO CHUẨN ROYAL WORKBENCH) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 items-start">
+        
+        {/* CỘT TRÁI (60% ~ lg:col-span-7): TÁC VỤ & ĐIỀU PHỐI XƯỞNG */}
+        <div className="lg:col-span-7 space-y-4">
           
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-9 gap-2 sm:gap-2.5 relative z-10">
-              
-              {/* Button 1: Lên Đơn Mới (Bán Lẻ) */}
+          {/* A. KHUNG VIỆC CẦN XỬ LÝ NGAY (COMPACT ROWS h-12) */}
+          <div className="bg-[#121214] border border-white/[0.06] rounded-xl p-3.5 shadow-sm">
+            <div className="flex items-center justify-between pb-2.5 border-b border-white/[0.06]">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center text-[10px]">
+                  <i className="fas fa-fire-alt animate-pulse"></i>
+                </div>
+                <span className="text-[11px] font-black text-white uppercase tracking-wider">
+                  Việc Cần Xử Lý Ngay ({criticalActionItems.length})
+                </span>
+              </div>
+              <span className="text-[10px] font-mono text-zinc-500">Độ ưu tiên P0</span>
+            </div>
+
+            <div className="divide-y divide-white/[0.04] mt-1">
+              {criticalActionItems.length === 0 ? (
+                <div className="h-12 flex items-center justify-center text-[11px] text-zinc-500 font-mono italic">
+                  Không có việc tồn đọng khẩn cấp.
+                </div>
+              ) : (
+                criticalActionItems.map(item => (
+                  <div key={item.id} className="h-12 flex items-center justify-between gap-2 px-1 hover:bg-white/[0.02] transition-colors rounded">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded font-mono border shrink-0 ${item.tagColor}`}>
+                        {item.tag}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-[11.5px] font-bold text-zinc-200 truncate">{item.title}</div>
+                        <div className="text-[9.5px] text-zinc-500 font-mono truncate">{item.sub}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={item.onAction}
+                      className="shrink-0 text-[10px] font-bold px-2.5 py-1 rounded bg-white/[0.06] hover:bg-white/[0.12] text-zinc-200 hover:text-white border border-white/[0.08] transition-colors cursor-pointer active:scale-95"
+                    >
+                      {item.actionText} <i className="fas fa-arrow-right text-[8px] ml-0.5"></i>
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* B. BẢNG ĐIỀU PHỐI THỢ SẢN XUẤT & ĐÓNG GÓI */}
+          <ProductionStaffDispatchBoard 
+            prodItems={prodItems || []}
+            orders={orders || []}
+            packings={packings || erpData?.Packings || []}
+            currentUser={currentUser}
+            isAdmin={isSuperAdmin}
+            isBoss={isBoss}
+            pushDeltas={pushDeltas}
+            triggerToast={triggerToast}
+            kpiConfig={typeof kpiConfig !== 'undefined' ? kpiConfig : []}
+            erpData={erpData || {}}
+          />
+
+          {/* C. KHUNG GIAO VIỆC / NHẮC VIỆC & NHIỆM VỤ CHUNG */}
+          <DashboardTasksSection 
+            importExport={(typeof importExport !== 'undefined' ? importExport : null) || erpData?.ImportExport || []}
+            currentUser={currentUser} 
+            pushDeltas={pushDeltas} 
+            triggerToast={triggerToast} 
+            isAdmin={isSuperAdmin} 
+            isBoss={isBoss}
+            userConfigs={userConfigs}
+            reimbursements={reimbursements}
+            products={(typeof erpProducts !== 'undefined' ? erpProducts : null) || erpData?.Products || []}
+          />
+
+          {/* D. BẢNG LỊCH SỬ BỊ TRỪ LƯƠNG TRONG THÁNG */}
+          <MonthlyPenaltyLedger 
+            bonusPenalty={erpData?.BonusPenalty || kpis || []}
+            attendance={attendance || []}
+            currentUser={currentUser}
+            isAdmin={isSuperAdmin}
+            isBoss={isBoss}
+            pushDeltas={pushDeltas}
+            triggerToast={triggerToast}
+            allStaffNames={allStaffNames || []}
+          />
+        </div>
+
+        {/* CỘT PHẢI (40% ~ lg:col-span-5): QUÂN SỐ TRỰC CA, PHÍM TẮT & NHẬT KÝ */}
+        <div className="lg:col-span-5 space-y-4">
+          
+          {/* A. ĐỘI NGŨ & CHẤM CÔNG HÔM NAY (QUÂN SỐ TRỰC CA) */}
+          <div className="vision-card p-4 sm:p-5 mb-4 shadow-sm">
+            <div className="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-white/[0.06] border border-white/10 text-sky-400 flex items-center justify-center text-[12px]">
+                  <i className="fas fa-users"></i>
+                </div>
+                <span className="font-display font-extrabold text-[15px] sm:text-[16px] text-white tracking-tight">
+                  Quân Số Trực Ca ({rosterAndAttendance.workingCount}/{allStaffNames.length})
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {rosterAndAttendance.unCheckedInCount > 0 ? (
+                  <span className="pill-ongoing">
+                    {rosterAndAttendance.unCheckedInCount} chưa vào
+                  </span>
+                ) : (
+                  <span className="pill-complete">
+                    Đủ quân số
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Grid nhân sự trực ca */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 py-2.5">
+              {rosterAndAttendance.staffRoster.filter(s => s.status !== 'LEAVE').map((st, i) => {
+                const isWorking = st.status === 'WORKING';
+                const isDone = st.status === 'CHECKED_OUT';
+                const isMissingIn = st.status === 'UNCHECKED_IN';
+
+                return (
+                  <div 
+                    key={i} 
+                    className={`p-2 rounded-lg border transition-colors flex flex-col justify-between ${
+                      isWorking ? 'bg-blue-500/5 border-blue-500/20' :
+                      isDone ? 'bg-emerald-500/5 border-emerald-500/20' :
+                      'bg-white/[0.02] border-white/[0.04] opacity-60'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[11px] font-bold text-zinc-200 truncate" title={st.name}>
+                        {st.name}
+                      </span>
+                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                        isWorking ? 'bg-emerald-400' :
+                        isDone ? 'bg-blue-400' :
+                        'bg-rose-500'
+                      }`}></span>
+                    </div>
+
+                    <div className="mt-1 flex items-center justify-between text-[9px] font-mono">
+                      {isMissingIn ? (
+                        <span className="text-rose-400 font-bold">Chưa vào</span>
+                      ) : (
+                        <>
+                          <span className="text-emerald-400 font-bold">V: {st.inTime}</span>
+                          <span className={st.outTime ? 'text-zinc-400' : 'text-amber-400'}>
+                            {st.outTime ? `R: ${st.outTime}` : 'Tại xưởng'}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Dòng xin nghỉ hôm nay */}
+            <div className="pt-2 border-t border-white/[0.04] flex items-center gap-1.5 flex-wrap text-[10.5px]">
+              <span className="font-bold text-zinc-500 flex items-center gap-1 shrink-0 font-mono text-[10px]">
+                <i className="fas fa-umbrella-beach text-sky-400"></i> Nghỉ phép:
+              </span>
+              {rosterAndAttendance.leaveList.length === 0 ? (
+                <span className="text-zinc-500 italic text-[10px]">Đi làm đủ 100%.</span>
+              ) : (
+                rosterAndAttendance.leaveList.map((st, idx) => (
+                  <span key={idx} className="bg-sky-500/10 text-sky-300 border border-sky-500/20 text-[9.5px] font-bold px-1.5 py-0.5 rounded">
+                    {st.name} ({st.reason})
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* B. BẢNG PHÍM TẮT ĐIỀU HÀNH 1-CHẠM (QUICK ACTIONS) */}
+          <div className="bg-[#121214] border border-white/[0.06] p-3.5 rounded-xl shadow-sm">
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/[0.06]">
+              <div className="flex items-center gap-2 text-[11px] font-black text-zinc-200 uppercase tracking-wider">
+                <i className="fas fa-bolt text-[#d4af37]"></i> Phím Tắt 1-Chạm
+              </div>
+              <span className="text-[9px] font-mono text-zinc-500">Bento Grid</span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {/* Button 1: Lên Đơn */}
               <button 
-                  onClick={() => window.dispatchEvent(new CustomEvent('globalNavigateAndTrigger', { detail: { tab: 'orders', trigger: 'triggerCreateOrder', data: { channel: 'Bán Lẻ' } } }))} 
-                  className="bg-gradient-to-b from-[#18181f] to-[#121215] hover:from-[#20202a] hover:to-[#16161c] p-3 rounded-2xl border border-white/[0.08] hover:border-emerald-500/50 flex flex-col items-center justify-center transition-all group active:scale-90 active:brightness-125 shadow-sm cursor-pointer"
-                  title="Lên đơn bán lẻ mới"
+                onClick={() => window.dispatchEvent(new CustomEvent('globalNavigateAndTrigger', { detail: { tab: 'orders', trigger: 'triggerCreateOrder', data: { channel: 'Bán Lẻ' } } }))} 
+                className="bg-white/[0.02] hover:bg-white/[0.06] p-2.5 rounded-xl border border-white/[0.06] hover:border-emerald-500/40 flex flex-col items-center justify-center transition-all group active:scale-95 cursor-pointer"
               >
-                  <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center text-base mb-1.5 group-hover:scale-110 shadow-[0_0_15px_rgba(16,185,129,0.15)] transition-transform"><i className="fas fa-cart-plus"></i></div>
-                  <span className="text-[10px] sm:text-[11px] font-black text-zinc-200 text-center uppercase tracking-wide group-hover:text-emerald-400 transition-colors">Lên Đơn</span>
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-sm mb-1 group-hover:scale-110 transition-transform"><i className="fas fa-cart-plus"></i></div>
+                <span className="text-[10px] font-bold text-zinc-300 group-hover:text-emerald-400">Lên Đơn</span>
               </button>
 
               {/* Button 2: Bảng Giá */}
               <button 
-                  onClick={() => window.dispatchEvent(new Event('openPriceListModal'))} 
-                  className="bg-gradient-to-b from-[#18181f] to-[#121215] hover:from-[#20202a] hover:to-[#16161c] p-3 rounded-2xl border border-white/[0.08] hover:border-amber-500/50 flex flex-col items-center justify-center transition-all group active:scale-90 active:brightness-125 shadow-sm cursor-pointer"
-                  title="Tra cứu bảng giá và tồn kho"
+                onClick={() => window.dispatchEvent(new CustomEvent('openGlassPriceModal'))} 
+                className="bg-white/[0.02] hover:bg-white/[0.06] p-2.5 rounded-xl border border-white/[0.06] hover:border-amber-500/40 flex flex-col items-center justify-center transition-all group active:scale-95 cursor-pointer"
               >
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center text-base mb-1.5 group-hover:scale-110 shadow-[0_0_15px_rgba(245,158,11,0.15)] transition-transform"><i className="fas fa-tags"></i></div>
-                  <span className="text-[10px] sm:text-[11px] font-black text-zinc-200 text-center uppercase tracking-wide group-hover:text-amber-400 transition-colors">Bảng Giá</span>
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center text-sm mb-1 group-hover:scale-110 transition-transform"><i className="fas fa-tags"></i></div>
+                <span className="text-[10px] font-bold text-zinc-300 group-hover:text-amber-400">Bảng Giá</span>
               </button>
 
-              {/* Button 3: Tính Giá Bể */}
+              {/* Button 3: Check Nợ */}
               <button 
-                  onClick={() => window.dispatchEvent(new Event('openTankPriceModal'))} 
-                  className="bg-gradient-to-b from-[#18181f] to-[#121215] hover:from-[#20202a] hover:to-[#16161c] p-3 rounded-2xl border border-white/[0.08] hover:border-sky-500/50 flex flex-col items-center justify-center transition-all group active:scale-90 active:brightness-125 shadow-sm cursor-pointer"
-                  title="Định giá bể kính theo kích thước"
+                onClick={() => window.dispatchEvent(new CustomEvent('globalNavigateAndTrigger', { detail: { tab: 'finance', trigger: 'openPartnersTab' } }))} 
+                className="bg-white/[0.02] hover:bg-white/[0.06] p-2.5 rounded-xl border border-white/[0.06] hover:border-rose-500/40 flex flex-col items-center justify-center transition-all group active:scale-95 cursor-pointer"
               >
-                  <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 text-sky-400 flex items-center justify-center text-base mb-1.5 group-hover:scale-110 shadow-[0_0_15px_rgba(14,165,233,0.15)] transition-transform"><i className="fas fa-box-open"></i></div>
-                  <span className="text-[10px] sm:text-[11px] font-black text-zinc-200 text-center uppercase tracking-wide group-hover:text-sky-400 transition-colors">Giá Bể</span>
+                <div className="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center text-sm mb-1 group-hover:scale-110 transition-transform"><i className="fas fa-hand-holding-usd"></i></div>
+                <span className="text-[10px] font-bold text-zinc-300 group-hover:text-rose-400">Sổ Nợ</span>
               </button>
 
-              {/* Button 4: Thanh Khoản (Hoàn Tiền Vật Tư) */}
+              {/* Button 4: Tra SKU */}
               <button 
-                  onClick={() => window.dispatchEvent(new Event('openStaffReimbursementModal'))} 
-                  className="bg-gradient-to-b from-[#18181f] to-[#121215] hover:from-[#20202a] hover:to-[#16161c] p-3 rounded-2xl border border-white/[0.08] hover:border-rose-500/50 flex flex-col items-center justify-center transition-all group active:scale-90 active:brightness-125 shadow-sm cursor-pointer"
-                  title="Đề nghị hoàn tiền mua hộ vật tư xưởng"
+                onClick={() => window.dispatchEvent(new CustomEvent('globalNavigateAndTrigger', { detail: { tab: 'inventory', trigger: 'focusSearch' } }))} 
+                className="bg-white/[0.02] hover:bg-white/[0.06] p-2.5 rounded-xl border border-white/[0.06] hover:border-indigo-500/40 flex flex-col items-center justify-center transition-all group active:scale-95 cursor-pointer"
               >
-                  <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center text-base mb-1.5 group-hover:scale-110 shadow-[0_0_15px_rgba(244,63,94,0.15)] transition-transform"><i className="fas fa-hand-holding-usd"></i></div>
-                  <span className="text-[10px] sm:text-[11px] font-black text-zinc-200 text-center uppercase tracking-wide group-hover:text-rose-400 transition-colors">Thanh Khoản</span>
+                <div className="w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-sm mb-1 group-hover:scale-110 transition-transform"><i className="fas fa-barcode"></i></div>
+                <span className="text-[10px] font-bold text-zinc-300 group-hover:text-indigo-400">Tra SKU</span>
               </button>
 
               {/* Button 5: Nhập Kho */}
               <button 
-                  onClick={() => {
-                      window.pendingAction = 'createImportTicket';
-                      window.dispatchEvent(new CustomEvent('globalNavigateAndTrigger', { detail: { tab: 'import_export', trigger: 'triggerCreateImportTicket', data: { type: 'NHAP' }, mode: 'ERP' } }));
-                  }} 
-                  className="bg-gradient-to-b from-[#18181f] to-[#121215] hover:from-[#20202a] hover:to-[#16161c] p-3 rounded-2xl border border-white/[0.08] hover:border-blue-500/50 flex flex-col items-center justify-center transition-all group active:scale-90 active:brightness-125 shadow-sm cursor-pointer"
-                  title="Tạo phiếu nhập kho vật tư / hàng hoá"
+                onClick={() => {
+                  window.pendingAction = 'createImportTicket';
+                  window.handleNavigateTab('inventory', 'WORKSPACE');
+                }} 
+                className="bg-white/[0.02] hover:bg-white/[0.06] p-2.5 rounded-xl border border-white/[0.06] hover:border-blue-500/40 flex flex-col items-center justify-center transition-all group active:scale-95 cursor-pointer"
               >
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 flex items-center justify-center text-base mb-1.5 group-hover:scale-110 shadow-[0_0_15px_rgba(59,130,246,0.15)] transition-transform"><i className="fas fa-boxes"></i></div>
-                  <span className="text-[10px] sm:text-[11px] font-black text-zinc-200 text-center uppercase tracking-wide group-hover:text-blue-400 transition-colors">Nhập Kho</span>
-              </button>
-              
-              {/* Button 6: Tính Giá Cước */}
-              <button 
-                  onClick={() => window.dispatchEvent(new CustomEvent('openFreightModal'))} 
-                  className="bg-gradient-to-b from-[#18181f] to-[#121215] hover:from-[#20202a] hover:to-[#16161c] p-3 rounded-2xl border border-white/[0.08] hover:border-purple-500/50 flex flex-col items-center justify-center transition-all group active:scale-90 active:brightness-125 shadow-sm cursor-pointer"
-                  title="Tính cước phí vận chuyển"
-              >
-                  <div className="w-10 h-10 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-400 flex items-center justify-center text-base mb-1.5 group-hover:scale-110 shadow-[0_0_15px_rgba(168,85,247,0.15)] transition-transform"><i className="fas fa-truck-moving"></i></div>
-                  <span className="text-[10px] sm:text-[11px] font-black text-zinc-200 text-center uppercase tracking-wide group-hover:text-purple-400 transition-colors">Tính Cước</span>
+                <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center text-sm mb-1 group-hover:scale-110 transition-transform"><i className="fas fa-boxes"></i></div>
+                <span className="text-[10px] font-bold text-zinc-300 group-hover:text-blue-400">Nhập Kho</span>
               </button>
 
-              {/* Button 7: Chi Tiền Xưởng (Mở ngay tại Dashboard) */}
+              {/* Button 6: Tính Cước */}
               <button 
-                  onClick={() => window.dispatchEvent(new Event('openQuickExpenseModal'))} 
-                  className="bg-gradient-to-b from-[#18181f] to-[#121215] hover:from-[#20202a] hover:to-[#16161c] p-3 rounded-2xl border border-white/[0.08] hover:border-cyan-500/50 flex flex-col items-center justify-center transition-all group active:scale-90 active:brightness-125 shadow-sm cursor-pointer"
-                  title="Lập phiếu chi tiền xưởng nhanh"
+                onClick={() => window.dispatchEvent(new CustomEvent('openFreightModal'))} 
+                className="bg-white/[0.02] hover:bg-white/[0.06] p-2.5 rounded-xl border border-white/[0.06] hover:border-purple-500/40 flex flex-col items-center justify-center transition-all group active:scale-95 cursor-pointer"
               >
-                  <div className="w-10 h-10 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 flex items-center justify-center text-base mb-1.5 group-hover:scale-110 shadow-[0_0_15px_rgba(6,182,212,0.15)] transition-transform"><i className="fas fa-file-invoice-dollar"></i></div>
-                  <span className="text-[10px] sm:text-[11px] font-black text-zinc-200 text-center uppercase tracking-wide group-hover:text-cyan-400 transition-colors">Chi Tiền</span>
+                <div className="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center text-sm mb-1 group-hover:scale-110 transition-transform"><i className="fas fa-truck-moving"></i></div>
+                <span className="text-[10px] font-bold text-zinc-300 group-hover:text-purple-400">Tính Cước</span>
+              </button>
+
+              {/* Button 7: Chi Tiền */}
+              <button 
+                onClick={() => window.dispatchEvent(new Event('openQuickExpenseModal'))} 
+                className="bg-white/[0.02] hover:bg-white/[0.06] p-2.5 rounded-xl border border-white/[0.06] hover:border-cyan-500/40 flex flex-col items-center justify-center transition-all group active:scale-95 cursor-pointer"
+              >
+                <div className="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center text-sm mb-1 group-hover:scale-110 transition-transform"><i className="fas fa-file-invoice-dollar"></i></div>
+                <span className="text-[10px] font-bold text-zinc-300 group-hover:text-cyan-400">Chi Tiền</span>
               </button>
 
               {/* Button 8: Giá Layout */}
               <button 
-                  onClick={() => window.dispatchEvent(new CustomEvent('openLayoutCalcModal'))} 
-                  className="bg-gradient-to-b from-[#18181f] to-[#121215] hover:from-[#20202a] hover:to-[#16161c] p-3 rounded-2xl border border-white/[0.08] hover:border-pink-500/50 flex flex-col items-center justify-center transition-all group active:scale-90 active:brightness-125 shadow-sm cursor-pointer"
-                  title="Định giá layout thuỷ sinh"
+                onClick={() => window.dispatchEvent(new CustomEvent('openLayoutCalcModal'))} 
+                className="bg-white/[0.02] hover:bg-white/[0.06] p-2.5 rounded-xl border border-white/[0.06] hover:border-pink-500/40 flex flex-col items-center justify-center transition-all group active:scale-95 cursor-pointer"
               >
-                  <div className="w-10 h-10 rounded-xl bg-pink-500/15 border border-pink-500/30 text-pink-400 flex items-center justify-center text-base mb-1.5 group-hover:scale-110 shadow-[0_0_15px_rgba(236,72,153,0.15)] transition-transform"><i className="fas fa-drafting-compass"></i></div>
-                  <span className="text-[10px] sm:text-[11px] font-black text-zinc-200 text-center uppercase tracking-wide group-hover:text-pink-400 transition-colors">Giá Layout</span>
+                <div className="w-8 h-8 rounded-lg bg-pink-500/10 text-pink-400 flex items-center justify-center text-sm mb-1 group-hover:scale-110 transition-transform"><i className="fas fa-drafting-compass"></i></div>
+                <span className="text-[10px] font-bold text-zinc-300 group-hover:text-pink-400">Giá Layout</span>
               </button>
 
-              {/* Button 9: Phạt Nhanh (Ghi phạt trực tiếp vào bảng lương) */}
+              {/* Button 9: Phạt Nhanh */}
               <button 
-                  onClick={() => window.dispatchEvent(new Event('openQuickPenaltyModal'))} 
-                  className="bg-gradient-to-b from-[#18181f] to-[#121215] hover:from-[#20202a] hover:to-[#16161c] p-3 rounded-2xl border border-rose-900/40 hover:border-rose-500/60 flex flex-col items-center justify-center transition-all group active:scale-90 active:brightness-125 shadow-sm cursor-pointer"
-                  title="Phạt vi phạm nhanh ghi nhận trực tiếp vào bảng lương"
+                onClick={() => window.dispatchEvent(new Event('openQuickPenaltyModal'))} 
+                className="bg-white/[0.02] hover:bg-white/[0.06] p-2.5 rounded-xl border border-white/[0.06] hover:border-rose-500/40 flex flex-col items-center justify-center transition-all group active:scale-95 cursor-pointer"
               >
-                  <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center text-base mb-1.5 group-hover:scale-110 shadow-[0_0_15px_rgba(244,63,94,0.15)] transition-transform"><i className="fas fa-gavel"></i></div>
-                  <span className="text-[10px] sm:text-[11px] font-black text-rose-300 text-center uppercase tracking-wide group-hover:text-rose-400 transition-colors">Phạt Nhanh</span>
+                <div className="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center text-sm mb-1 group-hover:scale-110 transition-transform"><i className="fas fa-gavel"></i></div>
+                <span className="text-[10px] font-bold text-zinc-300 group-hover:text-rose-400">Phạt Nhanh</span>
               </button>
-
-          </div>
-      </div>
-
-      {/* 📋 BẢNG LỊCH SỬ BỊ TRỪ LƯƠNG TRONG THÁNG (CẬP NHẬT LIÊN TỤC) */}
-      <MonthlyPenaltyLedger 
-        bonusPenalty={erpData?.BonusPenalty || kpis || []}
-        attendance={attendance || []}
-        currentUser={currentUser}
-        isAdmin={isSuperAdmin}
-        isBoss={isBoss}
-        pushDeltas={pushDeltas}
-        triggerToast={triggerToast}
-        allStaffNames={allStaffNames || []}
-      />
-
-      {/* KHUNG GIAO VIỆC / NHẮC VIỆC & NHIỆM VỤ CHUNG */}
-      <DashboardTasksSection 
-          importExport={(typeof importExport !== 'undefined' ? importExport : null) || erpData?.ImportExport || []}
-          currentUser={currentUser} 
-          pushDeltas={pushDeltas} 
-          triggerToast={triggerToast} 
-          isAdmin={isSuperAdmin} 
-          isBoss={isBoss}
-          userConfigs={userConfigs}
-          reimbursements={reimbursements}
-          products={(typeof erpProducts !== 'undefined' ? erpProducts : null) || erpData?.Products || []}
-      />
-
-
-
-      {/* 👥 ĐỘI NGŨ & CHẤM CÔNG HÔM NAY (HỢP NHẤT SIÊU GỌN GÀNG) */}
-      <div className="bg-[#09090b] border border-[#27272a] rounded-xl p-3.5 sm:p-4 shadow-sm relative overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-2.5 border-b border-[#27272a]">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-md bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 text-[11px]">
-              <i className="fas fa-users"></i>
             </div>
-            <span className="font-black text-[12px] text-zinc-100 uppercase tracking-wider">
-              Đội Ngũ & Chấm Công Hôm Nay ({rosterAndAttendance.workingCount}/{allStaffNames.length})
-            </span>
           </div>
 
-          <div className="flex items-center gap-2 text-[10px] font-bold">
-            {rosterAndAttendance.unCheckedInCount > 0 && (
-              <span className="text-rose-400 bg-rose-950/40 px-2 py-0.5 rounded border border-rose-800/40">
-                {rosterAndAttendance.unCheckedInCount} chưa vào
-              </span>
-            )}
-            {rosterAndAttendance.unCheckedOutCount > 0 && (
-              <span className="text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-800/40">
-                {rosterAndAttendance.unCheckedOutCount} chưa ra
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Danh sách thẻ nhân sự: Họ tên, giờ vào, giờ ra */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 py-3">
-          {rosterAndAttendance.staffRoster.filter(s => s.status !== 'LEAVE').map((st, i) => {
-            const isWorking = st.status === 'WORKING';
-            const isDone = st.status === 'CHECKED_OUT';
-            const isMissingIn = st.status === 'UNCHECKED_IN';
-
-            return (
-              <div 
-                key={i} 
-                className={`flex flex-col justify-between p-2 rounded-lg border transition-colors ${
-                  isWorking ? 'bg-[#12141a] border-blue-500/30' :
-                  isDone ? 'bg-[#101412] border-emerald-500/20' :
-                  'bg-[#140f10] border-rose-900/30 opacity-70'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-1">
-                  <span className="text-[11px] font-bold text-zinc-200 truncate" title={st.name}>
-                    {st.name}
-                  </span>
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    isWorking ? 'bg-emerald-400' :
-                    isDone ? 'bg-blue-400' :
-                    'bg-rose-500'
-                  }`}></span>
-                </div>
-
-                <div className="mt-1 flex items-center justify-between text-[9.5px] font-mono">
-                  {isMissingIn ? (
-                    <span className="text-rose-400 font-bold">Chưa vào</span>
-                  ) : (
-                    <>
-                      <span className="text-emerald-400 font-bold" title="Giờ vào">
-                        V: {st.inTime}
-                      </span>
-                      <span className={st.outTime ? 'text-zinc-300 font-bold' : 'text-amber-400 font-bold'} title="Giờ ra">
-                        {st.outTime ? `R: ${st.outTime}` : 'Chưa ra'}
-                      </span>
-                    </>
-                  )}
-                </div>
+          {/* C. NHẬT KÝ HOẠT ĐỘNG GẦN ĐÂY */}
+          <div className="bg-[#121214] border border-white/[0.06] rounded-xl p-3.5 shadow-sm">
+            <div className="flex items-center justify-between gap-2 mb-3 pb-2 border-b border-white/[0.06]">
+              <div className="font-black text-[11px] text-zinc-200 uppercase tracking-wider flex items-center gap-1.5">
+                <i className="fas fa-list-ul text-zinc-400"></i>
+                Hoạt Động Gần Đây
               </div>
-            );
-          })}
-        </div>
-
-        {/* 1 DÒNG BÁO AI XIN NGHỈ HÔM NAY NGAY DƯỚI */}
-        <div className="pt-2.5 border-t border-[#1f1f23] flex items-center gap-2 flex-wrap text-[11px]">
-          <span className="font-bold text-zinc-400 flex items-center gap-1 shrink-0">
-            <i className="fas fa-umbrella-beach text-sky-400 text-[10px]"></i> Xin nghỉ hôm nay:
-          </span>
-          {rosterAndAttendance.leaveList.length === 0 ? (
-            <span className="text-zinc-500 italic text-[10.5px]">
-              Hôm nay không có nhân sự nào xin nghỉ (Đi làm đủ 100%).
-            </span>
-          ) : (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {rosterAndAttendance.leaveList.map((st, idx) => (
-                <span key={idx} className="bg-sky-950/40 text-sky-300 border border-sky-800/50 text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
-                  <span className="text-white">{st.name}</span>
-                  <span className="text-sky-400/90 text-[9px] font-normal">({st.reason})</span>
-                </span>
-              ))}
+              <select 
+                value={categoryFilter} 
+                onChange={(e) => setCategoryFilter(e.target.value)} 
+                className="bg-[#09090b] border border-white/[0.08] text-zinc-300 text-[9.5px] font-bold uppercase px-2 py-1 rounded outline-none cursor-pointer focus:border-[#d4af37]/50 transition-colors"
+              >
+                {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              </select>
             </div>
-          )}
-        </div>
-      </div>
 
-
-      {/* NHẬT KÝ HOẠT ĐỘNG GẦN ĐÂY */}
-      <div className="bg-[#09090b] border border-[#27272a] rounded-xl p-4 shadow-sm relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 border-b border-[#27272a] pb-3">
-          <div className="font-black text-[12px] text-zinc-100 uppercase tracking-widest flex items-center gap-2.5">
-            <div className="w-6 h-6 rounded-md bg-zinc-800 text-zinc-400 border border-[#27272a] flex items-center justify-center">
-                <i className="fas fa-list-ol text-[11px]"></i>
+            <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1 custom-scrollbar">
+              {filteredLogs.length === 0 ? (
+                <div className="text-center py-6 text-zinc-500 italic text-[11px] font-mono">Không có hoạt động nào</div>
+              ) : (
+                filteredLogs.slice(0, 30).map((log, index) => {
+                  const style = getCategoryStyle(log.category);
+                  return (
+                    <div key={index} className="flex items-start gap-2.5 bg-white/[0.02] border border-white/[0.04] rounded-lg p-2.5 hover:border-white/[0.08] transition-colors">
+                      <div className="mt-0.5 text-xs shrink-0" style={{ color: style.color }}>{style.icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[11px] text-zinc-200 font-medium leading-tight flex items-center gap-1.5 flex-wrap">
+                          <span>{log.message}</span>
+                          {log.amount > 0 && <span className="text-emerald-400 font-mono font-bold text-[9.5px]">+{canSeeMoney ? log.amount.toLocaleString('vi-VN') + 'đ' : '******đ'}</span>}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1 text-[9px] font-mono text-zinc-500">
+                          <span>{log.time?.split(' ')[1]?.slice(0,5) || log.time?.slice(11,16) || '--:--'}</span>
+                          {log.user && <span>• <strong className="text-zinc-400">{log.user}</strong></span>}
+                          <span>•</span>
+                          <span className={`px-1 rounded ${style.bg}`} style={{ color: style.color }}>{log.category}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
-            Hoạt động gần đây
           </div>
-          <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="bg-[#121214] border border-[#27272a] text-zinc-300 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded outline-none cursor-pointer focus:border-[#d4af37]/50 transition-colors">
-            {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-          </select>
-        </div>
 
-        <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-          {filteredLogs.length === 0 ? (
-            <div className="text-center py-8 text-zinc-500 italic text-[11px] font-bold bg-[#121214] rounded-lg border border-[#27272a] border-dashed">Không có hoạt động nào được ghi nhận</div>
-          ) : (
-            filteredLogs.slice(0, 50).map((log, index) => {
-              const style = getCategoryStyle(log.category);
-              return (
-                <div key={index} className="flex items-start gap-3.5 bg-[#121214] border border-[#27272a] rounded-lg px-3.5 py-3 transition-colors hover:border-[#3f3f46] group">
-                  <div className="mt-0.5 text-[14px] w-6 shrink-0 flex items-center justify-center" style={{ color: style.color }}>{style.icon}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[12px] text-zinc-200 font-bold leading-tight flex items-center gap-2 flex-wrap">
-                      {log.message}
-                      {log.amount > 0 && <span className="text-emerald-400 font-black text-[10px] bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20 whitespace-nowrap">+{canSeeMoney ? log.amount.toLocaleString('vi-VN') + 'đ' : '******đ'}</span>}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1.5 text-[10px] font-medium text-zinc-500">
-                      <span className="font-mono bg-[#121214] px-1.5 rounded border border-[#27272a]">{log.time?.split(' ')[1]?.slice(0,5) || log.time?.slice(11,16)}</span>
-                      {log.user && <span>• <span className="text-zinc-400 font-bold">{log.user}</span></span>}
-                      <span>•</span>
-                      <div className={`text-[9px] font-bold px-2 py-0.5 rounded ${style.bg}`} style={{ color: style.color }}>{log.category}</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
         </div>
       </div>
+
     </div>
   );
 });

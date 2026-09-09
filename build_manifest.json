@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-07T17:14:15.797Z",
+  "generatedAt": "2026-09-09T00:23:51.416Z",
   "coreFiles": [
     "Config.html",
     "Components.html",
@@ -26,28 +26,28 @@
   ],
   "hashes": {
     "Config.html": "07b7165a5d1c062e3578bb82dc384cd96ee86fdeacf60ce00baa72b69bd98e64",
-    "Components.html": "375e73d660a90e1d525236d56f4bbb2066180e9f48f7d3f5258826a3a0922bb6",
+    "Components.html": "0bb9928143c69d299978ef56b796e57da5842267443515ee1132c55855d0fb84",
     "Modals.html": "40b568b39d68e3237f260e51ab9dfe9cbf1bee052f1101b9707bc5999c898658",
     "Modals_Orders.html": "a049798aeec702035674679da72e9380b76a89c3a625130e896e8f6c3425cf12",
-    "Tab_Dashboard.html": "9bf5ef952d831b595ff18028650eba193813e893d7b90ef908c8ad25c1c23b9b",
-    "Tab_Orders.html": "625a9a1f8eaa8fde9e9f4d9d83841f26f1ebe17b30b658c37b0b69efeaf57456",
-    "App_Main.html": "7e346adb9033f17bb16973a43dcbada3855b02a50f8839a32aa03b9727d97c2b",
-    "Tab_Production.html": "95c1fc8329d99071f339729cf60d1bd7ebbb008dfd95a151b0124c45df5e0c36",
-    "Tab_Inventory.html": "5e52f36a81e370e54eae115b5042d2358ceeb981d1b27920f6ccda92297cde3d",
-    "Tab_ImportExport.html": "c3a86f8b7a35bc3bd3d590e384f88738592d2b7143789856e05d80b170c310e5",
-    "Tab_Suppliers.html": "8b9afb55999fa69239b1061c16b192a2236bdb1171e50ad6088b78c9a117bd3d",
-    "Tab_Finance.html": "0ed3351ce42e8b3c2ebf618248e83cd1aa6ab3a175e7167b030395bdad0d373e",
-    "Tab_BusinessReport.html": "757436c3ae4be6a713033d7edb1b81444bd715eabbe23b9f291b05213d691194",
-    "Tab_HR.html": "a67ff56200c2fa5172b2a1bd165eace25e10bedb7ec1fb05dc5d267a5f930505",
+    "Tab_Dashboard.html": "f85503f41f7fa833df8ff3c678f0c8777ebd5cafd0327e706d88887335045125",
+    "Tab_Orders.html": "a4412df8a6efdae456d6250cd344b1bf45a3994464161a3a8c232409d6152e53",
+    "App_Main.html": "c5df71426ef9173a467d3b13c6b67c632fa5a3aa6a78f452dd72587efdf695b3",
+    "Tab_Production.html": "55cdc1ca85d689a3fc9b826ccd1e648d94b4554be8b2c3f7298d8ba35d6ba4b5",
+    "Tab_Inventory.html": "6aeed1113be370529496edbfa5c3b9371beb94c0ce1f6f5cbc7f18b0e0659925",
+    "Tab_ImportExport.html": "7a03519cb12d6e32c0a56fff24dcd1cb716471acc3fad8096af2c050fc054f48",
+    "Tab_Suppliers.html": "cd1e44729399adb216065d0df76ef5925b466fd6c3e1840da13823a23ad9aeeb",
+    "Tab_Finance.html": "6c079929e8889ae7b5152fb2eb4465fcf4d9de0d63229b6de3f784a83b0855aa",
+    "Tab_BusinessReport.html": "137ff9bd46a4f7453b1c8c75907b240e97a3aa84caf0a50e28a7aaa60cfaf065",
+    "Tab_HR.html": "a3a736088535b58018f95a3e703b74025f9131ca11d1bf239994fbab66ad2065",
     "Tab_Documents.html": "bbe662e69c280b7de2427c508d1bfe07121849ac18925fbbc88450c166aa4acd",
     "Tab_Viewer3D.html": "b5a7084f30dabd51ef3e2be4e2b280801e415de08de5ae527429973c653b68d7",
     "Tab_Affiliate.html": "d295f198a8cf634c53774e9bbf4cd431005170ed49ce42db5de609e95c47c8d9",
-    "Tab_Analytics.html": "2e778efb1ae9a42a1b980fda157f25b08f6c85bb760a424455a078406689912f",
-    "Tab_Workspaces.html": "93434178201ce6f287fd99790de4313a92289b50f7152132fc4a3f2942f26333",
+    "Tab_Analytics.html": "a8aede647275bd131fc0552f2e2d4ad9073bcb65b1379d659f32653df80875d3",
+    "Tab_Workspaces.html": "e830f06bcbb895b7185597a4ea4e6146245818023bc6d931ed4082c6a854f357",
     "ShopeeGlobalTab.html": "d931cbc6779f93c4e8584548bc0b20adef711a6d8face1b2ad73147332b334d0"
   },
   "bundleHashes": {
-    "Compiled_Core.html": "31cdeb41adff21e81bba2d4697a945c6881b0905853459f3f1ef395772d4f721",
-    "Compiled_Deferred.html": "1c6356af0341c4ca1b7485ac9427e4efc30afe1e6f8f9b566232ccefe1895f27"
+    "Compiled_Core.html": "7375a16440b0642b1d03b85b0b7234ee8977aae8002fd692d296ff05d1a474df",
+    "Compiled_Deferred.html": "448f011b015b60c992c575a2e6e543a056c3cf58f8bfbcecd95f3d005c32418e"
   }
 }

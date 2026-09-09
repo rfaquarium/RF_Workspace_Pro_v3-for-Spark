@@ -414,17 +414,17 @@ const WorkshopAssistantWidget = React.memo(function WorkshopAssistantWidget({ cu
 
     return (
         <React.Fragment>
-            {/* NÚT TRÒN NỔI GÓC PHẢI DƯỚI */}
-            <div className="fixed bottom-5 right-5 z-[9990] flex items-center gap-2">
+            {/* NÚT TRÒN NỔI GÓC PHẢI DƯỚI (NỔI TRÊN BOTTOM DOCK TRÊN MOBILE) */}
+            <div className="fixed bottom-20 right-4 sm:bottom-6 sm:right-6 z-[9990] flex items-center gap-2">
                 {!isOpen && (
                     <button
                         type="button"
                         onClick={() => setIsOpen(true)}
-                        className="group relative flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-tr from-[#1a1710] to-[#2a2418] border border-[#d4af37]/50 shadow-[0_8px_24px_rgba(0,0,0,0.6)] text-[#d4af37] hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
-                        title="Mở Quản Đốc Ảo Rich Fish"
+                        className="group relative flex items-center justify-center w-11 h-11 rounded-full bg-zinc-900/90 backdrop-blur-xl border border-white/20 shadow-[0_8px_25px_rgba(0,0,0,0.7)] text-zinc-200 hover:text-white hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
+                        title="Mở Trợ Lý Kỹ Thuật Xưởng"
                     >
-                        <i className="fas fa-robot text-lg group-hover:rotate-12 transition-transform"></i>
-                        <span className={`absolute top-0.5 right-0.5 w-3 h-3 rounded-full border-2 border-[#121214] ${isOnline === true ? 'bg-emerald-400 animate-pulse' : isOnline === false ? 'bg-rose-500' : 'bg-amber-400'}`}></span>
+                        <i className="fas fa-headset text-base group-hover:scale-110 transition-transform"></i>
+                        <span className={`absolute top-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-[#121214] ${isOnline === true ? 'bg-emerald-400' : isOnline === false ? 'bg-rose-500' : 'bg-amber-400'}`}></span>
                     </button>
                 )}
             </div>
@@ -433,19 +433,19 @@ const WorkshopAssistantWidget = React.memo(function WorkshopAssistantWidget({ cu
             {isOpen && (
                 <div className="fixed bottom-5 right-5 z-[9995] w-[92vw] sm:w-[360px] h-[520px] max-h-[85vh] bg-[#121216] border border-white/10 rounded-2xl shadow-[0_16px_40px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden backdrop-blur-xl animate-scale-up">
                     {/* Header */}
-                    <div className="px-4 py-3 bg-gradient-to-r from-[#1a1710] to-[#121216] border-b border-white/10 flex items-center justify-between shrink-0">
+                    <div className="px-4 py-3 bg-[#18181b] border-b border-white/10 flex items-center justify-between shrink-0">
                         <div className="flex items-center gap-2.5">
-                            <div className="w-8 h-8 rounded-xl bg-[#d4af37]/20 border border-[#d4af37]/40 flex items-center justify-center text-[#d4af37] text-sm shadow-sm">
-                                <i className="fas fa-hard-hat"></i>
+                            <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-200 text-sm shadow-sm">
+                                <i className="fas fa-headset"></i>
                             </div>
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <h4 className="text-[13px] font-black text-white uppercase tracking-wider">Quản Đốc Ảo</h4>
-                                    <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-full border ${isOnline ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border-rose-500/30'}`}>
+                                    <h4 className="text-[13px] font-semibold text-zinc-100 tracking-tight">Trợ Lý Kỹ Thuật Xưởng</h4>
+                                    <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border ${isOnline ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
                                         {isOnline ? 'ONLINE' : 'OFFLINE'}
                                     </span>
                                 </div>
-                                <p className="text-[10px] text-zinc-400 font-medium">Hỗ trợ kỹ thuật & an toàn xưởng</p>
+                                <p className="text-[10px] text-zinc-400">Hỗ trợ quy trình & an toàn kỹ thuật</p>
                             </div>
                         </div>
                         <button
@@ -579,7 +579,7 @@ const RFAgentControlTower = React.memo(function RFAgentControlTower({
         kho: { name: "Thủ Kho AI", icon: "📦", color: "#f59e0b", box: "avatar-kho" },
         sx: { name: "Giám Sát SX", icon: "🛠️", color: "#ec4899", box: "avatar-sx" },
         hr: { name: "Trợ Lý HR", icon: "📊", color: "#a855f7", box: "avatar-hr" },
-        baodong: { name: "Thánh Bao Đồng", icon: "🦜", color: "#f43f5e", box: "avatar-baodong" }
+        baodong: { name: "Cảnh Báo Vận Hành", icon: "🔔", color: "#f43f5e", box: "avatar-baodong" }
     }), []);
 
     // 1. Kéo thả cửa sổ (Drag & Drop hỗ trợ cả Mouse & Touch)

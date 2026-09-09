@@ -1990,17 +1990,44 @@ Model ID: 287936773312
 // 5. COMPONENT: MÀN HÌNH DANH MỤC & THỦ KHO (InventoryListView)
 // =========================================================================
 function InventoryListView({ data, pushData, pushDeltas, documents, isAdmin, isBoss: propIsBoss, userRole: propUserRole, currentUser: propCurrentUser, hasPerm: propHasPerm, triggerToast }) {
-  const [catFilter, setCatFilter] = React.useState('KHO BỂ KÍNH');
+  // Bộ lọc thông minh theo chuẩn Linear UX:
+  // 'ALL' | 'MATERIALS' | 'STONES' | 'ACCESSORIES' | 'TANKS' | 'RETURNS'
+  const [activeSegment, setActiveSegment] = React.useState('ALL');
   const [subCatFilter, setSubCatFilter] = React.useState(null); 
   const [search, setSearch] = React.useState(''); 
   const deferredSearch = React.useDeferredValue ? React.useDeferredValue(search) : search;
+  
+  // Modals & Side Drawer State
   const [editProd, setEditProd] = React.useState(null); 
   const [addVarGroup, setAddVarGroup] = React.useState(null);
-  const [viewMode, setViewMode] = React.useState('GRID'); // 'GRID' (Thẻ ảnh) | 'TABLE' (Bảng rút gọn)
   const [showStockRules, setShowStockRules] = React.useState(false);
   const [showBulkEditPrice, setShowBulkEditPrice] = React.useState(false);
   const [showQuickNotes, setShowQuickNotes] = React.useState(false);
   const [showShopeeImport, setShowShopeeImport] = React.useState(false);
+  
+  // Side Drawer state
+  const [selectedDrawerItem, setSelectedDrawerItem] = React.useState(null);
+  const [selectedDrawerReturn, setSelectedDrawerReturn] = React.useState(null);
+  const [drawerActiveTab, setDrawerActiveTab] = React.useState('STOCK_CARD'); // 'STOCK_CARD' | 'BOM_CALC' | 'RETURN_INSPECT'
+
+  // Quick Stock Adjustment in Drawer
+  const [stockAdjType, setStockAdjType] = React.useState('IN'); // 'IN' (Nhập) | 'OUT' (Xuất)
+  const [stockAdjQty, setStockAdjQty] = React.useState('');
+  const [stockAdjUnit, setStockAdjUnit] = React.useState('DEFAULT'); // 'DEFAULT' | 'LARGE_SHEET' | 'SQM' | 'BOX'
+  const [stockAdjNote, setStockAdjNote] = React.useState('');
+  const [isSubmittingAdj, setIsSubmittingAdj] = React.useState(false);
+
+  // Glass BOM Calculator State (+5% hao hụt chuẩn Hiến pháp)
+  const [bomLength, setBomLength] = React.useState(30);
+  const [bomWidth, setBomWidth] = React.useState(20);
+  const [bomHeight, setBomHeight] = React.useState(20);
+  const [bomQty, setBomQty] = React.useState(1);
+
+  // Return Inspection State
+  const [inspectPhoto, setInspectPhoto] = React.useState('');
+  const [inspectNote, setInspectNote] = React.useState('');
+  const [isProcessingReturn, setIsProcessingReturn] = React.useState(false);
+
   const formatMoney = (val) => Math.round(Number(val || 0)).toLocaleString('vi-VN');
   
   const currentRole = String(propUserRole || localStorage.getItem('rf_role') || '').trim();
@@ -2015,18 +2042,18 @@ function InventoryListView({ data, pushData, pushDeltas, documents, isAdmin, isB
   }, [propHasPerm, currentRole, currentUser, isAdmin, isBoss]);
 
   const isAdminRole = hasPerm('INV_EDIT_PRODUCT');
-  const canViewCost = hasPerm('INV_EDIT_PRODUCT') || ['QUẢN LÝ KHO VẬN', 'TỐI CAO', 'KẾ TOÁN'].includes(currentRole.toUpperCase()) || isBoss;
+  // CHẶN BẢO MẬT: Chỉ Boss, Kế Toán, Quản Lý Kho mới được xem giá vốn. Thợ xưởng/Thủ kho/CTV bị ẩn 100%.
+  const canViewCost = (hasPerm('INV_EDIT_PRODUCT') || ['QUẢN LÝ KHO VẬN', 'TỐI CAO', 'KẾ TOÁN'].includes(currentRole.toUpperCase()) || isBoss) && currentRole !== 'CTV';
 
+  // Gom nhóm sản phẩm theo SKU
   const uniqueProducts = React.useMemo(() => {
       const map = new Map();
       (data.Products || []).forEach(p => {
-          // Khử gom nhóm theo tên, gom theo SKU (hoặc ID nếu không có SKU)
           const key = String(p.sku || p.id).toUpperCase().trim();
           if (!key) return;
           if (map.has(key)) {
               const existing = map.get(key);
               existing.quantity = Number(existing.quantity || 0) + Number(p.quantity || 0);
-              // Cập nhật lại các trường phụ
               if (Number(p.costPrice) > 0 && !existing.costPrice) existing.costPrice = p.costPrice;
               if (Number(p.price) > 0 && !existing.price) existing.price = p.price;
               existing._allIds = existing._allIds || [existing.id];
@@ -2039,658 +2066,1104 @@ function InventoryListView({ data, pushData, pushDeltas, documents, isAdmin, isB
       return Array.from(map.values());
   }, [data.Products]);
 
+  // Danh sách kiện hàng hoàn từ Orders
+  const returnedOrders = React.useMemo(() => {
+      const allOrders = data.Orders || [];
+      return allOrders.filter(o => {
+          const st = String(o.status || '').toUpperCase().trim();
+          const retSt = String(o.returnStatus || '').toUpperCase().trim();
+          return st === 'HÀNG HOÀN' || st.includes('HOÀN') || retSt === 'WAITING_INSPECTION' || retSt === 'SCRAPPED' || retSt === 'RESTOCKED';
+      }).map(o => ({
+          id: o.id,
+          orderCode: o.orderCode || o.id,
+          customer: o.customer || 'Khách hàng',
+          phone: o.phone || '',
+          productSummary: o.accessories || o.note || 'Sản phẩm hoàn',
+          returnTrackingCode: o.returnTrackingCode || o.trackingCode || `RET-${o.orderCode || o.id}`,
+          returnStatus: o.returnStatus || (String(o.status || '').toUpperCase().includes('HOÀN') ? 'WAITING_INSPECTION' : 'WAITING_INSPECTION'),
+          inspectedBy: o.inspectedBy || '',
+          inspectedAt: o.inspectedAt || '',
+          inspectionPhoto: o.inspectionPhoto || '',
+          inspectionNote: o.inspectionNote || o.note || ''
+      }));
+  }, [data.Orders]);
+
+  const waitingInspectionReturns = React.useMemo(() => {
+      return returnedOrders.filter(r => r.returnStatus === 'WAITING_INSPECTION');
+  }, [returnedOrders]);
+
+  // Phân loại danh mục theo Segmented Control
+  const isItemInSegment = React.useCallback((p, segment) => {
+      const cat = String(p.category || '').toUpperCase().trim();
+      const subCat = String(p.sub_category || '').toUpperCase().trim();
+      const name = String(p.name || '').toUpperCase().trim();
+      const sku = String(p.sku || '').toUpperCase().trim();
+
+      if (segment === 'ALL') return true;
+
+      // 1. Phân biệt BỂ KÍNH (Bể nâng đáy, Bể giấu keo, Bể đúc, Bể vát...)
+      const isTank = cat.includes('BỂ') || subCat.includes('BỂ') || name.startsWith('BỂ') || name.includes('BỂ KÍNH') || sku.startsWith('BE-') || sku.startsWith('BK-');
+
+      // 2. Phân biệt HÀNG HOÁ / THÀNH PHẨM LAYOUT (Layout lũa đá, Bố cục thủy sinh, Tiểu cảnh...)
+      const isLayout = cat.includes('LAYOUT') || subCat.includes('LAYOUT') || name.includes('LAYOUT') || sku.startsWith('LO-') || sku.startsWith('LAY-') || name.includes('BỐ CỤC') || name.includes('TIỂU CẢNH');
+
+      if (segment === 'LAYOUTS') {
+          // Hàng hoá / Thành phẩm Layout (Ưu tiên độc lập)
+          return isLayout;
+      }
+
+      if (segment === 'TANKS') {
+          // Thành phẩm: Bể kính
+          return isTank && !isLayout;
+      }
+
+      if (segment === 'MATERIALS') {
+          // Nguyên vật liệu: Kính tấm, Keo silicone, Hóa chất, Xốp
+          if (isTank || isLayout) return false;
+          return cat.includes('DANH MỤC SẢN XUẤT') || cat.includes('NGUYÊN LIỆU') || cat.includes('VẬT TƯ') || 
+                 subCat.includes('KÍNH') || subCat.includes('KEO') || subCat.includes('SILICONE') ||
+                 name.includes('KÍNH TẤM') || name.includes('KEO SILICONE') || name.includes('KÍNH KHỔ') || name.includes('APOLLO');
+      }
+
+      if (segment === 'STONES') {
+          // Đá, Lũa & Cát thô / rời
+          // TUYỆT ĐỐI KHÔNG MATCH BỂ NÂNG ĐÁY hoặc HÀNG HOÁ LAYOUT
+          if (isTank || isLayout) return false;
+
+          // Kiểm tra từ "ĐÁ" bằng regex ranh giới từ để tránh nhầm với "NÂNG ĐÁY"
+          const hasStone = /(^|\s|[,\-_/])(ĐÁ|DA)(\s|[,\-_/]|$)/i.test(name) || subCat.includes('ĐÁ') || cat.includes('ĐÁ');
+          const hasWood = name.includes('LŨA') || subCat.includes('LŨA') || cat.includes('LŨA');
+          const hasSand = name.includes('CÁT') || subCat.includes('CÁT') || cat.includes('CÁT') || name.includes('PHÂN NỀN') || subCat.includes('PHÂN NỀN');
+
+          return hasStone || hasWood || hasSand;
+      }
+
+      if (segment === 'ACCESSORIES') {
+          // Phụ kiện sàn: Đèn, Lọc, Máy bơm, Thức ăn, Cây giả, Lưới, Nhiệt kế
+          if (isTank || isLayout) return false;
+          return cat.includes('PHỤ KIỆN') || cat.includes('HÀNG HOÁ') || 
+                 subCat.includes('ĐÈN') || subCat.includes('LỌC') || subCat.includes('BƠM') || subCat.includes('MÁY') || subCat.includes('SƯỞI') || subCat.includes('PHỤ KIỆN') ||
+                 name.includes('ĐÈN') || name.includes('LỌC') || name.includes('BƠM') || name.includes('MÁY') || name.includes('SƯỞI');
+      }
+
+      return true;
+  }, []);
+
+  // Lọc sản phẩm theo tìm kiếm và segment
+  const filteredProducts = React.useMemo(() => {
+      let list = uniqueProducts;
+      if (activeSegment !== 'ALL' && activeSegment !== 'RETURNS') {
+          list = list.filter(p => isItemInSegment(p, activeSegment));
+      }
+      if (subCatFilter) {
+          list = list.filter(p => String(p.sub_category || '').toUpperCase().trim() === subCatFilter);
+      }
+      if (deferredSearch && deferredSearch.trim()) {
+          const q = deferredSearch.toLowerCase().trim();
+          list = list.filter(p => 
+              String(p.sku || '').toLowerCase().includes(q) || 
+              String(p.name || '').toLowerCase().includes(q) || 
+              String(p.category || '').toLowerCase().includes(q) ||
+              String(p.sub_category || '').toLowerCase().includes(q)
+          );
+      }
+      return list;
+  }, [uniqueProducts, activeSegment, subCatFilter, deferredSearch, isItemInSegment]);
+
+  // Bộ 4 Metric Cards
+  const lowStockCount = React.useMemo(() => {
+      return uniqueProducts.filter(p => Number(p.quantity || 0) <= Number(p.minStock || 0)).length;
+  }, [uniqueProducts]);
+
+  const totalInventoryCapital = React.useMemo(() => {
+      return uniqueProducts.reduce((sum, p) => {
+          const q = Math.max(0, Number(p.quantity || 0));
+          const c = Number(p.costPrice || 0);
+          return sum + (q * c);
+      }, 0);
+  }, [uniqueProducts]);
+
+  const totalPhysicalUnits = React.useMemo(() => {
+      return uniqueProducts.reduce((sum, p) => sum + Math.max(0, Number(p.quantity || 0)), 0);
+  }, [uniqueProducts]);
+
+  // Xử lý xuất Excel
   const handleExportExcel = () => {
       const columns = [
           { key: 'sku', label: 'Mã SKU' },
-          { key: 'name', label: 'Tên Sản Phẩm' },
+          { key: 'name', label: 'Tên Mặt Hàng' },
           { key: 'category', label: 'Danh Mục' },
           { key: 'sub_category', label: 'Phân Loại' },
-          { key: 'costPrice', label: 'Giá Vốn' },
-          { key: 'price', label: 'Giá Bán' },
-          { key: 'quantity', label: 'Số Lượng Tồn' },
+          { key: 'quantity', label: 'Tồn Thực Tế' },
           { key: 'unit', label: 'Đơn Vị' },
-          { key: 'minStock', label: 'Tồn Tối Thiểu' },
-          { key: 'maxStock', label: 'Tồn Tối Đa' }
+          { key: 'minStock', label: 'Định Mức Tối Thiểu' }
       ];
+      if (canViewCost) {
+          columns.push({ key: 'costPrice', label: 'Giá Vốn (VNĐ)' });
+          columns.push({ key: 'price', label: 'Giá Bán (VNĐ)' });
+      }
       if (typeof exportToExcel === 'function') {
-          exportToExcel(uniqueProducts, columns, `Danh_Sach_Ton_Kho_${new Date().toISOString().slice(0,10)}.xlsx`);
+          exportToExcel(filteredProducts, columns, `Ton_Kho_RichFish_${new Date().toISOString().slice(0,10)}.xlsx`);
       } else {
-          alert('Tính năng xuất excel đang tải...');
+          alert('Tính năng xuất excel đang nạp...');
       }
   };
 
-  const catTotals = React.useMemo(() => {
-    const totals = { 'LAYOUT': 0, 'BỂ KÍNH': 0, 'PHỤ KIỆN': 0, 'DANH MỤC SẢN XUẤT': 0 };
-    uniqueProducts.forEach(p => {
-      let cat = String(p.category || '').toUpperCase().trim();
-      if (cat.includes('BỂ') || cat.includes('BE')) cat = 'BỂ KÍNH';
-      else if (cat.includes('LAYOUT')) cat = 'LAYOUT';
-      else if (cat.includes('DANH MỤC SẢN XUẤT') || cat.includes('VẬT TƯ') || cat.includes('NGUYÊN LIỆU')) cat = 'DANH MỤC SẢN XUẤT';
-      else cat = 'PHỤ KIỆN';
-
-      const qty = Math.max(0, Number(p.quantity || 0));
-      const cost = Number(p.costPrice || 0);
-      totals[cat] = (totals[cat] || 0) + (qty * cost);
-    });
-    return totals;
-  }, [uniqueProducts]);
-
-  const totalInventoryValue = React.useMemo(() => {
-    return (catTotals['BỂ KÍNH'] || 0) + (catTotals['LAYOUT'] || 0) + (catTotals['PHỤ KIỆN'] || 0) + (catTotals['DANH MỤC SẢN XUẤT'] || 0);
-  }, [catTotals]);
-
-  const isSearching = (deferredSearch || '').trim().length > 0;
-  
-  const getCategoriesForFilter = (filter) => {
-      if (filter === 'KHO BỂ KÍNH') return ['BỂ KÍNH'];
-      if (filter === 'KHO LAYOUT') return ['LAYOUT'];
-      if (filter === 'KHO THÀNH PHẨM') return ['THÀNH PHẨM', 'BỂ KÍNH', 'LAYOUT'];
-      if (filter === 'KHO HÀNG HOÁ' || filter === 'KHO PHỤ KIỆN') return ['PHỤ KIỆN'];
-      if (filter === 'KHO NGUYÊN LIỆU' || filter === 'KHO VẬT TƯ' || filter === 'KHO SẢN XUẤT') return ['DANH MỤC SẢN XUẤT'];
-      return [filter];
+  // Drawer Handler: Mở Drawer cho sản phẩm
+  const handleOpenProductDrawer = (prod) => {
+      setSelectedDrawerItem(prod);
+      setSelectedDrawerReturn(null);
+      setDrawerActiveTab('STOCK_CARD');
+      setStockAdjQty('');
+      setStockAdjNote('');
   };
 
-  const activeCategories = getCategoriesForFilter(catFilter);
-  const productsInCat = uniqueProducts.filter(p => activeCategories.includes(String(p.category || '').toUpperCase().trim()));
-  
-  const isGlassTankCat = activeCategories.includes('BỂ KÍNH');
-  const getDisplaySubCat = (p) => {
-      let sc = String(p.sub_category || '').toUpperCase().trim();
-      if (!sc || sc === 'KHÁC') {
-          return isGlassTankCat ? 'BỂ LẺ SIZE' : (sc || 'KHÁC');
-      }
-      return sc;
+  // Drawer Handler: Mở Drawer cho đơn hàng hoàn
+  const handleOpenReturnDrawer = (retItem) => {
+      setSelectedDrawerReturn(retItem);
+      setSelectedDrawerItem(null);
+      setDrawerActiveTab('RETURN_INSPECT');
+      setInspectPhoto(retItem.inspectionPhoto || '');
+      setInspectNote(retItem.inspectionNote || '');
   };
 
-  const subCatCounts = {};
-  productsInCat.forEach(p => { 
-      const sc = getDisplaySubCat(p); 
-      subCatCounts[sc] = (subCatCounts[sc] || 0) + 1; 
-  });
+  // Đóng Drawer
+  const handleCloseDrawer = () => {
+      setSelectedDrawerItem(null);
+      setSelectedDrawerReturn(null);
+  };
 
-  let predefinedFolders = [];
-  activeCategories.forEach(cat => {
-      if (typeof SUB_CATEGORIES !== 'undefined' && SUB_CATEGORIES[cat]) {
-          predefinedFolders = [...predefinedFolders, ...SUB_CATEGORIES[cat]];
+  // Xử lý Thao tác Kho 1 Chạm (+ Nhập Kho / - Xuất SX) kèm Quy Đổi UOM
+  const handleExecuteStockAdj = async () => {
+      if (!selectedDrawerItem) return;
+      const rawNum = parseFloat(stockAdjQty);
+      if (isNaN(rawNum) || rawNum <= 0) {
+          return triggerToast('Vui lòng nhập số lượng hợp lệ (> 0)!', 'fa-exclamation-triangle', 'warning');
       }
-  });
 
-  const activeFolders = Array.from(new Set([...predefinedFolders, ...Object.keys(subCatCounts)])).filter(f => (subCatCounts[f] || 0) > 0 || predefinedFolders.includes(f));
+      let convertedQty = rawNum;
+      let conversionDescription = `${rawNum} ${selectedDrawerItem.unit || 'đơn vị'}`;
 
-  // Tổng hợp chỉ số của toàn bộ phân loại kho đang chọn
-  const warehouseTotalModels = React.useMemo(() => {
-      const setObj = new Set();
-      productsInCat.forEach(p => {
-          let baseName = p.name || 'Chưa đặt tên';
-          if (p.name && p.name.includes(' - ')) baseName = p.name.split(' - ')[0].trim();
-          setObj.add(baseName);
-      });
-      return setObj.size;
-  }, [productsInCat]);
-  const warehouseTotalQty = React.useMemo(() => productsInCat.reduce((sum, p) => sum + (Number(p.quantity) || 0), 0), [productsInCat]);
-  const warehouseTotalVal = React.useMemo(() => productsInCat.reduce((sum, p) => sum + ((Number(p.quantity) || 0) * (Number(p.costPrice) || 0)), 0), [productsInCat]);
+      // Quy đổi UOM tự động:
+      // Tấm kính lớn (1.8m x 2.0m = 3.6m²) -> ra m²
+      if (stockAdjUnit === 'LARGE_SHEET') {
+          convertedQty = Math.round(rawNum * 3.6 * 100) / 100;
+          conversionDescription = `${rawNum} Tấm lớn (= ${convertedQty} m²)`;
+      } else if (stockAdjUnit === 'BOX') {
+          // Thùng keo (24 chai/thùng) -> ra chai
+          convertedQty = rawNum * 24;
+          conversionDescription = `${rawNum} Thùng (= ${convertedQty} Chai)`;
+      }
 
-  let displayProducts = []; 
-  if (isSearching) { 
-      const sLower = deferredSearch.toLowerCase().trim();
-      displayProducts = uniqueProducts.filter(p => (p.name && String(p.name).toLowerCase().includes(sLower)) || (p.sku && String(p.sku).toLowerCase().includes(sLower)));
-  } else if (subCatFilter) { 
-      displayProducts = productsInCat.filter(p => getDisplaySubCat(p) === subCatFilter);
-  } else {
-      displayProducts = productsInCat;
-  }
+      setIsSubmittingAdj(true);
+      try {
+          const deltaQty = stockAdjType === 'IN' ? convertedQty : -convertedQty;
+          const newQty = Math.max(0, Number(selectedDrawerItem.quantity || 0) + deltaQty);
 
-  const groupedProducts = React.useMemo(() => { 
-      const groups = {}; 
-      displayProducts.forEach(p => { 
-          let baseName = p.name || 'Chưa đặt tên'; 
-          let variant = 'Mặc định'; 
-          if (p.name && p.name.includes(' - ')) { 
-              const parts = p.name.split(' - '); 
-              baseName = parts[0].trim(); 
-              variant = parts.slice(1).join(' - ').trim(); 
-          } 
-          let imgUrl = formatImageUrl(p.image) || formatImageUrl(p.realImage);
-          if (!groups[baseName]) groups[baseName] = { baseName, image: imgUrl, items: [] }; 
-          if (imgUrl && !groups[baseName].image) groups[baseName].image = imgUrl; 
-          
-          let pCopy = { ...p, variantLabel: variant };
-          pCopy.image = imgUrl;
-          if (pCopy.realImage) pCopy.realImage = formatImageUrl(pCopy.realImage);
-          
-          groups[baseName].items.push(pCopy); 
-      }); 
-      return Object.values(groups); 
-  }, [displayProducts]);
+          const updatedProd = {
+              ...selectedDrawerItem,
+              quantity: newQty
+          };
+
+          // Ghi nhận chứng từ vào ImportExport
+          const newTicket = {
+              id: 'IE_' + Date.now(),
+              type: stockAdjType === 'IN' ? 'Nhập' : 'Xuất',
+              target: stockAdjType === 'IN' ? 'Nhập bổ sung kho' : 'Xuất phục vụ sản xuất',
+              date: new Date().toISOString().replace('T', ' ').slice(0, 19),
+              note: `[1-Chạm] ${stockAdjType === 'IN' ? 'Nhập' : 'Xuất'} ${conversionDescription} (${selectedDrawerItem.name}). Lý do: ${stockAdjNote || 'Điều chỉnh tức thì'}`,
+              totalAmount: (Number(selectedDrawerItem.costPrice || 0) * convertedQty),
+              itemsData: JSON.stringify([{
+                  id: selectedDrawerItem.id,
+                  sku: selectedDrawerItem.sku,
+                  name: selectedDrawerItem.name,
+                  qty: convertedQty,
+                  unit: selectedDrawerItem.unit,
+                  price: selectedDrawerItem.costPrice || 0
+              }])
+          };
+
+          const payload = {
+              Products: [updatedProd],
+              ImportExport: [newTicket]
+          };
+
+          await pushDeltas(payload, `Đã ${stockAdjType === 'IN' ? 'nhập' : 'xuất'} ${conversionDescription}!`, 'fa-box-archive');
+          setSelectedDrawerItem(updatedProd);
+          setStockAdjQty('');
+          setStockAdjNote('');
+      } catch (err) {
+          triggerToast('Lỗi khi điều chỉnh tồn kho: ' + err.message, 'fa-times', 'danger');
+      } finally {
+          setIsSubmittingAdj(false);
+      }
+  };
+
+  // Xử lý Kiểm Định Hàng Hoàn Đảo Chiều (Reverse Logistics)
+  const handleResolveReturn = async (decision) => {
+      if (!selectedDrawerReturn) return;
+      setIsProcessingReturn(true);
+
+      try {
+          const isRestock = decision === 'RESTOCK';
+          const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
+
+          // 1. Cập nhật trạng thái đơn hàng trong Orders
+          const updatedOrder = {
+              id: selectedDrawerReturn.id,
+              returnStatus: isRestock ? 'RESTOCKED' : 'SCRAPPED',
+              inspectedBy: currentUser || 'Thủ kho',
+              inspectedAt: nowStr,
+              inspectionPhoto: inspectPhoto || selectedDrawerReturn.inspectionPhoto,
+              inspectionNote: inspectNote || (isRestock ? 'Hàng nguyên vẹn đạt chuẩn - Đã nhập lại kho thành phẩm' : 'Hàng vỡ nát / phế liệu - Đã chuyển thanh lý tiêu hủy')
+          };
+
+          let payload = {
+              Orders: [updatedOrder]
+          };
+
+          // 2. Nếu HÀNG NGUYÊN VẸN -> Tự động tìm SKU thành phẩm để cộng lại kho
+          if (isRestock) {
+              const matchedSku = selectedDrawerItem?.sku || null;
+              if (matchedSku) {
+                  const targetProd = uniqueProducts.find(p => p.sku === matchedSku);
+                  if (targetProd) {
+                      payload.Products = [{
+                          ...targetProd,
+                          quantity: Number(targetProd.quantity || 0) + 1
+                      }];
+                  }
+              }
+          }
+
+          const msg = isRestock 
+              ? `🟢 ĐÃ NHẬP KHO THÀNH PHẨM! Kiện ${selectedDrawerReturn.returnTrackingCode} nguyên vẹn.` 
+              : `🔴 ĐÃ XÁC NHẬN PHẾ LIỆU! Kiện ${selectedDrawerReturn.returnTrackingCode} chuyển thanh lý, không cộng kho.`;
+
+          await pushDeltas(payload, msg, isRestock ? 'fa-check-circle' : 'fa-dumpster');
+          handleCloseDrawer();
+      } catch (err) {
+          triggerToast('Lỗi khi xử lý kiểm định: ' + err.message, 'fa-times', 'danger');
+      } finally {
+          setIsProcessingReturn(false);
+      }
+  };
+
+  // Tính toán diện tích kính theo công thức chuẩn Hiến pháp: S = (DxR + 2DC + 2RC) x 1.05 m²
+  const computedGlassArea = React.useMemo(() => {
+      const L = (parseFloat(bomLength) || 0) / 100;
+      const W = (parseFloat(bomWidth) || 0) / 100;
+      const H = (parseFloat(bomHeight) || 0) / 100;
+      const qty = parseInt(bomQty, 10) || 1;
+      
+      const singleArea = (L * W + 2 * L * H + 2 * W * H) * 1.05; // 5% hao hụt chuẩn
+      const totalArea = singleArea * qty;
+      const sheetCount = totalArea / 3.6; // 1 tấm khổ 180x200cm = 3.6 m²
+      
+      return {
+          singleArea: Math.round(singleArea * 1000) / 1000,
+          totalArea: Math.round(totalArea * 1000) / 1000,
+          sheetCount: Math.round(sheetCount * 100) / 100,
+          perimeterMeters: Math.round(((L + W) * 2 * qty) * 100) / 100
+      };
+  }, [bomLength, bomWidth, bomHeight, bomQty]);
 
   return (
-      <div className="space-y-3.5 pb-6 w-full max-w-full overflow-x-hidden animate-fade-in text-zinc-200">
-          
-          {/* QUY CHUẨN SKU & HƯỚNG DẪN KIỂM KHO (COLLAPSIBLE CHIP) */}
-          {currentRole !== 'CTV' && (
-              <div className="bg-[#121215] border border-white/[0.08] rounded-2xl overflow-hidden shadow-sm w-full transition-all">
-                  <div 
-                      onClick={() => setShowStockRules(!showStockRules)} 
-                      className="flex justify-between items-center p-3 sm:p-3.5 bg-white/[0.02] cursor-pointer hover:bg-white/[0.04] transition-colors select-none"
-                  >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-6 h-6 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 text-xs shrink-0">
-                              <i className="fas fa-clipboard-check"></i>
-                          </div>
-                          <span className="font-bold text-[11px] text-zinc-200 uppercase tracking-wider truncate">Quy Chuẩn SKU & Kiểm Kho Xưởng Định Kỳ</span>
-                      </div>
-                      <div className={`w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center text-[10px] text-zinc-400 transition-transform duration-200 shrink-0 ${showStockRules ? 'rotate-180 text-white bg-white/10' : ''}`}>
-                          <i className="fas fa-chevron-down"></i>
-                      </div>
-                  </div>
-                  {showStockRules && (
-                      <div className="p-3.5 pt-2.5 border-t border-white/[0.08] bg-[#09090b] animate-fade-in">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 text-[11px]">
-                              {/* 1. Bể Kính */}
-                              <div className="p-2.5 rounded-xl bg-[#121215] border border-white/[0.08] hover:border-cyan-500/30 transition-colors">
-                                  <div className="text-cyan-400 font-bold uppercase text-[9.5px] mb-1 flex items-center gap-1.5">
-                                      <i className="fas fa-fish"></i>
-                                      <span>1. Bể Kính (BE / TERA / BC)</span>
-                                  </div>
-                                  <div className="font-mono text-zinc-300 font-semibold text-[10.5px] leading-relaxed">
-                                      <div><span className="text-cyan-400 font-bold">BE[DxRxC]:</span> BE202020, BE302020</div>
-                                      <div><span className="text-cyan-400 font-bold">Nâng đáy/Tera:</span> BE202020ND, TERA202025</div>
-                                  </div>
-                              </div>
-
-                              {/* 2. Layout */}
-                              <div className="p-2.5 rounded-xl bg-[#121215] border border-white/[0.08] hover:border-amber-500/30 transition-colors">
-                                  <div className="text-amber-400 font-bold uppercase text-[9.5px] mb-1 flex items-center gap-1.5">
-                                      <i className="fas fa-mountain-sun"></i>
-                                      <span>2. Layout (Mẫu - Size)</span>
-                                  </div>
-                                  <div className="font-mono text-zinc-300 font-semibold text-[10.5px] leading-relaxed">
-                                      <div><span className="text-amber-400 font-bold">Mẫu chuẩn:</span> RUN-001-302020, BON-503030</div>
-                                      <div><span className="text-amber-400 font-bold">Cover size:</span> CV-302020, CV-604040</div>
-                                  </div>
-                              </div>
-
-                              {/* 3. Phụ Kiện */}
-                              <div className="p-2.5 rounded-xl bg-[#121215] border border-white/[0.08] hover:border-purple-500/30 transition-colors">
-                                  <div className="text-purple-400 font-bold uppercase text-[9.5px] mb-1 flex items-center gap-1.5">
-                                      <i className="fas fa-plug"></i>
-                                      <span>3. Hàng Hoá Phụ Kiện</span>
-                                  </div>
-                                  <div className="font-mono text-zinc-300 font-semibold text-[10.5px] leading-relaxed">
-                                      <div><span className="text-purple-400 font-bold">Đèn / Lọc:</span> DEN-RGB-30CM, LOC-THAC-HBL</div>
-                                      <div><span className="text-purple-400 font-bold">VLL / Nền:</span> VLL-MATRIX, CAT-NANG-VANG</div>
-                                  </div>
-                              </div>
-
-                              {/* 4. Nguyên Liệu & Vật Tư */}
-                              <div className="p-2.5 rounded-xl bg-[#121215] border border-white/[0.08] hover:border-emerald-500/30 transition-colors">
-                                  <div className="text-emerald-400 font-bold uppercase text-[9.5px] mb-1 flex items-center gap-1.5">
-                                      <i className="fas fa-boxes-stacked"></i>
-                                      <span>4. Nguyên Liệu / Vật Tư</span>
-                                  </div>
-                                  <div className="font-mono text-zinc-300 font-semibold text-[10.5px] leading-relaxed">
-                                      <div><span className="text-emerald-400 font-bold">NLSX:</span> NLSX-KINH-5LI, NLSX-RF, NLSX-502</div>
-                                      <div><span className="text-emerald-400 font-bold">VTSX:</span> VTSX-GANGTAY, VTSX-DAO-ROCTHIEP</div>
-                                  </div>
-                              </div>
-
-                              {/* 5. Lịch Kiểm Kho */}
-                              <div className="p-2.5 rounded-xl bg-[#121215] border border-white/[0.08] hover:border-[#d4af37]/30 transition-colors">
-                                  <div className="text-[#d4af37] font-bold uppercase text-[9.5px] mb-1 flex items-center gap-1.5">
-                                      <i className="fas fa-calendar-check"></i>
-                                      <span>5. Lịch Chốt Kho Xưởng</span>
-                                  </div>
-                                  <div className="text-zinc-300 text-[10.5px] leading-relaxed">
-                                      <div>Định kỳ: Ngày <b className="text-white font-mono">01</b> & <b className="text-white font-mono">15</b></div>
-                                      <div className="text-zinc-400 text-[10px]">Lĩnh đầu ca $\rightarrow$ Quyết toán cuối ca</div>
-                                  </div>
-                              </div>
-                          </div>
-                      </div>
-                  )}
-              </div>
-          )}
-
-          {/* 5 THẺ BENTO METRICS GIÁ TRỊ TỒN KHO THEO GIÁ VỐN XUẤT XƯỞNG */}
-          {canViewCost && currentRole !== 'CTV' && (
-              <div className="space-y-2 w-full">
-                  <div className="flex items-center justify-between px-1">
-                      <span className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
-                          <i className="fas fa-coins text-[#d4af37]"></i>
-                          <span>Giá Trị Tồn Kho</span>
-                      </span>
-                      <span className="text-[9.5px] font-bold text-zinc-400 bg-white/[0.03] px-2.5 py-0.5 rounded-md border border-white/[0.06] flex items-center gap-1">
-                          <i className="fas fa-info-circle text-[#d4af37] text-[9px]"></i>
-                          <span>Tính theo Giá Vốn xuất xưởng</span>
-                      </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3 w-full">
-                      {/* Card 1: Bể Kính */}
-                      <div 
-                          onClick={() => { setCatFilter('KHO BỂ KÍNH'); setSubCatFilter(null); setSearch(''); }}
-                          className={`p-3 sm:p-3.5 rounded-2xl shadow-sm transition-all relative overflow-hidden group cursor-pointer active:scale-95 select-none ${
-                              catFilter === 'KHO BỂ KÍNH' && !isSearching
-                                  ? 'bg-gradient-to-br from-cyan-950/40 via-[#121215] to-[#09090b] border border-cyan-400/60 shadow-[0_0_20px_rgba(6,182,212,0.2)] ring-1 ring-cyan-400/30'
-                                  : 'bg-[#121215] border border-white/[0.08] hover:border-cyan-500/40 hover:bg-cyan-500/[0.03]'
-                          }`}
-                      >
-                          <div className="flex items-center justify-between mb-2">
-                              <span className="text-[10.5px] font-bold uppercase tracking-wider text-cyan-400">Giá Trị Bể Kính</span>
-                              <div className="w-7 h-7 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 text-xs group-hover:scale-110 transition-transform">
-                                  <i className="fas fa-fish"></i>
-                              </div>
-                          </div>
-                          <div className="text-[15px] sm:text-[17px] font-mono font-black text-cyan-400 tracking-tight truncate">
-                              {formatMoney(catTotals['BỂ KÍNH'])}<span className="text-xs font-normal text-cyan-500 ml-0.5">đ</span>
-                          </div>
-                      </div>
-
-                      {/* Card 2: Layout */}
-                      <div 
-                          onClick={() => { setCatFilter('KHO LAYOUT'); setSubCatFilter(null); setSearch(''); }}
-                          className={`p-3 sm:p-3.5 rounded-2xl shadow-sm transition-all relative overflow-hidden group cursor-pointer active:scale-95 select-none ${
-                              catFilter === 'KHO LAYOUT' && !isSearching
-                                  ? 'bg-gradient-to-br from-amber-950/40 via-[#121215] to-[#09090b] border border-amber-400/60 shadow-[0_0_20px_rgba(245,158,11,0.2)] ring-1 ring-amber-400/30'
-                                  : 'bg-[#121215] border border-white/[0.08] hover:border-amber-500/40 hover:bg-amber-500/[0.03]'
-                          }`}
-                      >
-                          <div className="flex items-center justify-between mb-2">
-                              <span className="text-[10.5px] font-bold uppercase tracking-wider text-amber-400">Giá Trị Layout</span>
-                              <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-xs group-hover:scale-110 transition-transform">
-                                  <i className="fas fa-mountain-sun"></i>
-                              </div>
-                          </div>
-                          <div className="text-[15px] sm:text-[17px] font-mono font-black text-amber-400 tracking-tight truncate">
-                              {formatMoney(catTotals['LAYOUT'])}<span className="text-xs font-normal text-amber-500 ml-0.5">đ</span>
-                          </div>
-                      </div>
-
-                      {/* Card 3: Phụ Kiện (Hàng Hoá) */}
-                      <div 
-                          onClick={() => { setCatFilter('KHO HÀNG HOÁ'); setSubCatFilter(null); setSearch(''); }}
-                          className={`p-3 sm:p-3.5 rounded-2xl shadow-sm transition-all relative overflow-hidden group cursor-pointer active:scale-95 select-none ${
-                              catFilter === 'KHO HÀNG HOÁ' && !isSearching
-                                  ? 'bg-gradient-to-br from-purple-950/40 via-[#121215] to-[#09090b] border border-purple-400/60 shadow-[0_0_20px_rgba(168,85,247,0.2)] ring-1 ring-purple-400/30'
-                                  : 'bg-[#121215] border border-white/[0.08] hover:border-purple-500/40 hover:bg-purple-500/[0.03]'
-                          }`}
-                      >
-                          <div className="flex items-center justify-between mb-2">
-                              <span className="text-[10.5px] font-bold uppercase tracking-wider text-purple-400">Giá Trị Phụ Kiện</span>
-                              <div className="w-7 h-7 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 text-xs group-hover:scale-110 transition-transform">
-                                  <i className="fas fa-plug"></i>
-                              </div>
-                          </div>
-                          <div className="text-[15px] sm:text-[17px] font-mono font-black text-purple-400 tracking-tight truncate">
-                              {formatMoney(catTotals['PHỤ KIỆN'])}<span className="text-xs font-normal text-purple-500 ml-0.5">đ</span>
-                          </div>
-                      </div>
-
-                      {/* Card 4: Vật Tư Sản Xuất */}
-                      <div 
-                          onClick={() => { setCatFilter('KHO NGUYÊN LIỆU'); setSubCatFilter(null); setSearch(''); }}
-                          className={`p-3 sm:p-3.5 rounded-2xl shadow-sm transition-all relative overflow-hidden group cursor-pointer active:scale-95 select-none ${
-                              catFilter === 'KHO NGUYÊN LIỆU' && !isSearching
-                                  ? 'bg-gradient-to-br from-emerald-950/40 via-[#121215] to-[#09090b] border border-emerald-400/60 shadow-[0_0_20px_rgba(16,185,129,0.2)] ring-1 ring-emerald-400/30'
-                                  : 'bg-[#121215] border border-white/[0.08] hover:border-emerald-500/40 hover:bg-emerald-500/[0.03]'
-                          }`}
-                      >
-                          <div className="flex items-center justify-between mb-2">
-                              <span className="text-[10.5px] font-bold uppercase tracking-wider text-emerald-400">Vật Tư Sản Xuất</span>
-                              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-xs group-hover:scale-110 transition-transform">
-                                  <i className="fas fa-boxes-stacked"></i>
-                              </div>
-                          </div>
-                          <div className="text-[15px] sm:text-[17px] font-mono font-black text-emerald-400 tracking-tight truncate">
-                              {formatMoney(catTotals['DANH MỤC SẢN XUẤT'])}<span className="text-xs font-normal text-emerald-500 ml-0.5">đ</span>
-                          </div>
-                      </div>
-
-                      {/* Card 5: Tổng Giá Trị Kho */}
-                      <div className="col-span-2 sm:col-span-2 md:col-span-1 lg:col-span-1 bg-gradient-to-br from-[#18181f] via-[#121215] to-[#09090b] border border-[#d4af37]/40 p-3 sm:p-3.5 rounded-2xl shadow-[0_0_20px_rgba(212,175,55,0.08)] relative overflow-hidden group">
-                          <div className="flex items-center justify-between mb-2">
-                              <span className="text-[10.5px] font-black uppercase tracking-wider text-[#d4af37]">Tổng Giá Trị Kho</span>
-                              <div className="w-7 h-7 rounded-lg bg-[#d4af37]/15 border border-[#d4af37]/30 flex items-center justify-center text-[#d4af37] text-xs shadow-sm group-hover:scale-110 transition-transform">
-                                  <i className="fas fa-vault"></i>
-                              </div>
-                          </div>
-                          <div className="text-[16px] sm:text-[18px] font-mono font-black text-[#d4af37] drop-shadow-[0_0_10px_rgba(212,175,55,0.3)] tracking-tight truncate">
-                              {formatMoney(totalInventoryValue)}<span className="text-xs font-normal text-[#d4af37]/80 ml-0.5">đ</span>
-                          </div>
-                      </div>
-                  </div>
-              </div>
-          )}
-
-          {/* THANH TÌM KIẾM VÀ CÁC THAO TÁC QUẢN TRỊ */}
-          <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between w-full">
-              {/* Search Bar with Glass Ring Focus */}
-              <div className="flex-1 bg-[#121215] rounded-xl flex items-center border border-white/[0.08] focus-within:border-[#d4af37]/60 focus-within:ring-1 focus-within:ring-[#d4af37]/25 transition-all px-3 py-0.5 shadow-sm">
-                  <i className="fas fa-search text-zinc-500 text-xs mr-2.5 shrink-0"></i>
-                  <input 
-                      placeholder="Tìm kiếm tên sản phẩm, mã SKU..." 
-                      value={search} 
-                      onChange={(e) => setSearch(e.target.value)} 
-                      className="w-full py-2 text-[12px] font-bold outline-none bg-transparent text-white placeholder-zinc-500 font-sans min-w-0" 
-                  />
-                  {search && (
-                      <button onClick={() => setSearch('')} className="text-zinc-500 hover:text-zinc-300 p-1 shrink-0 transition-colors cursor-pointer">
-                          <i className="fas fa-times-circle text-xs"></i>
-                      </button>
-                  )}
-              </div>
-
-              {/* Action Buttons Toolbar */}
-              <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar py-0.5 shrink-0 overscroll-x-contain touch-pan-x">
-                  {/* View Mode Switch */}
-                  <div className="flex items-center gap-1 bg-[#121215] p-1 rounded-xl border border-white/[0.08] shrink-0">
-                      <button 
-                          type="button"
-                          onClick={() => setViewMode('GRID')} 
-                          className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
-                              viewMode === 'GRID' ? 'bg-[#d4af37] text-zinc-950 shadow-sm font-black' : 'text-zinc-400 hover:text-white'
-                          }`}
-                      >
-                          <i className="fas fa-th-large text-xs"></i>
-                          <span className="hidden sm:inline">Dạng Thẻ</span>
-                      </button>
-                      <button 
-                          type="button"
-                          onClick={() => setViewMode('TABLE')} 
-                          className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
-                              viewMode === 'TABLE' ? 'bg-[#d4af37] text-zinc-950 shadow-sm font-black' : 'text-zinc-400 hover:text-white'
-                          }`}
-                      >
-                          <i className="fas fa-table-list text-xs"></i>
-                          <span className="hidden sm:inline">Dạng Bảng</span>
-                      </button>
-                  </div>
-
-                  <button
-                      onClick={handleExportExcel}
-                      className="h-9 px-3 rounded-xl bg-emerald-950/30 hover:bg-emerald-900/50 text-emerald-300 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 border border-emerald-500/30 transition-all active:scale-95 cursor-pointer shadow-sm"
-                      title="Xuất file Excel tồn kho"
-                  >
-                      <i className="fas fa-file-excel text-emerald-400"></i>
-                      <span className="hidden sm:inline">Xuất Excel</span>
-                  </button>
-
-                  <button
-                      type="button"
-                      onClick={() => setShowQuickNotes(prev => !prev)}
-                      className={`h-9 px-3 rounded-xl font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 border transition-all active:scale-95 cursor-pointer shadow-sm ${showQuickNotes ? 'bg-amber-500/20 text-amber-300 border-amber-500/50' : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'}`}
-                      title="Ghi chú & nhắc việc kho hàng"
-                  >
-                      <i className="fas fa-sticky-note text-amber-400"></i>
-                      <span className="hidden sm:inline">Ghi Chú</span>
-                  </button>
-
-                  {hasPerm('INV_EDIT_PRODUCT') && (
-                      <button 
-                          onClick={() => setShowBulkEditPrice(true)} 
-                          className="h-9 px-3 rounded-xl bg-purple-950/30 hover:bg-purple-900/50 text-purple-300 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 border border-purple-500/30 transition-all active:scale-95 cursor-pointer shadow-sm"
-                          title="Sửa giá hàng loạt"
-                      >
-                          <i className="fas fa-edit text-purple-400"></i>
-                          <span className="hidden sm:inline">Sửa Giá</span>
-                      </button>
-                  )}
-
-                  {hasPerm('INV_ADD_PRODUCT') && (
-                      <button 
-                          onClick={() => setEditProd({})} 
-                          className="h-9 px-3.5 rounded-xl bg-gradient-to-r from-[#d4af37] to-[#f0ca5e] text-zinc-950 font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_12px_rgba(212,175,55,0.2)] hover:brightness-110 transition-all active:scale-95 cursor-pointer"
-                          title="Thêm hàng hóa mới"
-                      >
-                          <i className="fas fa-plus"></i>
-                          <span>Thêm Hàng</span>
-                      </button>
-                  )}
-
-                  {(isBoss || currentRole === 'TỐI CAO') && (
-                      <button 
-                          type="button"
-                          onClick={() => setShowShopeeImport(true)} 
-                          className="h-9 px-3.5 rounded-xl bg-gradient-to-r from-[#ee4d2d] to-[#ff5722] hover:from-[#d73211] hover:to-[#ee4d2d] text-white font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_15px_rgba(238,77,45,0.3)] hover:brightness-110 transition-all active:scale-95 cursor-pointer border border-orange-400/40"
-                          title="Nhập nhanh sản phẩm từ Shopee (Smart Paste / Excel) - Phân quyền TỐI CAO"
-                      >
-                          <i className="fas fa-bag-shopping text-white text-[12px]"></i>
-                          <span>Nhập Shopee</span>
-                      </button>
-                  )}
-              </div>
-          </div>
-
-          {/* KHUNG GHI CHÚ NHANH KHO HÀNG */}
-          {showQuickNotes && typeof window.QuickNotesPanel !== 'undefined' && (
-              <window.QuickNotesPanel 
-                  targetTab="KHO_HANG" 
-                  documents={documents || data?.Documents || (typeof erpData !== 'undefined' ? erpData?.Documents : []) || window._rf_documents || []} 
-                  pushDeltas={pushDeltas || pushData || (typeof window.pushDeltas === 'function' ? window.pushDeltas : null)} 
-                  currentUser={currentUser} 
-                  isBoss={isAdminRole} 
-                  triggerToast={triggerToast} 
-              />
-          )}
-
-          {/* PHÂN LOẠI KHO HÀNG (COLORFUL SEGMENTED RIBBON) */}
-          <div className="flex overflow-x-auto gap-2 py-1 hide-scrollbar items-center overscroll-x-contain touch-pan-x">
-              {[
-                  { 
-                      id: 'KHO BỂ KÍNH', 
-                      label: 'Kho Bể Kính', 
-                      icon: 'fa-fish', 
-                      activeClass: 'bg-gradient-to-r from-cyan-500/30 via-cyan-500/15 to-transparent text-cyan-300 border-cyan-400/60 shadow-[0_0_16px_rgba(6,182,212,0.35)] ring-1 ring-cyan-400/40 font-black',
-                      inactiveClass: 'bg-[#121215] text-zinc-400 hover:text-cyan-300 hover:bg-cyan-500/10 border-white/[0.08] hover:border-cyan-500/30',
-                      iconColor: 'text-cyan-400'
-                  },
-                  { 
-                      id: 'KHO LAYOUT', 
-                      label: 'Kho Layout', 
-                      icon: 'fa-mountain-sun', 
-                      activeClass: 'bg-gradient-to-r from-amber-500/30 via-amber-500/15 to-transparent text-amber-300 border-amber-400/60 shadow-[0_0_16px_rgba(245,158,11,0.35)] ring-1 ring-amber-400/40 font-black',
-                      inactiveClass: 'bg-[#121215] text-zinc-400 hover:text-amber-300 hover:bg-amber-500/10 border-white/[0.08] hover:border-amber-500/30',
-                      iconColor: 'text-amber-400'
-                  },
-                  { 
-                      id: 'KHO HÀNG HOÁ', 
-                      label: 'Kho Hàng Hoá (Phụ Kiện)', 
-                      icon: 'fa-plug', 
-                      activeClass: 'bg-gradient-to-r from-purple-500/30 via-purple-500/15 to-transparent text-purple-300 border-purple-400/60 shadow-[0_0_16px_rgba(168,85,247,0.35)] ring-1 ring-purple-400/40 font-black',
-                      inactiveClass: 'bg-[#121215] text-zinc-400 hover:text-purple-300 hover:bg-purple-500/10 border-white/[0.08] hover:border-purple-500/30',
-                      iconColor: 'text-purple-400'
-                  },
-                  { 
-                      id: 'KHO NGUYÊN LIỆU', 
-                      label: 'Kho Nguyên Liệu (Vật Tư)', 
-                      icon: 'fa-boxes-stacked', 
-                      activeClass: 'bg-gradient-to-r from-emerald-500/30 via-emerald-500/15 to-transparent text-emerald-300 border-emerald-400/60 shadow-[0_0_16px_rgba(16,185,129,0.35)] ring-1 ring-emerald-400/40 font-black',
-                      inactiveClass: 'bg-[#121215] text-zinc-400 hover:text-emerald-300 hover:bg-emerald-500/10 border-white/[0.08] hover:border-emerald-500/30',
-                      iconColor: 'text-emerald-400'
-                  }
-              ].map(tab => {
-                  const isActive = catFilter === tab.id && !isSearching;
-                  return (
-                      <button 
-                          key={tab.id} 
-                          onClick={() => { setCatFilter(tab.id); setSubCatFilter(null); setSearch(''); }} 
-                          className={`px-3.5 py-2.5 rounded-xl text-[11px] font-bold uppercase transition-all shrink-0 border flex items-center gap-2 cursor-pointer active:scale-95 ${
-                              isActive ? tab.activeClass : tab.inactiveClass
-                          }`}
-                      >
-                          <i className={`fas ${tab.icon} text-xs ${tab.iconColor}`}></i>
-                          <span>{tab.label}</span>
-                      </button>
-                  );
-              })}
-          </div>
-
-          {/* SUB-CATEGORY FOLDER FILTER CHIPS (IF CURRENT CATEGORY HAS MULTIPLE FOLDERS) */}
-          {!isSearching && activeFolders.length > 0 && (
-              <div className="flex overflow-x-auto gap-1.5 py-0.5 hide-scrollbar items-center overscroll-x-contain touch-pan-x">
-                  <button
-                      type="button"
-                      onClick={() => setSubCatFilter(null)}
-                      className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition-all shrink-0 border cursor-pointer active:scale-95 ${
-                          !subCatFilter
-                              ? 'bg-white/[0.15] text-white border-white/30 font-black shadow-sm'
-                              : 'bg-[#121215] text-zinc-400 hover:text-zinc-200 border-white/[0.06]'
-                      }`}
-                  >
-                      Tất cả ({productsInCat.length})
-                  </button>
-                  {activeFolders.map(folder => {
-                      const count = subCatCounts[folder] || 0;
-                      const isSel = subCatFilter === folder;
-                      return (
-                          <button
-                              key={folder}
-                              type="button"
-                              onClick={() => setSubCatFilter(isSel ? null : folder)}
-                              className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition-all shrink-0 border flex items-center gap-1.5 cursor-pointer active:scale-95 ${
-                                  isSel
-                                      ? catFilter === 'KHO BỂ KÍNH'
-                                          ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/50 font-black shadow-sm'
-                                          : catFilter === 'KHO LAYOUT'
-                                          ? 'bg-amber-500/20 text-amber-300 border-amber-400/50 font-black shadow-sm'
-                                          : catFilter === 'KHO HÀNG HOÁ'
-                                          ? 'bg-purple-500/20 text-purple-300 border-purple-400/50 font-black shadow-sm'
-                                          : 'bg-emerald-500/20 text-emerald-300 border-emerald-400/50 font-black shadow-sm'
-                                      : 'bg-[#121215] text-zinc-400 hover:text-zinc-200 border-white/[0.06]'
-                              }`}
-                          >
-                              <span>{folder}</span>
-                              <span className={`text-[9.5px] font-mono ${isSel ? 'text-white font-bold' : 'text-zinc-500'}`}>({count})</span>
-                          </button>
-                      );
-                  })}
-              </div>
-          )}
-
-          {/* EXECUTIVE SUMMARY STRIP FOR CURRENT WAREHOUSE CATEGORY */}
-          {!isSearching && (
-              <div className={`border px-3.5 py-2.5 rounded-2xl flex items-center justify-between gap-3 text-xs flex-wrap shadow-sm transition-all ${
-                  catFilter === 'KHO BỂ KÍNH'
-                      ? 'bg-cyan-950/20 border-cyan-500/25'
-                      : catFilter === 'KHO LAYOUT'
-                      ? 'bg-amber-950/20 border-amber-500/25'
-                      : catFilter === 'KHO HÀNG HOÁ'
-                      ? 'bg-purple-950/20 border-purple-500/25'
-                      : 'bg-emerald-950/20 border-emerald-500/25'
-              }`}>
-                  <div className="flex items-center gap-2">
-                      <i className={`fas ${
-                          catFilter === 'KHO BỂ KÍNH' ? 'fa-fish text-cyan-400' :
-                          catFilter === 'KHO LAYOUT' ? 'fa-mountain-sun text-amber-400' :
-                          catFilter === 'KHO HÀNG HOÁ' ? 'fa-plug text-purple-400' :
-                          'fa-boxes-stacked text-emerald-400'
-                      } text-xs`}></i>
-                      <span className={`font-bold uppercase tracking-wide text-[11px] ${
-                          catFilter === 'KHO BỂ KÍNH' ? 'text-cyan-300' :
-                          catFilter === 'KHO LAYOUT' ? 'text-amber-300' :
-                          catFilter === 'KHO HÀNG HOÁ' ? 'text-purple-300' :
-                          'text-emerald-300'
-                      }`}>
-                          {subCatFilter ? `${catFilter} ➔ ${subCatFilter}` : catFilter}
-                      </span>
-                      <span className="text-[10px] text-zinc-400 font-mono">({activeFolders.length} nhóm danh mục)</span>
-                  </div>
-                  <div className="flex items-center gap-3 sm:gap-4 font-mono text-[11px] flex-wrap">
-                      <span>Tổng mẫu: <b className="text-zinc-100 font-bold">{warehouseTotalModels}</b></span>
-                      <span>Tổng tồn: <b className="text-sky-400 font-bold">{formatStockQty(warehouseTotalQty)}</b></span>
-                      {canViewCost && (
-                          <span>Tổng giá trị kho: <b className="text-emerald-400 font-bold">{formatMoney(warehouseTotalVal)}đ</b></span>
-                      )}
-                  </div>
-              </div>
-          )}
-
-          {/* DANH SÁCH SẢN PHẨM PHẲNG THEO VIEWMODE (GRID / TABLE) */}
-          {viewMode === 'GRID' ? (
-              <div className="space-y-2.5 animate-fade-in">
-                  {groupedProducts.length === 0 ? (
-                      <div className="text-center py-12 text-zinc-500 font-bold text-xs bg-[#121215] rounded-2xl border border-dashed border-white/[0.08]">
-                          <i className="fas fa-box-open text-2xl mb-2 text-zinc-600 block"></i>
-                          Không tìm thấy hàng hoá nào phù hợp!
-                      </div>
-                  ) : (
-                      groupedProducts.map(group => (
-                          <VariantGroupCard 
-                              key={group.baseName} 
-                              group={group} 
-                              setEditProd={setEditProd} 
-                              setAddVarGroup={setAddVarGroup} 
-                              pushData={pushData} 
-                              data={data} 
-                          />
-                      ))
-                  )}
-              </div>
-          ) : (
-              <div className="overflow-x-auto rounded-2xl border border-white/[0.08] bg-[#121215] animate-fade-in">
-                  <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                          <tr className="bg-[#09090b] text-zinc-400 border-b border-white/[0.08] uppercase text-[10px] font-bold tracking-wider">
-                              <th className="p-3">Mã SKU</th>
-                              <th className="p-3">Tên Sản Phẩm</th>
-                              <th className="p-3">Phân Loại</th>
-                              {canViewCost && <th className="p-3 text-right">Giá Vốn</th>}
-                              <th className="p-3 text-right">Giá Bán</th>
-                              <th className="p-3 text-center">Tồn Kho</th>
-                              <th className="p-3 text-center">Thao Tác</th>
-                          </tr>
-                      </thead>
-                      <tbody className="divide-y divide-white/[0.04]">
-                          {productsInCat.map(p => {
-                              const isMat = String(p.category || '').toUpperCase().trim() === 'DANH MỤC SẢN XUẤT' || String(p.sub_category || '').toUpperCase().includes('NGUYÊN LIỆU') || String(p.sub_category || '').toUpperCase().includes('VẬT TƯ');
-                              return (
-                              <tr key={p.id} className="hover:bg-white/[0.02] transition-colors font-medium">
-                                  <td className="p-3 font-mono text-[#d4af37] font-bold">{p.sku || 'N/A'}</td>
-                                  <td className="p-3 font-bold text-white">{p.name}</td>
-                                  <td className="p-3 text-zinc-400">{p.sub_category || 'Mặc định'}</td>
-                                  {canViewCost && <td className="p-3 text-right font-mono text-zinc-300">{formatMoney(p.costPrice)}đ</td>}
-                                  <td className="p-3 text-right font-mono font-bold">
-                                      {isMat ? (
-                                          <span className="text-amber-400">{formatMoney(p.costPrice)}đ <span className="text-[9px] text-zinc-500 font-normal uppercase">(nhập)</span></span>
-                                      ) : (
-                                          <span className="text-emerald-400">{formatMoney(p.price)}đ</span>
-                                      )}
-                                  </td>
-                                  <td className={`p-3 text-center font-mono font-bold ${Number(p.quantity || 0) <= 0 ? 'text-rose-400' : 'text-zinc-100'}`}>
-                                      {formatStockQty(p.quantity)} <span className="text-[10px] text-zinc-400 font-normal">{p.unit || ''}</span>
-                                  </td>
-                                  <td className="p-3 text-center">
-                                      <button onClick={() => setEditProd(p)} className="px-2.5 py-1 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 rounded-lg text-[10px] font-bold border border-white/[0.08] transition-all cursor-pointer">
-                                          Sửa
-                                      </button>
-                                  </td>
-                              </tr>
-                          )})}
-                      </tbody>
-                  </table>
-              </div>
-          )}
-
-          {editProd && (
-              <ProductEditModal prod={editProd} onClose={() => setEditProd(null)} pushData={pushData} currentCat={catFilter} data={data} />
-          )}
-          {addVarGroup && (
-            <AddVariantModal group={addVarGroup} onClose={() => setAddVarGroup(null)} pushData={pushData} data={data} />
-          )}
-          {showBulkEditPrice && (
-            <BulkEditPriceModal data={data} pushData={pushData} onClose={() => setShowBulkEditPrice(false)} />
-          )}
-          {showShopeeImport && (isBoss || currentRole === 'TỐI CAO') && (
-            <ShopeeProductImportModal 
-                onClose={() => setShowShopeeImport(false)} 
-                pushData={pushData} 
-                pushDeltas={pushDeltas}
-                data={data} 
-                currentCat={catFilter} 
-                triggerToast={triggerToast} 
-            />
-          )}
+    <div className="space-y-3.5 pb-8 w-full max-w-full overflow-x-hidden animate-fade-in text-zinc-200">
+      
+      {/* 1. SEGMENTED CONTROL PHẲNG (FOUR SEASONS SOLID MATTE) */}
+      <div className="bg-[#202228] p-1.5 rounded-2xl flex items-center gap-1.5 overflow-x-auto hide-scrollbar border-0 shadow-md">
+        {[
+          { id: 'ALL', label: 'Tất Cả', icon: 'fa-layer-group', count: uniqueProducts.length },
+          { id: 'LAYOUTS', label: '🪵 Hàng Hoá Layout', icon: 'fa-tree' },
+          { id: 'TANKS', label: '🏆 Thành Phẩm Bể Kính', icon: 'fa-fish' },
+          { id: 'STONES', label: '🌿 Đá, Lũa & Cát', icon: 'fa-mountain' },
+          { id: 'MATERIALS', label: '🧱 Nguyên Vật Liệu (Kính, Keo)', icon: 'fa-boxes-stacked' },
+          { id: 'ACCESSORIES', label: '📦 Phụ Kiện Sàn', icon: 'fa-plug' },
+          { id: 'RETURNS', label: '⚠️ Chờ Kiểm Định Hàng Hoàn', icon: 'fa-truck-ramp-box', badge: waitingInspectionReturns.length, badgeColor: 'bg-[#A7226F] text-white font-bold' }
+        ].map(tab => {
+          const isActive = activeSegment === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => { setActiveSegment(tab.id); setSubCatFilter(null); }}
+              className={`h-9 px-3.5 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-all flex items-center gap-2 whitespace-nowrap cursor-pointer active:scale-95 shrink-0 border-0 ${
+                isActive 
+                  ? 'bg-[#282b33] text-white font-black shadow-none'
+                  : 'text-zinc-400 hover:text-white bg-transparent'
+              }`}
+            >
+              <i className={`fas ${tab.icon} text-xs`}></i>
+              <span>{tab.label}</span>
+              {tab.badge !== undefined && tab.badge > 0 && (
+                <span className={`px-1.5 py-0.2 rounded-full text-[9px] ${isActive ? 'bg-black/40 text-white' : tab.badgeColor}`}>
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
+
+      {/* 2. METRIC CARDS DÒNG TIỀN & TỒN KHO (4 Ô ĐIỀU HÀNH FOUR SEASONS MATTE) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+        {/* Card 1: Tổng Mặt Hàng */}
+        <div className="bg-[#202228] p-3.5 rounded-2xl relative overflow-hidden group border-0 shadow-md">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-400">1. Tổng SKU Quản Lý</span>
+            <div className="w-6 h-6 rounded-lg bg-[#18191d] flex items-center justify-center text-[#2E9599] text-xs border-0">
+              <i className="fas fa-barcode"></i>
+            </div>
+          </div>
+          <div className="text-[20px] sm:text-[22px] font-mono font-black text-white tracking-tight">
+            {uniqueProducts.length} <span className="text-xs font-normal text-zinc-500 font-sans">mã</span>
+          </div>
+          <p className="text-[10px] text-zinc-400 mt-0.5">Danh mục hàng hóa chuẩn xưởng</p>
+        </div>
+
+        {/* Card 2: Cảnh Báo Chạm Ngưỡng */}
+        <div className="bg-[#202228] p-3.5 rounded-2xl relative overflow-hidden transition-all border-0 shadow-md">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-400">2. Chạm Ngưỡng Tồn</span>
+            <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs border-0 ${lowStockCount > 0 ? 'bg-[#18191d] text-[#F46C3F]' : 'bg-[#18191d] text-zinc-500'}`}>
+              <i className="fas fa-triangle-exclamation"></i>
+            </div>
+          </div>
+          <div className="text-[20px] sm:text-[22px] font-mono font-black text-white tracking-tight">
+            {lowStockCount} <span className="text-xs font-normal text-zinc-400 font-sans">SKU cần nhập</span>
+          </div>
+          <p className="text-[10px] text-zinc-500 mt-0.5">Số lượng ≤ Định mức an toàn</p>
+        </div>
+
+        {/* Card 3: Giá Trị Vốn Hoặc Sản Lượng Vật Lý */}
+        <div className="bg-[#202228] p-3.5 rounded-2xl relative overflow-hidden group border-0 shadow-md">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10.5px] font-bold uppercase tracking-wider text-zinc-400">
+              {canViewCost ? '3. Vốn Tồn Kho Xưởng' : '3. Tổng Sản Lượng Tồn'}
+            </span>
+            <div className="w-6 h-6 rounded-lg bg-[#18191d] flex items-center justify-center text-zinc-400 text-xs border-0">
+              <i className={canViewCost ? 'fas fa-vault' : 'fas fa-cubes'}></i>
+            </div>
+          </div>
+          <div className="text-[19px] sm:text-[21px] font-mono font-black text-white tracking-tight truncate">
+            {canViewCost ? `${formatMoney(totalInventoryCapital)}đ` : `${formatMoney(totalPhysicalUnits)} SP`}
+          </div>
+          <p className="text-[10px] text-zinc-500 mt-0.5">
+            {canViewCost ? 'Định giá theo giá vốn xuất xưởng' : 'Đơn vị tính vật lý tổng hợp'}
+          </p>
+        </div>
+
+        {/* Card 4: Kiện Hàng Hoàn Chờ Rạch Thùng (Sunset Orange) */}
+        <div 
+          onClick={() => setActiveSegment('RETURNS')}
+          className={`p-3.5 rounded-2xl relative overflow-hidden cursor-pointer active:scale-95 transition-all border-0 shadow-md ${
+            waitingInspectionReturns.length > 0 ? 'bg-[#202228] hover:bg-[#282b33]' : 'bg-[#202228]'
+          }`}
+        >
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10.5px] font-bold uppercase tracking-wider text-[#F46C3F]">4. Chờ Rạch Thùng</span>
+            <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-xs border-0 ${waitingInspectionReturns.length > 0 ? 'bg-[#F46C3F]/20 text-[#F46C3F]' : 'bg-[#18191d] text-zinc-500'}`}>
+              <i className="fas fa-box-open"></i>
+            </div>
+          </div>
+          <div className="text-[20px] sm:text-[22px] font-mono font-black text-[#F46C3F] tracking-tight">
+            {waitingInspectionReturns.length} <span className="text-xs font-normal text-zinc-400 font-sans">kiện chờ KCS</span>
+          </div>
+          <p className="text-[10px] text-zinc-400 mt-0.5">Tuyệt đối cấm cộng kho tự động</p>
+        </div>
+      </div>
+
+      {/* 3. TOOLBAR TÌM KIẾM & THAO TÁC QUẢN TRỊ (FOUR SEASONS SOLID MATTE) */}
+      <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between w-full">
+        <div className="flex-1 bg-[#202228] rounded-xl flex items-center border-0 focus-within:ring-1 focus-within:ring-[#2E9599] transition-all px-3 py-0.5 shadow-md">
+          <i className="fas fa-search text-zinc-500 text-xs mr-2.5 shrink-0"></i>
+          <input 
+            placeholder={activeSegment === 'RETURNS' ? 'Tìm mã vận đơn hoàn, mã đơn, khách hàng...' : 'Tìm kiếm tên sản phẩm, mã SKU, quy cách vật tư...'}
+            value={search} 
+            onChange={(e) => setSearch(e.target.value)} 
+            className="w-full py-2 text-[12px] font-bold outline-none bg-transparent text-white placeholder-zinc-500 min-w-0" 
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="text-zinc-500 hover:text-zinc-300 p-1 shrink-0 cursor-pointer">
+              <i className="fas fa-times-circle text-xs"></i>
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0 overflow-x-auto hide-scrollbar">
+          <button
+            onClick={handleExportExcel}
+            className="h-9 px-3 rounded-xl bg-[#202228] hover:bg-[#282b33] text-[#2E9599] font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 border-0 transition-all active:scale-95 cursor-pointer shadow-md"
+          >
+            <i className="fas fa-file-excel text-[#2E9599]"></i>
+            <span className="hidden sm:inline">Xuất Excel</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowQuickNotes(prev => !prev)}
+            className={`h-9 px-3 rounded-xl font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 border-0 transition-all active:scale-95 cursor-pointer shadow-md ${
+              showQuickNotes ? 'bg-[#F7DC68] text-zinc-950' : 'bg-[#202228] hover:bg-[#282b33] text-[#F7DC68]'
+            }`}
+          >
+            <i className="fas fa-sticky-note"></i>
+            <span className="hidden sm:inline">Ghi Chú</span>
+          </button>
+
+          {isAdminRole && (
+            <>
+              <button 
+                onClick={() => setShowBulkEditPrice(true)} 
+                className="h-9 px-3 rounded-xl bg-[#202228] hover:bg-[#282b33] text-purple-300 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 border-0 transition-all active:scale-95 cursor-pointer shadow-md"
+              >
+                <i className="fas fa-edit text-purple-400"></i>
+                <span className="hidden sm:inline">Sửa Giá</span>
+              </button>
+
+              <button 
+                onClick={() => setEditProd({})} 
+                className="h-9 px-3.5 rounded-xl bg-[#F46C3F] hover:bg-[#ff7d52] text-white border-0 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-md"
+              >
+                <i className="fas fa-plus text-white"></i>
+                <span>Thêm SKU</span>
+              </button>
+            </>
+          )}
+
+          {(isBoss || currentRole === 'TỐI CAO') && (
+            <button 
+              type="button"
+              onClick={() => setShowShopeeImport(true)} 
+              className="h-9 px-3.5 rounded-xl bg-[#202228] hover:bg-[#282b33] text-[#F46C3F] border-0 font-bold text-[11px] uppercase tracking-wider flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-md"
+            >
+              <i className="fas fa-bag-shopping text-[#F46C3F] text-[12px]"></i>
+              <span>Nhập Shopee</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* QUICK NOTES COLLAPSIBLE */}
+      {showQuickNotes && typeof window.QuickNotesPanel !== 'undefined' && (
+        <window.QuickNotesPanel 
+          targetTab="KHO_HANG" 
+          documents={documents || data?.Documents || []} 
+          pushDeltas={pushDeltas || pushData} 
+          currentUser={currentUser} 
+          isBoss={isAdminRole} 
+          triggerToast={triggerToast} 
+        />
+      )}
+
+      {/* 4. HIGH-DENSITY DATA ROWS (DANH SÁCH NÉN CHIỀU CAO H-14) */}
+      {activeSegment === 'RETURNS' ? (
+        /* GIAO DIỆN KIỂM ĐỊNH HÀNG HOÀN ĐẢO CHIỀU (REVERSE LOGISTICS) */
+        <div className="overflow-x-auto rounded-2xl border border-white/[0.06] bg-[#121214] shadow-sm">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-[#09090b] text-zinc-400 border-b border-white/[0.06] uppercase text-[10px] font-bold tracking-wider h-11">
+                <th className="p-3 pl-4">Mã Vận Đơn Hoàn</th>
+                <th className="p-3">Mã Đơn Gốc</th>
+                <th className="p-3">Khách Hàng</th>
+                <th className="p-3">Sản Phẩm</th>
+                <th className="p-3 text-center">Trạng Thái</th>
+                <th className="p-3 text-center">Người Kiểm</th>
+                <th className="p-3 text-center pr-4">Thao Tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.04]">
+              {returnedOrders.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="text-center py-12 text-zinc-500 font-bold">
+                    <i className="fas fa-clipboard-check text-2xl text-zinc-600 block mb-2"></i>
+                    Không có kiện hàng hoàn nào cần xử lý.
+                  </td>
+                </tr>
+              ) : (
+                returnedOrders.map(ret => {
+                  const isWaiting = ret.returnStatus === 'WAITING_INSPECTION';
+                  const isRestocked = ret.returnStatus === 'RESTOCKED';
+                  const isScrapped = ret.returnStatus === 'SCRAPPED';
+
+                  return (
+                    <tr 
+                      key={ret.id} 
+                      onClick={() => handleOpenReturnDrawer(ret)}
+                      className="hover:bg-white/[0.02] transition-colors cursor-pointer group h-14"
+                    >
+                      <td className="p-3 pl-4 font-mono font-bold text-amber-400 group-hover:underline">
+                        {ret.returnTrackingCode}
+                      </td>
+                      <td className="p-3 font-mono font-medium text-zinc-300">
+                        {ret.orderCode}
+                      </td>
+                      <td className="p-3 font-bold text-white">
+                        {ret.customer}
+                      </td>
+                      <td className="p-3 text-zinc-400 max-w-xs truncate" title={ret.productSummary}>
+                        {ret.productSummary}
+                      </td>
+                      <td className="p-3 text-center">
+                        {isWaiting && (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-500/20 text-amber-300 border border-amber-500/40 inline-flex items-center gap-1.5 animate-pulse">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span> Chờ Rạch Thùng
+                          </span>
+                        )}
+                        {isRestocked && (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 inline-flex items-center gap-1.5">
+                            <i className="fas fa-check text-[9px]"></i> Đã Nhập Kho
+                          </span>
+                        )}
+                        {isScrapped && (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/40 inline-flex items-center gap-1.5">
+                            <i className="fas fa-dumpster text-[9px]"></i> Đã Thanh Lý
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-center text-zinc-400 font-medium">
+                        {ret.inspectedBy || '---'}
+                      </td>
+                      <td className="p-3 text-center pr-4">
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleOpenReturnDrawer(ret); }}
+                          className="h-8 px-3 rounded-lg bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 text-[10.5px] font-bold border border-amber-500/30 transition-all cursor-pointer"
+                        >
+                          Kiểm Định
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        /* GIAO DIỆN BẢNG TỒN KHO NÉN H-14 */
+        <div className="overflow-x-auto rounded-2xl border border-white/[0.06] bg-[#121214] shadow-sm">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="bg-[#09090b] text-zinc-400 border-b border-white/[0.06] uppercase text-[10px] font-bold tracking-wider h-11">
+                <th className="p-3 pl-4">SKU & Hình Ảnh</th>
+                <th className="p-3">Tên Mặt Hàng</th>
+                <th className="p-3">Danh Mục</th>
+                <th className="p-3">Đơn Vị (UOM)</th>
+                <th className="p-3 text-center">Tồn Thực Tế</th>
+                <th className="p-3 text-center">Định Mức An Toàn</th>
+                {canViewCost && <th className="p-3 text-right">Giá Vốn</th>}
+                <th className="p-3 text-center">Trạng Thái</th>
+                <th className="p-3 text-center pr-4">Thao Tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/[0.04]">
+              {filteredProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={canViewCost ? 9 : 8} className="text-center py-12 text-zinc-500 font-bold">
+                    <i className="fas fa-boxes text-2xl text-zinc-600 block mb-2"></i>
+                    Không tìm thấy sản phẩm nào phù hợp!
+                  </td>
+                </tr>
+              ) : (
+                filteredProducts.map(p => {
+                  const qty = Number(p.quantity || 0);
+                  const min = Number(p.minStock || 0);
+                  const isLow = qty <= min;
+                  const isOut = qty <= 0;
+                  const imgUrl = formatImageUrl(p.image) || formatImageUrl(p.realImage);
+
+                  return (
+                    <tr 
+                      key={p.id} 
+                      onClick={() => handleOpenProductDrawer(p)}
+                      className="hover:bg-white/[0.02] transition-colors cursor-pointer group h-14"
+                    >
+                      {/* SKU & Hình ảnh */}
+                      <td className="p-3 pl-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-lg bg-black/40 border border-white/[0.08] overflow-hidden flex items-center justify-center shrink-0">
+                            {imgUrl ? (
+                              <img src={imgUrl} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                              <i className={`fas ${getSubCategoryIcon(p.name)} text-zinc-600 text-xs`}></i>
+                            )}
+                          </div>
+                          <span className="font-mono font-bold text-zinc-200 text-[11px] group-hover:text-white">
+                            {p.sku || 'N/A'}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Tên Mặt Hàng */}
+                      <td className="p-3 font-bold text-white">
+                        <div className="truncate max-w-sm" title={p.name}>{p.name}</div>
+                        {p.sub_category && <div className="text-[10px] text-zinc-400 font-normal">{p.sub_category}</div>}
+                      </td>
+
+                      {/* Danh Mục */}
+                      <td className="p-3">
+                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[#18191d] text-zinc-300 border-0">
+                          {p.category || 'Mặc định'}
+                        </span>
+                      </td>
+
+                      {/* Đơn vị tính */}
+                      <td className="p-3 font-medium text-zinc-300">
+                        {p.unit || 'Cái'}
+                      </td>
+
+                      {/* Tồn thực tế */}
+                      <td className="p-3 text-center font-mono font-black text-sm">
+                        <span className={isOut ? 'text-rose-400' : isLow ? 'text-amber-400' : 'text-white'}>
+                          {Math.round(qty * 100) / 100}
+                        </span>
+                      </td>
+
+                      {/* Định mức an toàn */}
+                      <td className="p-3 text-center font-mono text-zinc-400 text-xs">
+                        {min > 0 ? min : '---'}
+                      </td>
+
+                      {/* Giá vốn (Chỉ Admin/Kế toán) */}
+                      {canViewCost && (
+                        <td className="p-3 text-right font-mono text-zinc-300 font-bold">
+                          {formatMoney(p.costPrice)}đ
+                        </td>
+                      )}
+
+                      {/* Trạng thái */}
+                      <td className="p-3 text-center">
+                        {isOut ? (
+                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[#18191d] text-rose-400 border-0">
+                            Cháy Hàng
+                          </span>
+                        ) : isLow ? (
+                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[#18191d] text-amber-400 border-0">
+                            Cảnh Báo
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-[#18191d] text-zinc-300 border-0">
+                            An Toàn
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Thao tác */}
+                      <td className="p-3 text-center pr-4">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleOpenProductDrawer(p); }}
+                            className="h-7 px-2.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 text-[10px] font-bold border border-white/[0.08] transition-all cursor-pointer"
+                          >
+                            Thẻ Kho
+                          </button>
+                          {isAdminRole && (
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); setEditProd(p); }}
+                              className="h-7 px-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white text-[10px] border border-white/[0.08] transition-all cursor-pointer"
+                            >
+                              <i className="fas fa-edit"></i>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* 5. SIDE DRAWER ĐIỀU HÀNH KHO & KIỂM ĐỊNH HÀNG HOÀN (SLIDE-OVER PANEL) */}
+      {(selectedDrawerItem || selectedDrawerReturn) && (
+        <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
+          {/* Backdrop Blur */}
+          <div 
+            onClick={handleCloseDrawer} 
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity animate-fade-in"
+          ></div>
+
+          {/* Drawer Surface */}
+          <div className="relative w-full max-w-xl bg-[#18181b] backdrop-blur-xl border-l border-white/[0.06] shadow-2xl h-full flex flex-col z-10 animate-slide-in-right overflow-hidden">
+            {/* Drawer Header */}
+            <div className="p-4 border-b border-white/[0.06] flex items-center justify-between bg-[#121214]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#d4af37]/15 border border-[#d4af37]/30 flex items-center justify-center text-[#d4af37] text-sm">
+                  <i className={selectedDrawerReturn ? 'fas fa-truck-ramp-box' : 'fas fa-boxes'}></i>
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                    {selectedDrawerReturn ? 'Kiểm Định Kiện Hàng Hoàn' : selectedDrawerItem?.name}
+                  </h3>
+                  <p className="text-[10px] text-zinc-400 font-mono">
+                    {selectedDrawerReturn ? `Mã vận đơn: ${selectedDrawerReturn.returnTrackingCode}` : `SKU: ${selectedDrawerItem?.sku || 'N/A'}`}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={handleCloseDrawer}
+                className="w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+
+            {/* Drawer Sub-Tabs Control */}
+            <div className="p-2.5 bg-[#121214] border-b border-white/[0.06] flex items-center gap-1.5">
+              {selectedDrawerItem && (
+                <>
+                  <button
+                    onClick={() => setDrawerActiveTab('STOCK_CARD')}
+                    className={`flex-1 py-1.5 rounded-xl text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      drawerActiveTab === 'STOCK_CARD' ? 'bg-[#d4af37] text-zinc-950 font-black shadow-sm' : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <i className="fas fa-clipboard-list text-xs"></i>
+                    <span>Thẻ Kho 1-Chạm</span>
+                  </button>
+                  <button
+                    onClick={() => setDrawerActiveTab('BOM_CALC')}
+                    className={`flex-1 py-1.5 rounded-xl text-[11px] font-bold uppercase transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      drawerActiveTab === 'BOM_CALC' ? 'bg-[#d4af37] text-zinc-950 font-black shadow-sm' : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    <i className="fas fa-calculator text-xs"></i>
+                    <span>BOM Bể Kính (+5%)</span>
+                  </button>
+                </>
+              )}
+              {selectedDrawerReturn && (
+                <button
+                  onClick={() => setDrawerActiveTab('RETURN_INSPECT')}
+                  className="flex-1 py-1.5 rounded-xl text-[11px] font-black uppercase bg-amber-500 text-zinc-950 shadow-sm flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <i className="fas fa-shield-halved text-xs"></i>
+                  <span>Quy Trình Kiểm Định Hàng Hoàn</span>
+                </button>
+              )}
+            </div>
+
+            {/* Drawer Body Content */}
+            <div className="flex-1 p-4 overflow-y-auto space-y-4 custom-scrollbar text-xs">
+              
+              {/* TAB 1: THẺ KHO & XUẤT NHẬP 1 CHẠM */}
+              {drawerActiveTab === 'STOCK_CARD' && selectedDrawerItem && (
+                <div className="space-y-4 animate-fade-in">
+                  {/* Tồn hiện tại card */}
+                  <div className="bg-[#121214] p-4 rounded-2xl border border-white/[0.06] flex items-center justify-between">
+                    <div>
+                      <span className="text-[10.5px] uppercase font-bold text-zinc-400 block mb-1">Tồn Kho Hiện Tại</span>
+                      <div className="text-2xl font-mono font-black text-white">
+                        {selectedDrawerItem.quantity} <span className="text-xs font-normal text-zinc-400 font-sans">{selectedDrawerItem.unit || 'Cái'}</span>
+                      </div>
+                    </div>
+                    {canViewCost && (
+                      <div className="text-right">
+                        <span className="text-[10.5px] uppercase font-bold text-zinc-400 block mb-1">Giá Vốn Xuất Xưởng</span>
+                        <div className="text-xl font-mono font-bold text-[#d4af37]">
+                          {formatMoney(selectedDrawerItem.costPrice)}đ
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bảng quy đổi UOM tự động */}
+                  <div className="bg-[#121214] p-4 rounded-2xl border border-white/[0.06] space-y-3">
+                    <div className="font-bold text-[11px] uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                      <i className="fas fa-scale-unbalanced"></i>
+                      <span>Thao Tác Kho 1-Chạm & Quy Đổi Đơn Vị Tính (UOM)</span>
+                    </div>
+
+                    {/* Loại thao tác: Nhập hay Xuất */}
+                    <div className="grid grid-cols-2 gap-2 bg-[#09090b] p-1 rounded-xl border border-white/[0.06]">
+                      <button
+                        onClick={() => setStockAdjType('IN')}
+                        className={`py-2 rounded-lg font-bold text-xs uppercase flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          stockAdjType === 'IN' ? 'bg-emerald-500 text-zinc-950 font-black shadow-sm' : 'text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        <i className="fas fa-plus-circle"></i> Nhập Kho (+)
+                      </button>
+                      <button
+                        onClick={() => setStockAdjType('OUT')}
+                        className={`py-2 rounded-lg font-bold text-xs uppercase flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          stockAdjType === 'OUT' ? 'bg-rose-500 text-white font-black shadow-sm' : 'text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        <i className="fas fa-minus-circle"></i> Xuất Sản Xuất (-)
+                      </button>
+                    </div>
+
+                    {/* Chọn đơn vị tính đầu vào */}
+                    <div>
+                      <label className="text-[10.5px] font-bold text-zinc-400 mb-1 block">Đơn Vị Quy Đổi Nhập/Xuất:</label>
+                      <select
+                        value={stockAdjUnit}
+                        onChange={(e) => setStockAdjUnit(e.target.value)}
+                        className="w-full bg-[#09090b] border border-white/[0.06] rounded-xl px-3 py-2 text-white font-bold outline-none"
+                      >
+                        <option value="DEFAULT">Đơn vị mặc định ({selectedDrawerItem.unit || 'Cái'})</option>
+                        <option value="LARGE_SHEET">Tấm lớn (180x200cm = 3.6 m² kính)</option>
+                        <option value="BOX">Thùng đóng gói (24 chai/hộp)</option>
+                      </select>
+                    </div>
+
+                    {/* Nhập số lượng */}
+                    <div>
+                      <label className="text-[10.5px] font-bold text-zinc-400 mb-1 block">Số Lượng Thực Tế:</label>
+                      <input 
+                        type="number"
+                        placeholder="Nhập số lượng..."
+                        value={stockAdjQty}
+                        onChange={(e) => setStockAdjQty(e.target.value)}
+                        className="w-full bg-[#09090b] border border-white/[0.06] rounded-xl px-3 py-2 text-white font-mono font-bold text-base outline-none focus:border-[#d4af37]"
+                      />
+                    </div>
+
+                    {/* Xem trước quy đổi */}
+                    {stockAdjQty && parseFloat(stockAdjQty) > 0 && (
+                      <div className="p-2.5 rounded-xl bg-[#09090b] border border-amber-500/30 text-amber-300 text-[11px] font-mono flex items-center justify-between">
+                        <span>Hệ thống sẽ {stockAdjType === 'IN' ? 'cộng' : 'trừ'}:</span>
+                        <b className="text-white text-xs">
+                          {stockAdjUnit === 'LARGE_SHEET' ? `${Math.round(parseFloat(stockAdjQty) * 3.6 * 100) / 100} m² kính` :
+                           stockAdjUnit === 'BOX' ? `${parseFloat(stockAdjQty) * 24} Chai` :
+                           `${stockAdjQty} ${selectedDrawerItem.unit || 'Cái'}`}
+                        </b>
+                      </div>
+                    )}
+
+                    {/* Lý do / Ghi chú */}
+                    <div>
+                      <label className="text-[10.5px] font-bold text-zinc-400 mb-1 block">Lý Do / Ghi Chú:</label>
+                      <input 
+                        type="text"
+                        placeholder="Nhập lý do xuất/nhập..."
+                        value={stockAdjNote}
+                        onChange={(e) => setStockAdjNote(e.target.value)}
+                        className="w-full bg-[#09090b] border border-white/[0.06] rounded-xl px-3 py-2 text-white outline-none focus:border-[#d4af37]"
+                      />
+                    </div>
+
+                    {/* Nút xác nhận */}
+                    <button
+                      onClick={handleExecuteStockAdj}
+                      disabled={isSubmittingAdj}
+                      className={`w-full py-2.5 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-md ${
+                        stockAdjType === 'IN' 
+                          ? 'bg-emerald-500 hover:bg-emerald-400 text-zinc-950' 
+                          : 'bg-rose-500 hover:bg-rose-400 text-white'
+                      }`}
+                    >
+                      <i className={`fas ${isSubmittingAdj ? 'fa-spinner fa-spin' : 'fa-check-circle'}`}></i>
+                      <span>{isSubmittingAdj ? 'Đang Lưu Phiếu...' : `Xác Nhận ${stockAdjType === 'IN' ? 'Nhập Kho' : 'Xuất Kho'}`}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: ĐỊNH MỨC TIÊU HAO SẢN XUẤT (BOM CALCULATOR) */}
+              {drawerActiveTab === 'BOM_CALC' && (
+                <div className="space-y-4 animate-fade-in">
+                  <div className="bg-[#121214] p-4 rounded-2xl border border-white/[0.06] space-y-3">
+                    <div className="font-bold text-[11px] uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                      <i className="fas fa-calculator"></i>
+                      <span>Định Mức Tiêu Hao Bể Kính Tử Diện (+5% Hao Hụt)</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                      Công thức chuẩn Hiến pháp: $S = (D \times R + 2DC + 2RC) \times 1.05\text{ m}^2$ (đã tính 5% hao hụt do đường cắt và cấn mài).
+                    </p>
+
+                    {/* Kích thước D x R x C */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[10.5px] font-bold text-zinc-400 mb-1 block">Dài (L - cm):</label>
+                        <input 
+                          type="number" 
+                          value={bomLength} 
+                          onChange={e => setBomLength(e.target.value)} 
+                          className="w-full bg-[#09090b] border border-white/[0.06] rounded-xl px-2.5 py-1.5 text-white font-mono font-bold text-center"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10.5px] font-bold text-zinc-400 mb-1 block">Rộng (W - cm):</label>
+                        <input 
+                          type="number" 
+                          value={bomWidth} 
+                          onChange={e => setBomWidth(e.target.value)} 
+                          className="w-full bg-[#09090b] border border-white/[0.06] rounded-xl px-2.5 py-1.5 text-white font-mono font-bold text-center"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10.5px] font-bold text-zinc-400 mb-1 block">Cao (H - cm):</label>
+                        <input 
+                          type="number" 
+                          value={bomHeight} 
+                          onChange={e => setBomHeight(e.target.value)} 
+                          className="w-full bg-[#09090b] border border-white/[0.06] rounded-xl px-2.5 py-1.5 text-white font-mono font-bold text-center"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10.5px] font-bold text-zinc-400 mb-1 block">Số lượng bể cần làm (chiếc):</label>
+                      <input 
+                        type="number" 
+                        value={bomQty} 
+                        onChange={e => setBomQty(e.target.value)} 
+                        className="w-full bg-[#09090b] border border-white/[0.06] rounded-xl px-3 py-2 text-white font-mono font-bold text-base"
+                      />
+                    </div>
+
+                    {/* Kết quả tính toán */}
+                    <div className="p-3.5 rounded-xl bg-[#09090b] border border-white/[0.06] space-y-2 font-mono text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-400">Diện tích 1 chiếc (+5% hao hụt):</span>
+                        <b className="text-emerald-400">{computedGlassArea.singleArea} m²</b>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-400">Tổng diện tích kính cần trừ kho:</span>
+                        <b className="text-[#d4af37] text-sm font-black">{computedGlassArea.totalArea} m²</b>
+                      </div>
+                      <div className="flex items-center justify-between border-t border-white/[0.06] pt-2">
+                        <span className="text-zinc-400">Tương đương tấm kính lớn (1.8x2m):</span>
+                        <b className="text-sky-400">{computedGlassArea.sheetCount} tấm nguyên</b>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-zinc-400">Chu vi mài vi tính:</span>
+                        <b className="text-zinc-300">{computedGlassArea.perimeterMeters} mét</b>
+                      </div>
+                    </div>
+
+                    {/* Nút trừ kho trực tiếp */}
+                    <button
+                      onClick={() => {
+                        setStockAdjType('OUT');
+                        setStockAdjUnit('DEFAULT');
+                        setStockAdjQty(String(computedGlassArea.totalArea));
+                        setStockAdjNote(`Xuất kính làm ${bomQty} bể ${bomLength}x${bomWidth}x${bomHeight}cm (+5% hao hụt)`);
+                        setDrawerActiveTab('STOCK_CARD');
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-[#d4af37] hover:brightness-110 text-zinc-950 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-sm"
+                    >
+                      <i className="fas fa-arrow-right"></i>
+                      <span>Đưa Vào Thẻ Kho Để Trừ Tồn ({computedGlassArea.totalArea} m²)</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: QUY TRÌNH KIỂM ĐỊNH HÀNG HOÀN (REVERSE LOGISTICS) */}
+              {drawerActiveTab === 'RETURN_INSPECT' && selectedDrawerReturn && (
+                <div className="space-y-4 animate-fade-in">
+                  <div className="bg-[#121214] p-4 rounded-2xl border border-amber-500/40 space-y-3">
+                    <div className="font-bold text-[11px] uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                      <i className="fas fa-box-open"></i>
+                      <span>Kiểm Tra Vật Lý Kiện Hàng Sau Khi Rạch Thùng</span>
+                    </div>
+
+                    {/* Thông tin đơn */}
+                    <div className="bg-[#09090b] p-3 rounded-xl border border-white/[0.06] space-y-1.5 font-mono text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-zinc-400">Mã vận đơn hoàn:</span>
+                        <b className="text-amber-400">{selectedDrawerReturn.returnTrackingCode}</b>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-zinc-400">Mã đơn hàng gốc:</span>
+                        <b className="text-white">{selectedDrawerReturn.orderCode}</b>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-zinc-400">Khách hàng:</span>
+                        <b className="text-zinc-300">{selectedDrawerReturn.customer}</b>
+                      </div>
+                      <div className="border-t border-white/[0.06] pt-1.5 text-zinc-400">
+                        <span>Sản phẩm: </span><span className="text-zinc-200 font-sans">{selectedDrawerReturn.productSummary}</span>
+                      </div>
+                    </div>
+
+                    {/* Ảnh chụp kiểm định vật lý */}
+                    <div>
+                      <label className="text-[10.5px] font-bold text-zinc-400 mb-1 block">Link Ảnh Hiện Trạng Vật Lý Sau Rạch Thùng:</label>
+                      <input 
+                        type="text"
+                        placeholder="Dán link ảnh chụp thực tế kiện hàng..."
+                        value={inspectPhoto}
+                        onChange={e => setInspectPhoto(e.target.value)}
+                        className="w-full bg-[#09090b] border border-white/[0.06] rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-amber-400"
+                      />
+                      {inspectPhoto && (
+                        <div className="mt-2 w-full h-40 rounded-xl overflow-hidden bg-black/50 border border-white/[0.08] flex items-center justify-center">
+                          <img src={formatImageUrl(inspectPhoto)} alt="Hiện trạng hàng hoàn" className="w-full h-full object-contain" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Ghi chú tình trạng */}
+                    <div>
+                      <label className="text-[10.5px] font-bold text-zinc-400 mb-1 block">Ghi Chú Đánh Giá Vật Lý:</label>
+                      <textarea 
+                        rows="3"
+                        placeholder="Bể nguyên vẹn, keo không nứt hở... hoặc Kính đáy bể vỡ nát do vận chuyển..."
+                        value={inspectNote}
+                        onChange={e => setInspectNote(e.target.value)}
+                        className="w-full bg-[#09090b] border border-white/[0.06] rounded-xl p-3 text-white text-xs outline-none focus:border-amber-400"
+                      />
+                    </div>
+
+                    {/* 2 NÚT QUYẾT ĐỊNH SINH TỬ CỦA THỦ KHO */}
+                    <div className="space-y-2 pt-2 border-t border-white/[0.06]">
+                      <button
+                        onClick={() => handleResolveReturn('RESTOCK')}
+                        disabled={isProcessingReturn}
+                        className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:brightness-110 text-zinc-950 font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-lg shadow-emerald-950/40"
+                      >
+                        <i className="fas fa-check-circle text-sm"></i>
+                        <span>🟢 HÀNG NGUYÊN VẸN ➔ NHẬP LẠI KHO THÀNH PHẨM</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleResolveReturn('SCRAP')}
+                        disabled={isProcessingReturn}
+                        className="w-full py-3 rounded-xl bg-gradient-to-r from-rose-700 to-rose-600 hover:brightness-110 text-white font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-95 shadow-lg shadow-rose-950/40"
+                      >
+                        <i className="fas fa-dumpster text-sm"></i>
+                        <span>🔴 HÀNG VỠ NÁT ➔ THANH LÝ PHẾ LIỆU / TIÊU HỦY</span>
+                      </button>
+                      <p className="text-[10px] text-zinc-400 text-center italic">
+                        *Hàng vỡ nát sẽ được hạch toán vào Chi phí rủi ro vận chuyển, tuyệt đối không cộng tồn kho.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RENDER CÁC MODAL QUẢN TRỊ KHO NÂNG CAO */}
+      {editProd && (
+        <ProductEditModal prod={editProd} onClose={() => setEditProd(null)} pushData={pushData} currentCat={activeSegment} data={data} />
+      )}
+      {addVarGroup && (
+        <AddVariantModal group={addVarGroup} onClose={() => setAddVarGroup(null)} pushData={pushData} data={data} />
+      )}
+      {showBulkEditPrice && (
+        <BulkEditPriceModal data={data} pushData={pushData} onClose={() => setShowBulkEditPrice(false)} />
+      )}
+      {showShopeeImport && (isBoss || currentRole === 'TỐI CAO') && (
+        <ShopeeProductImportModal 
+          onClose={() => setShowShopeeImport(false)} 
+          pushData={pushData} 
+          pushDeltas={pushDeltas}
+          data={data} 
+          currentCat={activeSegment} 
+          triggerToast={triggerToast} 
+        />
+      )}
+
+    </div>
   );
 }
 
@@ -4822,43 +5295,44 @@ const InventoryTab = React.memo(function InventoryTab(props) {
   return (
     <div className="w-full max-w-full flex flex-col space-y-3.5 overflow-x-hidden">
       {/* ROYAL WORKBENCH SUB-TABS SEGMENTED CONTROL */}
-      <div className="grid grid-cols-3 bg-[#0d0d10] border border-white/[0.08] rounded-2xl p-1.5 shrink-0 gap-2 shadow-sm max-w-full">
+      {/* TOP SUB-TABS (FOUR SEASONS SOLID MATTE) */}
+      <div className="grid grid-cols-3 bg-[#202228] border-0 rounded-2xl p-1 shrink-0 gap-1 shadow-md max-w-full">
           <button 
               type="button"
               onClick={() => setActiveSubTab('KHO_HANG')} 
-              className={`py-2.5 px-2.5 sm:px-3 text-[11px] font-black uppercase tracking-wider transition-all rounded-xl flex items-center justify-center gap-2 cursor-pointer active:scale-95 ${
+              className={`py-2.5 px-2.5 sm:px-3 text-[11px] font-bold uppercase tracking-wider transition-all rounded-xl flex items-center justify-center gap-2 cursor-pointer active:scale-95 border-0 ${
                   activeSubTab === 'KHO_HANG' 
-                      ? 'bg-gradient-to-r from-amber-500/30 via-amber-500/15 to-transparent text-amber-300 border border-amber-400/70 shadow-[0_0_20px_rgba(245,158,11,0.3)] ring-1 ring-amber-400/40 font-black' 
-                      : 'bg-white/[0.02] border border-white/[0.06] text-zinc-400 hover:text-amber-300 hover:bg-amber-500/10 hover:border-amber-500/30'
+                      ? 'bg-[#282b33] text-white font-black shadow-none' 
+                      : 'bg-transparent text-zinc-400 hover:text-white'
               }`}
           >
-              <i className={`fas fa-boxes text-xs ${activeSubTab === 'KHO_HANG' ? 'text-amber-400' : 'text-amber-400/70'}`}></i>
+              <i className="fas fa-boxes text-xs text-[#2E9599]"></i>
               <span className="truncate">Kho Hàng</span>
           </button>
           
           <button 
               type="button"
               onClick={() => setActiveSubTab('NHAT_KY')} 
-              className={`py-2.5 px-2.5 sm:px-3 text-[11px] font-black uppercase tracking-wider transition-all rounded-xl flex items-center justify-center gap-2 cursor-pointer active:scale-95 ${
+              className={`py-2.5 px-2.5 sm:px-3 text-[11px] font-bold uppercase tracking-wider transition-all rounded-xl flex items-center justify-center gap-2 cursor-pointer active:scale-95 border-0 ${
                   activeSubTab === 'NHAT_KY' 
-                      ? 'bg-gradient-to-r from-sky-500/30 via-sky-500/15 to-transparent text-sky-300 border border-sky-400/70 shadow-[0_0_20px_rgba(14,165,233,0.3)] ring-1 ring-sky-400/40 font-black' 
-                      : 'bg-white/[0.02] border border-white/[0.06] text-zinc-400 hover:text-sky-300 hover:bg-sky-500/10 hover:border-sky-500/30'
+                      ? 'bg-[#282b33] text-white font-black shadow-none' 
+                      : 'bg-transparent text-zinc-400 hover:text-white'
               }`}
           >
-              <i className={`fas fa-history text-xs ${activeSubTab === 'NHAT_KY' ? 'text-sky-400' : 'text-sky-400/70'}`}></i>
+              <i className="fas fa-history text-xs text-[#F46C3F]"></i>
               <span className="truncate">Nhật Ký</span>
           </button>
           
           <button 
               type="button"
               onClick={() => setActiveSubTab('KIEM_KHO')} 
-              className={`py-2.5 px-2.5 sm:px-3 text-[11px] font-black uppercase tracking-wider transition-all rounded-xl flex items-center justify-center gap-2 cursor-pointer active:scale-95 ${
+              className={`py-2.5 px-2.5 sm:px-3 text-[11px] font-bold uppercase tracking-wider transition-all rounded-xl flex items-center justify-center gap-2 cursor-pointer active:scale-95 border-0 ${
                   activeSubTab === 'KIEM_KHO' 
-                      ? 'bg-gradient-to-r from-emerald-500/30 via-emerald-500/15 to-transparent text-emerald-300 border border-emerald-400/70 shadow-[0_0_20px_rgba(16,185,129,0.3)] ring-1 ring-emerald-400/40 font-black' 
-                      : 'bg-white/[0.02] border border-white/[0.06] text-zinc-400 hover:text-emerald-300 hover:bg-emerald-500/10 hover:border-emerald-500/30'
+                      ? 'bg-[#282b33] text-white font-black shadow-none' 
+                      : 'bg-transparent text-zinc-400 hover:text-white'
               }`}
           >
-              <i className={`fas fa-clipboard-check text-xs ${activeSubTab === 'KIEM_KHO' ? 'text-emerald-400' : 'text-emerald-400/70'}`}></i>
+              <i className="fas fa-clipboard-check text-xs text-[#F7DC68]"></i>
               <span className="truncate">Kiểm Kho</span>
           </button>
       </div>
